@@ -4,6 +4,110 @@
   "projectFormatVersion": 2,
   "input": {
     "$defs": {
+      "ArtifactPublish": {
+        "additionalProperties": false,
+        "description": "Publish a file from a server-owned execution context without generating media.",
+        "properties": {
+          "path": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "expectedKind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "text",
+                  "image",
+                  "video",
+                  "audio",
+                  "file"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expectedkind"
+          },
+          "sources": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/AssetRef"
+            },
+            "maxItems": 100,
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "path",
+          "name"
+        ],
+        "title": "ArtifactPublish",
+        "type": "object"
+      },
+      "ArtifactPublishCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "commandId": {
+            "format": "uuid",
+            "title": "Commandid",
+            "type": "string"
+          },
+          "projectId": {
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "const": "artifact.publish",
+            "title": "Type",
+            "type": "string"
+          },
+          "expectedVersions": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/ObjectVersion"
+            },
+            "title": "Expectedversions",
+            "type": "array"
+          },
+          "expectedPreview": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expectedpreview"
+          },
+          "payload": {
+            "$ref": "#/$defs/ArtifactPublish"
+          }
+        },
+        "required": [
+          "commandId",
+          "projectId",
+          "type",
+          "payload"
+        ],
+        "title": "ArtifactPublishCommand",
+        "type": "object"
+      },
       "Asset": {
         "additionalProperties": false,
         "properties": {
@@ -2734,6 +2838,7 @@
           "command": {
             "discriminator": {
               "mapping": {
+                "artifact.publish": "#/$defs/ArtifactPublishCommand",
                 "asset.delete": "#/$defs/AssetDeleteCommand",
                 "asset.import": "#/$defs/AssetImportCommand",
                 "asset.updateMetadata": "#/$defs/AssetMetadataCommand",
@@ -2790,6 +2895,9 @@
               },
               {
                 "$ref": "#/$defs/AssetImportCommand"
+              },
+              {
+                "$ref": "#/$defs/ArtifactPublishCommand"
               },
               {
                 "$ref": "#/$defs/AssetWriteTextCommand"
@@ -11564,6 +11672,7 @@
       "command": {
         "discriminator": {
           "mapping": {
+            "artifact.publish": "#/$defs/ArtifactPublishCommand",
             "asset.delete": "#/$defs/AssetDeleteCommand",
             "asset.import": "#/$defs/AssetImportCommand",
             "asset.updateMetadata": "#/$defs/AssetMetadataCommand",
@@ -11620,6 +11729,9 @@
           },
           {
             "$ref": "#/$defs/AssetImportCommand"
+          },
+          {
+            "$ref": "#/$defs/ArtifactPublishCommand"
           },
           {
             "$ref": "#/$defs/AssetWriteTextCommand"
@@ -11827,6 +11939,114 @@
   },
   "output": {
     "$defs": {
+      "ArtifactPublish": {
+        "additionalProperties": false,
+        "description": "Publish a file from a server-owned execution context without generating media.",
+        "properties": {
+          "path": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "expectedKind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "text",
+                  "image",
+                  "video",
+                  "audio",
+                  "file"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expectedkind"
+          },
+          "sources": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/AssetRef"
+            },
+            "maxItems": 100,
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "path",
+          "name",
+          "expectedKind",
+          "sources"
+        ],
+        "title": "ArtifactPublish",
+        "type": "object"
+      },
+      "ArtifactPublishCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "commandId": {
+            "format": "uuid",
+            "title": "Commandid",
+            "type": "string"
+          },
+          "projectId": {
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "const": "artifact.publish",
+            "title": "Type",
+            "type": "string"
+          },
+          "expectedVersions": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/ObjectVersion"
+            },
+            "title": "Expectedversions",
+            "type": "array"
+          },
+          "expectedPreview": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expectedpreview"
+          },
+          "payload": {
+            "$ref": "#/$defs/ArtifactPublish"
+          }
+        },
+        "required": [
+          "commandId",
+          "projectId",
+          "type",
+          "expectedVersions",
+          "expectedPreview",
+          "payload"
+        ],
+        "title": "ArtifactPublishCommand",
+        "type": "object"
+      },
       "Asset": {
         "additionalProperties": false,
         "properties": {
@@ -14655,6 +14875,7 @@
           "command": {
             "discriminator": {
               "mapping": {
+                "artifact.publish": "#/$defs/ArtifactPublishCommand",
                 "asset.delete": "#/$defs/AssetDeleteCommand",
                 "asset.import": "#/$defs/AssetImportCommand",
                 "asset.updateMetadata": "#/$defs/AssetMetadataCommand",
@@ -14711,6 +14932,9 @@
               },
               {
                 "$ref": "#/$defs/AssetImportCommand"
+              },
+              {
+                "$ref": "#/$defs/ArtifactPublishCommand"
               },
               {
                 "$ref": "#/$defs/AssetWriteTextCommand"
@@ -23921,6 +24145,7 @@
       "command": {
         "discriminator": {
           "mapping": {
+            "artifact.publish": "#/$defs/ArtifactPublishCommand",
             "asset.delete": "#/$defs/AssetDeleteCommand",
             "asset.import": "#/$defs/AssetImportCommand",
             "asset.updateMetadata": "#/$defs/AssetMetadataCommand",
@@ -23977,6 +24202,9 @@
           },
           {
             "$ref": "#/$defs/AssetImportCommand"
+          },
+          {
+            "$ref": "#/$defs/ArtifactPublishCommand"
           },
           {
             "$ref": "#/$defs/AssetWriteTextCommand"

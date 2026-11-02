@@ -56,6 +56,8 @@ def creation_routes(projects: CreationProjects, generation=None):
         if value.projectId != project_id:
             raise ProjectError('命令不属于当前工程。')
         session = str(x_opendirector_session) if x_opendirector_session else None
+        if value.type == 'artifact.publish':
+            raise ProjectError('产物发布需要服务端执行上下文，不能通过路径直接访问本机文件。', 403)
         if value.type == 'job.checkpoint':
             raise ProjectError('任务执行事实只能由后台写入。', 403)
         if value.type in {'generation.submit', 'job.cancel', 'job.recover'}:

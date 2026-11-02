@@ -69,7 +69,7 @@ class CreationAssets:
             raise ContractError('reference_invalid', 'Asset reference differs from its content', asset.id)
         return asset
 
-    def register(self, command, *, session=None, source='ui', provenance=None, apply=None):
+    def register(self, command, *, session=None, source='ui', provenance=None, apply=None, upload_handle=None):
         """Trusted services may supply provenance and atomically update jobs/editors.
 
         HTTP never accepts these extra arguments. Generated/edited outputs
@@ -79,9 +79,9 @@ class CreationAssets:
         if replay is not None:
             return replay
         payload = command.payload
-        if command.type != 'asset.import':
+        if command.type != 'asset.import' and not (command.type == 'artifact.publish' and upload_handle is not None):
             raise ProjectError('文件登记需要素材导入命令。')
-        handle = payload.uploadHandle
+        handle = payload.uploadHandle if command.type == 'asset.import' else upload_handle
         with self.uploads.lock(command.projectId, handle):
             _, owner, record = self.uploads.ready(command.projectId, handle, session)
             asset = Asset(id=upload_asset_id(command.projectId, handle), projectId=command.projectId,
@@ -89,7 +89,7 @@ class CreationAssets:
                 path=f'assets/{upload_asset_id(command.projectId, handle)}', metadata=record.metadata,
                 provenance=provenance or AssetProvenance(source='upload'))
             def register(before):
-                if payload.expectedKind != record.kind:
+                if payload.expectedKind is not None and payload.expectedKind != record.kind:
                     raise ContractError('invalid_input', 'Uploaded media kind differs from the command')
                 existing = next((item for item in before.assets if item.id == asset.id), None)
                 if existing:

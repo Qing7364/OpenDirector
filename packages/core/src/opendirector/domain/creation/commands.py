@@ -25,6 +25,14 @@ class AssetImport(Contract):
     expectedKind: MediaKind
 
 
+class ArtifactPublish(Contract):
+    """Publish a file from a server-owned execution context without generating media."""
+    path: str = Field(min_length=1, max_length=4096)
+    name: str = Field(min_length=1, max_length=255)
+    expectedKind: MediaKind | None = None
+    sources: tuple[AssetRef, ...] = Field(default=(), max_length=100)
+
+
 class AssetWriteText(Contract):
     name: str = Field(min_length=1, max_length=255)
     text: str = Field(max_length=1024 * 1024)
@@ -277,6 +285,7 @@ _COMMANDS = (
     ('ProjectTrashCommand', 'project.trash', EmptyPayload),
     ('ProjectRestoreCommand', 'project.restore', EmptyPayload),
     ('AssetImportCommand', 'asset.import', AssetImport),
+    ('ArtifactPublishCommand', 'artifact.publish', ArtifactPublish),
     ('AssetWriteTextCommand', 'asset.writeText', AssetWriteText),
     ('AssetMetadataCommand', 'asset.updateMetadata', AssetMetadataUpdate),
     ('AssetDeleteCommand', 'asset.delete', AssetDelete),
