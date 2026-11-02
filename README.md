@@ -31,7 +31,7 @@ Use it to explore visual ideas, refine assets, and make short films. Projects st
 
 ## Example film: We Can Still Win
 
-*We Can Still Win* (《我们还能赢》) is a 60-second short about a middle-aged Dota 2 player, made by [@david6666666](https://github.com/david6666666), who works in AI infrastructure and plays Dota 2.
+*We Can Still Win* (《我们还能赢》) is a 60-second short about a middle-aged Dota 2 player.
 
 This screenshot shows the actual project reopened in OpenDirector: the script, six video shots, the editable timeline, and the rendered film. The production workflow was script and storyboard → reference images → video generation → narration and music → timeline editing → MP4 export. Video generation used FastH3 served through [vLLM-Omni](https://github.com/vllm-project/vllm-omni).
 

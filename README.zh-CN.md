@@ -31,7 +31,7 @@ OpenDirector 是一个在本地运行、通过浏览器使用的 AI 视频创作
 
 ## 短片示例：《我们还能赢》
 
-《我们还能赢》是一支关于 Dota2 中年云玩家的 60 秒短片，由从事 AI Infra 相关工作的 Dota2 玩家 [@david6666666](https://github.com/david6666666) 制作。
+《我们还能赢》是一支关于 Dota2 中年云玩家的 60 秒短片。
 
 下图为在 OpenDirector 中重新打开的真实工程，包含剧本、六个视频镜头、可编辑时间线和合成成片。制作顺序为：剧本与分镜 → 参考图片 → 视频生成 → 配音与配乐 → 时间线剪辑 → 导出 MP4。其中，视频生成使用通过 [vLLM-Omni](https://github.com/vllm-project/vllm-omni) 部署的 FastH3。
 
