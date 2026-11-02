@@ -69,7 +69,29 @@ def command(runtime: str, work: Path, socket: str, token: str, model: str | None
         if model:
             args += ['--model', f'opendirector/{model}' if bundled else model]
         return args, env
-    raise ProjectError('未知 Agent 引擎。')
+    if runtime == 'codex':
+        settings = [f'mcp_servers.opendirector.command={json.dumps(bridge["command"])}',
+            f'mcp_servers.opendirector.args={json.dumps(bridge["args"])}', 'mcp_servers.opendirector.required=true',
+            'mcp_servers.opendirector.default_tools_approval_mode="approve"',
+            'features.shell_tool=true', 'features.apply_patch_freeform=false', 'web_search="disabled"',
+            'skills.bundled.enabled=false', f'developer_instructions={json.dumps(SYSTEM)}']
+        settings += [f'mcp_servers.opendirector.env.{key}={json.dumps(value)}' for key, value in bridge['env'].items()]
+        args = [binary, 'exec', '--json', '--skip-git-repo-check', '--ignore-user-config', '--ignore-rules', '--sandbox', 'workspace-write']
+        for setting in settings:
+            args += ['-c', setting]
+    else:
+        plugin = work / 'plugin'
+        (plugin / '.claude-plugin').mkdir(parents=True)
+        (plugin / '.claude-plugin/plugin.json').write_text(json.dumps({'name': 'opendirector', 'version': '0.1.0'}))
+        (plugin / 'skills').symlink_to(work / '.agents/skills', target_is_directory=True)
+        args = [binary, '-p', '--verbose', '--system-prompt', SYSTEM,
+            '--output-format', 'stream-json', '--plugin-dir', str(plugin), '--tools', 'Skill,Bash,Read',
+            '--strict-mcp-config', '--mcp-config', json.dumps({'mcpServers': {'opendirector': bridge}}),
+            '--allowedTools', 'mcp__opendirector__*', 'Skill(opendirector:*)', 'Bash', 'Read',
+            '--permission-mode', 'dontAsk', '--setting-sources', '']
+    if model:
+        args += ['--model', model]
+    return args, env
 
 
 def text_events(runtime: str, raw: dict) -> list[dict]:
