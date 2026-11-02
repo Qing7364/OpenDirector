@@ -85,6 +85,7 @@ export interface AudioExecutionInput extends ContractInput {
   readonly format: "mp3" | "wav";
   readonly sampleRate?: number | null;
   readonly creationType?: "audio" | "music";
+  readonly instrumental?: boolean;
   readonly maxDurationSeconds?: number | null;
 }
 
@@ -97,6 +98,7 @@ export interface AudioParametersInput extends ContractInput {
   readonly creationType?: "audio" | "music";
   readonly mode?: "tts" | "unified";
   readonly voice?: string | null;
+  readonly instrumental?: boolean;
   readonly lyrics?: string;
   readonly durationSeconds?: number | null;
 }
@@ -1442,6 +1444,7 @@ export interface AudioExecution extends Contract {
   readonly format: "mp3" | "wav";
   readonly sampleRate: number | null;
   readonly creationType?: "audio" | "music";
+  readonly instrumental?: boolean;
   readonly maxDurationSeconds?: number | null;
 }
 
@@ -1454,6 +1457,7 @@ export interface AudioParameters extends Contract {
   readonly creationType: "audio" | "music";
   readonly mode: "tts" | "unified";
   readonly voice: string | null;
+  readonly instrumental?: boolean;
   readonly lyrics?: string;
   readonly durationSeconds?: number | null;
 }

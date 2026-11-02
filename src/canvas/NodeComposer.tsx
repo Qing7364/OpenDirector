@@ -455,7 +455,7 @@ export function NodeComposer({
                     : "描述台词、音色和声音场景，可添加音频参考…"
           }
         />
-        {backend && music && (
+        {backend && music && !settings.musicInstrumental && (
           <textarea
             className="cw-prompt-input cw-lyrics-input"
             aria-label="歌词"
@@ -464,7 +464,7 @@ export function NodeComposer({
             disabled={running}
             spellCheck={false}
             placeholder={
-              "歌词（可选，留空生成纯音乐）。段落标签单独成一行，例如：\n[verse]\n雨落在窗前\n[chorus]\n说不出的话，让旋律回答"
+              "歌词。段落标签单独成一行，例如：\n[verse]\n雨落在窗前\n[chorus]\n说不出的话，让旋律回答"
             }
             onChange={(event) => updateSettings({ lyrics: event.target.value })}
           />
@@ -522,6 +522,21 @@ export function NodeComposer({
             </span>
           </button>
           <div className="cw-generation-mode-controls">
+            {backend && music && (
+              <select
+                aria-label="音乐类型"
+                value={settings.musicInstrumental ? "instrumental" : "song"}
+                disabled={running}
+                onChange={(event) =>
+                  updateSettings({
+                    musicInstrumental: event.target.value === "instrumental",
+                  })
+                }
+              >
+                <option value="instrumental">纯音乐</option>
+                <option value="song">歌曲（带人声）</option>
+              </select>
+            )}
             {mode === "image" && (
               <select
                 aria-label="图片创作预设"

@@ -41,9 +41,11 @@ class AudioParameters(Contract):
     creationType: Literal['audio', 'music'] = 'audio'
     mode: Literal['tts', 'unified'] = 'tts'
     voice: str | None = Field(default=None, pattern=r'^[A-Za-z0-9_.-]{1,64}$')
-    # Music only: the prompt is the style description; empty lyrics ask for an instrumental piece.
+    # Music only: the prompt is the style description. A song sings its lyrics;
+    # an instrumental piece has no vocals and ignores any lyrics left in the spec.
     # Unset music fields stay out of the dump, so specs and job fingerprints
     # recorded before music support keep their identity.
+    instrumental: bool = Field(default=False, exclude_if=lambda value: value is False)
     lyrics: str = Field(default='', max_length=5000, exclude_if=lambda value: value == '')
     durationSeconds: Annotated[float, Field(strict=True, ge=MUSIC_SECONDS[0], le=MUSIC_SECONDS[1])] | None = Field(
         default=None, exclude_if=lambda value: value is None)
@@ -210,6 +212,7 @@ class AudioExecution(Contract):
     format: Literal['mp3', 'wav']
     sampleRate: PositiveInt | None = None
     creationType: Literal['audio', 'music'] = Field(default='audio', exclude_if=lambda value: value == 'audio')
+    instrumental: bool = Field(default=False, exclude_if=lambda value: value is False)
     # A music model may end the piece earlier than this cap.
     maxDurationSeconds: Annotated[float, Field(strict=True, ge=MUSIC_SECONDS[0], le=MUSIC_SECONDS[1])] | None = Field(
         default=None, exclude_if=lambda value: value is None)
@@ -330,6 +333,8 @@ def validate_generation(spec: GenerationSpec, model: ModelConfigPublic, referenc
     if spec.kind == 'audio' and rules.profile == 'vllm-omni-music':
         if spec.parameters.creationType != 'music':
             raise ValueError('所选模型用于音乐生成，请切换为音乐生成。')
+        if not spec.parameters.instrumental and not spec.parameters.lyrics.strip():
+            raise ValueError('歌曲需要歌词；不需要人声请选择纯音乐。')
     elif spec.kind == 'audio' and (spec.parameters.creationType != 'audio' or spec.parameters.mode != 'tts'):
         raise ValueError('当前语音服务仅支持文本朗读。')
     if spec.kind == 'audio' and spec.promptContent is not None and not any(part.type == 'text' and part.text.strip() for part in spec.promptContent):

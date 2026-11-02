@@ -125,8 +125,10 @@ class CreationGeneration(GenerationRuntime):
             from opendirector.domain.image_output import resolve_image_output
             params['size'] = resolve_image_output(config, input_rules(config), intent)
         if spec.kind == 'audio' and intent['creationType'] == 'music':
-            # The adapter snapshot fixes what is sent: style (prompt), lyrics and length cap.
-            params = {'creation_type': 'music', 'lyrics': intent.get('lyrics', ''),
+            # The adapter snapshot fixes what is sent: style (prompt), vocals, lyrics and length cap.
+            instrumental = intent.get('instrumental', False)
+            params = {'creation_type': 'music', 'instrumental': instrumental,
+                      'lyrics': '' if instrumental else intent.get('lyrics', ''),
                       'duration': intent.get('durationSeconds') or DEFAULT_MUSIC_SECONDS}
         elif spec.kind == 'audio' and intent.get('voice'):
             params['voice' if config['protocol'] == 'openai' else 'speaker'] = intent['voice']
@@ -178,7 +180,8 @@ class CreationGeneration(GenerationRuntime):
                 responseFormat='b64_json' if profile in {'vllm-omni-image', 'vllm-omni-qwen-image'} else 'url' if config['protocol'] == 'volcengine' else None,
                 outputFormat='png', watermark=parameters.get('watermark'))
         if kind == 'audio' and parameters.get('creation_type') == 'music':
-            return dict(kind=kind, creationType='music', format='mp3', maxDurationSeconds=parameters['duration'])
+            return dict(kind=kind, creationType='music', instrumental=parameters.get('instrumental', False), format='mp3',
+                        maxDurationSeconds=parameters['duration'])
         if kind == 'audio':
             return dict(kind=kind, voice=parameters.get('voice') or ('default' if config['connectionType'] == 'self_hosted' else 'alloy') if config['protocol'] == 'openai' else None,
                 speaker=parameters.get('speaker') if config['protocol'] != 'openai' else None,

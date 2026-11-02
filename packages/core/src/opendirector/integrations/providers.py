@@ -136,7 +136,8 @@ class GenerationProviders(VolcengineGeneration):
                         await asyncio.sleep(self.poll_interval)
                 if kind == 'audio' and task['parameters'].get('creation_type') == 'music':
                     params = task['parameters']
-                    result = await VllmOmniMusic(self.transport).music(config, MusicRequest(task['prompt'], params.get('lyrics', ''), params['duration']))
+                    result = await VllmOmniMusic(self.transport).music(config, MusicRequest(task['prompt'], params.get('lyrics', ''), params['duration'],
+                                                                                       params.get('instrumental', False)))
                     return result.suffix, result.data
                 if kind == 'audio':
                     result = await OpenAISpeech(self.transport).speech(config, SpeechRequest(task['prompt'], task['parameters'].get('voice')))

@@ -60,7 +60,8 @@ export interface GenerationSettings {
   audioCreationType?: "audio" | "music";
   audioMode?: "unified" | "tts";
   voiceName?: string;
-  /** Music models: words to sing; empty asks for an instrumental piece. */
+  /** Music models: an instrumental piece has no vocals; a song sings `lyrics`. */
+  musicInstrumental?: boolean;
   lyrics?: string;
   imagePreset?: "none" | "product-views";
   /** A model configured in the local API; catalog models leave it unset. */

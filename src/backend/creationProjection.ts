@@ -588,6 +588,8 @@ export class CreationProjection {
                     audioMode: spec.parameters.mode,
                     ...(spec.parameters.creationType === "music"
                       ? {
+                          musicInstrumental:
+                            spec.parameters.instrumental ?? false,
                           lyrics: spec.parameters.lyrics,
                           durationSeconds:
                             spec.parameters.durationSeconds ??
@@ -771,6 +773,7 @@ export class CreationProjection {
             mode: node.data.settings?.audioMode ?? "tts",
             ...(node.data.settings?.audioCreationType === "music"
               ? {
+                  instrumental: node.data.settings.musicInstrumental ?? true,
                   lyrics: node.data.settings.lyrics ?? "",
                   durationSeconds:
                     node.data.settings.durationSeconds ?? MUSIC_SECONDS.initial,

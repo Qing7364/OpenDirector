@@ -60,8 +60,13 @@ const cases = [
       lyrics: "[verse]\n雨落在窗前",
       durationSeconds: 45,
     },
-    patch: { lyrics: "", durationSeconds: 120 },
-    expected: { creationType: "music", lyrics: "", durationSeconds: 120 },
+    // A saved song reopens as a song and can turn into an instrumental piece.
+    patch: { musicInstrumental: true, durationSeconds: 120 },
+    expected: {
+      creationType: "music",
+      instrumental: true,
+      durationSeconds: 120,
+    },
   },
 ] as const;
 for (const scenario of cases)
@@ -150,6 +155,7 @@ for (const scenario of cases)
     ) {
       assert.equal(settings.audioCreationType, "music");
       assert.equal(settings.lyrics, "[verse]\n雨落在窗前");
+      assert.equal(settings.musicInstrumental, false);
       assert.equal(settings.durationSeconds, 45);
     }
     projection.baseline = restored;
@@ -261,7 +267,14 @@ test("an audio node composes with a music model and reads aloud with a speech mo
   // Speech nodes keep their 5 s default, which is no valid music length.
   assert.equal(composing.audioCreationType, "music");
   assert.equal(composing.durationSeconds, 30);
+  assert.equal(composing.musicInstrumental, true);
   assert.equal(backendBlocker(composing, [], [music, speech]), null);
+  const song = { ...composing, musicInstrumental: false };
+  assert.match(backendBlocker(song, [], [music])!, /歌词/);
+  assert.equal(
+    backendBlocker({ ...song, lyrics: "[verse]\n雨落在窗前" }, [], [music]),
+    null,
+  );
   assert.match(
     backendBlocker({ ...composing, prompt: " " }, [], [music])!,
     /音乐风格/,

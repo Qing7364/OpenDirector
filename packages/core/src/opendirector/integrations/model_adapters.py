@@ -316,6 +316,7 @@ class VllmOmniMusic(ModelAdapter):
 
     ``input`` carries the lyrics and ``instructions`` the style caption; both are
     required. ``max_new_tokens`` caps the length in audio frames at 25 per second.
+    An instrumental request sends section tags only and asks for no vocals.
     """
 
     capabilities = frozenset({'audio.music'})
@@ -323,10 +324,14 @@ class VllmOmniMusic(ModelAdapter):
     # Section tags without words: the models need non-empty lyrics, and an
     # arrangement with no sung text yields an instrumental piece.
     INSTRUMENTAL = '[intro]\n[verse]\n[chorus]\n[outro]'
+    NO_VOCALS = 'Instrumental only, no vocals.'
 
     async def music(self, config, request: MusicRequest) -> MediaResult:
-        payload = {'model': config['modelId'], 'input': request.lyrics.strip() or self.INSTRUMENTAL,
-                   'instructions': request.style, 'response_format': 'mp3',
+        style = f'{request.style.rstrip()} {self.NO_VOCALS}' if request.instrumental else request.style
+        # Jobs frozen before the explicit choice treated empty lyrics as instrumental.
+        tags_only = request.instrumental or not request.lyrics.strip()
+        payload = {'model': config['modelId'], 'input': self.INSTRUMENTAL if tags_only else request.lyrics.strip(),
+                   'instructions': style, 'response_format': 'mp3',
                    'max_new_tokens': round(request.max_seconds * self.FRAMES_PER_SECOND)}
 
         async def work():

@@ -135,10 +135,11 @@ class SpeechRequest:
 
 @dataclass(frozen=True)
 class MusicRequest:
-    """A song or score from a style description; empty lyrics ask for an instrumental piece."""
+    """A song that sings its lyrics, or an instrumental piece without vocals, from a style description."""
     style: str
     lyrics: str = ''
     max_seconds: float = 30
+    instrumental: bool = False
 
 
 @dataclass(frozen=True)
