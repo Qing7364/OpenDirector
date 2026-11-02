@@ -71,6 +71,7 @@ export function select(root: HTMLElement, caret: Caret) {
   value?.addRange(range);
 }
 export function readDOM(root: HTMLElement): ReferenceContent {
+  if (root.childNodes.length === 1 && root.firstChild?.nodeName === "BR") return [];
   const parts: ReferenceContent = [];
   function read(node: Node) {
     if (node instanceof HTMLElement && node.dataset.reference) {

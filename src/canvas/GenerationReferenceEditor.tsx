@@ -75,6 +75,10 @@ export function GenerationReferenceEditor({
 }) {
   const uploads = useReferenceUploads(controls?.projectId ?? "");
   const editor = useRef<ChatReferenceEditorHandle>(null);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => editor.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [node.id]);
   const file = useRef<HTMLInputElement>(null);
   const upload = useRef<AbortController | null>(null);
   const latestNode = useRef(node);
