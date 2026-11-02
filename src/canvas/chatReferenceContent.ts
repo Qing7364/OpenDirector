@@ -2,6 +2,7 @@ import type { ChatAsset } from "../backend/chat.ts";
 
 export type ContentPart =
   | { type: "text"; text: string }
+  | { type: "skill"; name: string }
   | {
       type: "reference";
       assetId: string;
@@ -71,7 +72,8 @@ export function normalizeContent(parts: ReferenceContent): ReferenceContent {
       const last = result.at(-1);
       if (last?.type === "text") last.text += text;
       else result.push({ type: "text", text });
-    } else
+    } else if (part.type === "skill") result.push({type: "skill", name: part.name});
+    else
       result.push({
         type: "reference",
         assetId: part.assetId,
@@ -109,6 +111,7 @@ export function contentText(content: ReferenceContent, speech = false) {
     .map((part) =>
       part.type === "text"
         ? part.text
+        : part.type === "skill" ? (speech ? "" : `/${part.name}`)
         : speech
           ? ""
           : `［参考${ids.indexOf(part.assetId) + 1}：${part.name}］`,
@@ -119,6 +122,7 @@ export function contentText(content: ReferenceContent, speech = false) {
     let prefix = "",
       hasReference = false;
     for (const part of content) {
+      if (part.type === "skill") continue;
       if (part.type === "reference") {
         hasReference = true;
         continue;
@@ -156,7 +160,7 @@ export function referenceContent(
       },
     ];
   });
-  return body.some((part) => part.type === "reference" || part.text.length > 0)
+  return body.some((part) => part.type !== "text" || part.text.length > 0)
     ? [...header, { type: "text", text: "\n" }, ...body]
     : header;
 }
@@ -181,7 +185,7 @@ export function currentReferences(
   assets: readonly ReferenceAsset[],
 ): ReferenceContent {
   return content.map((part) => {
-    if (part.type === "text" || part.binding === "asset") return part;
+    if (part.type !== "reference" || part.binding === "asset") return part;
     const asset = part.nodeId
       ? (assets.find(
           (asset) =>
@@ -205,6 +209,7 @@ export function currentReferences(
 export function validContent(content: ReferenceContent) {
   return (
     content.length <= 2000 &&
+    content.filter(part => part.type === "skill").length <= 1 &&
     contentText(content).length <= CONTENT_LIMIT &&
     referenceIds(content).length <= REFERENCE_LIMIT
   );

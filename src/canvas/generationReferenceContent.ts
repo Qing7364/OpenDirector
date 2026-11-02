@@ -37,7 +37,7 @@ export function generationEditIdentity(
         )
       : undefined,
     content: content.map((part) =>
-      part.type === "text"
+      part.type !== "reference"
         ? part
         : part.binding === "asset"
           ? {
@@ -143,6 +143,7 @@ export function generationContentPatch(
   const mentions: NonNullable<CanvasNodeData["promptMentions"]> = [];
   for (const part of content) {
     if (part.type === "text") prompt += part.text;
+    else if (part.type === "skill") prompt += `/${part.name}`;
     else {
       const label = `@${part.name}`;
       mentions.push({

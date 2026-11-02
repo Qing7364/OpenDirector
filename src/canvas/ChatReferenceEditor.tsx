@@ -37,6 +37,7 @@ import type { ReferenceRules } from "./chatReferenceInsertion.ts";
 import {
   mentionCategories,
   mentionRange,
+  slashRange,
   REFERENCE_CATEGORIES,
   type MentionOption,
   type ReferenceCategory,
@@ -47,6 +48,7 @@ import { assetDisplayName } from "./assetNames.ts";
 export interface ChatReferenceEditorHandle {
   focus: () => void;
   openPicker: () => void;
+  setSkill: (name: string | null, fromSlash?: boolean) => void;
   caret: () => Caret;
   removeSource: (nodeId: string) => boolean;
   insert: (
@@ -74,6 +76,8 @@ interface Props {
   onSubmit: () => void;
   onPasteFiles: (files: File[]) => void;
   onConfirmPending?: (caret: Caret) => void;
+  onSlashChange?: (query: string | null) => void;
+  skillsEnabled?: boolean;
   label?: string;
   placeholder?: string;
   className?: string;
@@ -114,8 +118,10 @@ export function ChatReferenceEditor({
   onSubmit,
   onPasteFiles,
   onConfirmPending,
+  onSlashChange,
+  skillsEnabled = false,
   label = "消息内容",
-  placeholder = "输入想法、剧本或上传参考，输入 @ 引用项目素材，和 Agent 一起创作",
+  placeholder = "输入想法、剧本或上传参考，支持 / 使用技能，输入 @ 引用项目素材，和 Agent 一起创作",
   className = "",
   autoGrow = false,
   referenceRules = defaultRules,
@@ -132,6 +138,7 @@ export function ChatReferenceEditor({
   const iconTemplates = useRef<HTMLSpanElement>(null);
   const current = useRef(value),
     saved = useRef<Caret>({ start: 0, end: 0 });
+  const slash = useRef<ReturnType<typeof slashRange>>(null);
   const past = useRef<Snapshot[]>([]),
     future = useRef<Snapshot[]>([]),
     lastEdit = useRef(0);
@@ -147,22 +154,8 @@ export function ChatReferenceEditor({
     [active, setActive] = useState(0);
   const [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
-  const latest = useRef({
-    onChange,
-    onChoose,
-    onOpen,
-    assets,
-    previews,
-    visibleReferenceNodeIds,
-  });
-  latest.current = {
-    onChange,
-    onChoose,
-    onOpen,
-    assets,
-    previews,
-    visibleReferenceNodeIds,
-  };
+  const latest = useRef({onChange, onChoose, onOpen, assets, previews, visibleReferenceNodeIds, onSlashChange});
+  latest.current = {onChange, onChoose, onOpen, assets, previews, visibleReferenceNodeIds, onSlashChange};
   const listId = useId();
   const categories = mentionCategories(options);
   const effectiveCategory = categories.includes(category) ? category : "all";
@@ -254,7 +247,15 @@ export function ChatReferenceEditor({
     for (const part of blank ? [] : content) {
       if (part.type === "text")
         fragment.append(document.createTextNode(part.text));
-      else {
+      else if (part.type === "skill") {
+        const chip = document.createElement("span");
+        chip.contentEditable = "false";
+        chip.dataset.skill = part.name;
+        chip.className = "cw-chat-skill-token";
+        chip.textContent = `/${part.name}`;
+        chip.setAttribute("aria-label", `技能：${part.name}`);
+        fragment.append(chip);
+      } else {
         const chip = document.createElement("span");
         chip.contentEditable = "false";
         chip.dataset.reference = JSON.stringify(part);
@@ -296,7 +297,7 @@ export function ChatReferenceEditor({
     // editor is still empty, so it keeps its prompt and publishes no message.
     const next = blankContent(normalized) ? [] : normalized;
     if (!validContent(next)) {
-      setNotice("正文最多 20000 字、64 份不同参考。");
+      setNotice(next.filter(part => part.type === "skill").length > 1 ? "每条消息只能选择一个技能，原内容未修改。" : "正文最多 20000 字、64 份不同参考。");
       paint(current.current, saved.current);
       return false;
     }
@@ -367,10 +368,12 @@ export function ChatReferenceEditor({
     setRange(at);
   }
   function updateMention() {
-    if (composing.current || choosing.current || disabled || referencesDisabled)
-      return;
+    if (composing.current || choosing.current || disabled) return;
     const at = caret();
     saved.current = at;
+    slash.current = slashRange(editingText(current.current), at.start, at.end);
+    latest.current.onSlashChange?.(slash.current?.query ?? null);
+    if (referencesDisabled) return;
     const next = mentionRange(editingText(current.current), at.start, at.end);
     if (!next) {
       dismissed.current = null;
@@ -444,8 +447,8 @@ export function ChatReferenceEditor({
         added: ReferenceAsset[] = [];
       const resolved = new Map<string, ReferenceAsset[]>();
       for (const part of content) {
-        if (part.type === "text") {
-          inserted.push(part);
+        if (part.type !== "reference") {
+          inserted.push(part.type === "skill" && !skillsEnabled ? {type: "text", text: `/${part.name}`} : part);
           continue;
         }
         const key = JSON.stringify([
@@ -539,6 +542,27 @@ export function ChatReferenceEditor({
   useImperativeHandle(ref, () => ({
     focus,
     caret,
+    setSkill: (name, fromSlash = false) => {
+      if (disabled || !skillsEnabled) return;
+      const range = fromSlash ? slash.current : caret();
+      if (!range) return;
+      let offset = 0, removedBeforeStart = 0, removedBeforeEnd = 0;
+      const body = current.current.filter(part => {
+        const start = offset;
+        offset += part.type === "text" ? part.text.length : 1;
+        if (part.type !== "skill") return true;
+        if (start < range.start) removedBeforeStart++;
+        if (start < range.end) removedBeforeEnd++;
+        return false;
+      });
+      const at = {start: range.start - removedBeforeStart, end: range.end - removedBeforeEnd};
+      const inserted: ReferenceContent = name ? [{type: "skill", name}, {type: "text", text: " "}] : [];
+      const position = at.start + (name ? 2 : 0);
+      publish(editContent(body, at, inserted), {start: position, end: position});
+      slash.current = null;
+      latest.current.onSlashChange?.(null);
+      focus({start: position, end: position});
+    },
     insert,
     removeSource: (nodeId) => {
       if (disabled || referencesDisabled || choosing.current) return false;
@@ -741,6 +765,8 @@ export function ChatReferenceEditor({
         }
         onCompositionStart={() => {
           composing.current = true;
+          slash.current = null;
+          latest.current.onSlashChange?.(null);
           close();
           // Uncommitted IME text is already drawn in the editor; the empty
           // prompt must not stay behind it.
@@ -752,11 +778,11 @@ export function ChatReferenceEditor({
         }}
         onInput={input}
         onFocus={() => {
-          saved.current = caret();
+          updateMention();
         }}
         onPointerUp={() => {
           close();
-          saved.current = caret();
+          updateMention();
         }}
         onBlur={() => {
           if (!choosing.current) close();
@@ -918,6 +944,7 @@ export function ChatReferenceEditor({
               data.content.every((part: ReferenceContent[number]) =>
                 part.type === "text"
                   ? typeof part.text === "string"
+                  : part.type === "skill" ? typeof part.name === "string" && /^[a-zA-Z0-9_-]{1,200}$/.test(part.name)
                   : part.type === "reference" &&
                     typeof part.name === "string" &&
                     part.name.length > 0 &&
@@ -946,7 +973,7 @@ export function ChatReferenceEditor({
                 void pasteReferences(normalizeContent(data.content), caret());
                 return;
               }
-              inserted = normalizeContent(data.content);
+              inserted = normalizeContent(data.content.map((part: ReferenceContent[number]) => part.type === "skill" && !skillsEnabled ? {type: "text", text: `/${part.name}`} : part));
             }
           } catch {
             /* Foreign clipboard data is inserted as plain text. */

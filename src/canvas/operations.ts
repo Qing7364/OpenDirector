@@ -323,7 +323,7 @@ export function pasteFragment(
     if (!node.data.promptContent) return node;
     const pinned = new Map<string, string>();
     const content = node.data.promptContent.map((part) => {
-      if (part.type === "text") return part;
+      if (part.type !== "reference") return part;
       if (part.binding === "asset") {
         const key = part.referenceId ?? `${part.assetId}:${part.fingerprint}`;
         if (!pinned.has(key)) pinned.set(key, newId());

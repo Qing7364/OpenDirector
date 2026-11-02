@@ -94,6 +94,7 @@ export function useAssistantChat(
       ...previous,
       draft: contentText(content),
       draftContent: content,
+      skills: content.flatMap(part => part.type === "skill" ? [part.name] : []),
       assets,
     }));
   };

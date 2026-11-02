@@ -740,3 +740,43 @@
     width: calc(100cqw - 32px);
   }
 }
+
+
+.cw-assistant-panel .cw-skill-trigger {
+  background: var(--chat-surface);
+  padding: 5px 7px;
+}
+.cw-skill-trigger small {
+  color: var(--chat-text);
+  font-size: 10px;
+}
+.cw-skill-popover {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  box-sizing: border-box;
+  overflow-y: auto;
+  z-index: 80;
+  padding: 8px;
+  border: 1px solid var(--chat-border);
+  border-radius: 16px;
+  background: var(--chat-surface);
+  box-shadow: 0 10px 32px #0005;
+  color: var(--chat-text);
+}
+.cw-skill-search { display: flex; align-items: center; gap: 10px; padding: 8px 10px 12px; margin-bottom: 6px; border-bottom: 1px solid var(--chat-border); color: var(--chat-muted); }
+.cw-assistant-panel .cw-skill-search input { flex: 1; min-width: 0; padding: 0; margin: 0; background: transparent; border: 0; border-radius: 0; outline: none; color: var(--chat-text); font: inherit; font-size: 14px; }
+.cw-assistant-panel .cw-skill-search button { padding: 2px 4px; color: var(--chat-muted); font-size: 18px; }
+.cw-skill-options { max-height: min(360px, 45dvh); overflow-y: auto; scrollbar-width: thin; }
+.cw-assistant-panel .cw-skill-options > button { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 12px 10px; border-radius: 10px; text-align: left; color: var(--chat-text); }
+.cw-skill-options > button > svg { margin-top: 3px; flex-shrink: 0; color: var(--chat-text); }
+.cw-skill-options > button > span { min-width: 0; flex: 1; }
+.cw-skill-title { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cw-skill-title strong { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-skill-title em { flex-shrink: 0; padding: 1px 5px; border-radius: 4px; background: var(--chat-hover); color: var(--chat-muted); font-size: 11px; font-style: normal; }
+.cw-skill-options small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 4px; font-size: 12px; line-height: 1.6; color: var(--chat-muted); }
+.cw-assistant-panel .cw-skill-options > button:is(.is-active, :hover, [aria-selected="true"]) { background: var(--chat-hover); }
+.cw-skill-popover p { margin: 12px 10px; color: var(--chat-muted); font-size: 12px; }
+.cw-assistant-panel .cw-skill-status > button { padding: 5px 8px; border: 1px solid var(--chat-border); border-radius: 6px; font-size: 12px; }
+
+.cw-chat-skill-token { display: inline-block; padding: 0 8px; margin-right: 5px; border: 0; border-radius: 6px; background: #2c2c3a; color: #cfcfe6; font-size: inherit; font-weight: 600; line-height: 1.65; vertical-align: baseline; white-space: nowrap; user-select: all; }

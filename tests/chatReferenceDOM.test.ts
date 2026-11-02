@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readDOM } from "../src/canvas/chatReferenceDOM.ts";
+import { readDOM, editContent } from "../src/canvas/chatReferenceDOM.ts";
 
 test("a browser's lone empty line is empty content, while real line breaks remain", () => {
   const previousElement = globalThis.HTMLElement;
@@ -32,4 +32,26 @@ test("a browser's lone empty line is empty content, while real line breaks remai
     globalThis.HTMLElement = previousElement;
     globalThis.Node = previousNode;
   }
+});
+
+
+test("consuming a skill command preserves references and surrounding text", () => {
+  const reference = {type: "reference" as const, assetId: "asset", name: "source.mp4", fingerprint: "source"};
+  const content = [reference, {type: "text" as const, text: " /skill 保留正文"}];
+  assert.deepEqual(editContent(content, {start: 2, end: 8}, []), [reference, {type: "text", text: "  保留正文"}]);
+});
+
+
+test("skill tokens retain their document position and occupy one editing unit", async () => {
+  const { editingText } = await import("../src/canvas/chatReferenceDOM.ts");
+  const { contentText, referenceIds, validContent } = await import("../src/canvas/chatReferenceContent.ts");
+  const reference = {type: "reference" as const, assetId: "image", name: "source.png", fingerprint: null};
+  const content = [reference, {type: "text" as const, text: " /skill trailing"}];
+  const inserted = editContent(content, {start: 2, end: 8}, [{type: "skill", name: "character-replacement"}]);
+  assert.deepEqual(inserted, [reference, {type: "text", text: " "}, {type: "skill", name: "character-replacement"}, {type: "text", text: " trailing"}]);
+  assert.equal(editingText(inserted), "\ufffc \ufffc trailing");
+  assert.deepEqual(referenceIds(inserted), ["image"]);
+  assert.match(contentText(inserted), /\/character-replacement trailing$/);
+  assert.deepEqual(editContent(inserted, {start: 2, end: 3}, []), [reference, {type: "text", text: "  trailing"}]);
+  assert.equal(validContent([{type: "skill", name: "first"}, {type: "skill", name: "second"}]), false);
 });
