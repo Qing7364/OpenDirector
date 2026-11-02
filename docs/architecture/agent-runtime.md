@@ -1,21 +1,62 @@
-# Agent runtime
+# Agent 运行机制
 
-Default runs the pinned bundled OpenCode process. OpenDirector supplies its configured chat model, declared input modalities and a turn-scoped MCP gateway. OpenCode owns its loop, native file and shell tools, and Skill loading.
+本文描述 runtime 适配、技能发现和单次运行的实现机制。业务分层与公共语义见 [统一项目架构](unified-project.md#agent-runtime-与业务执行)，需求与验收见 [Agent 协作开发文档](../development/agent-collaboration.md)。
 
-Each turn writes intermediate files into `agent-runs/<turn-id>/work`; source assets remain at their original absolute paths. The process inherits the server PATH, so installed FFmpeg and ffprobe can be discovered with `command -v`. These programs must be installed before starting the server.
+## Runtime 与模型来源
 
-Project changes go through `read_project`, `command_schema` and `execute_command`, sharing validation and receipts with the UI. Publish each newly created file with `artifact.publish`, then use `canvas.show` to display it. A timeline of source ranges does not create independent clips.
+Harness 指承担模型调用、工具执行和上下文管理的 Agent 执行程序；runtime 是 OpenDirector 对该程序的接入入口。
 
-Conversation drafts and messages persist separately from project objects. Only one reply per project is admitted; stop and stream disconnect terminate the process group, drain accepted business operations and save the partial reply. Native events and business-tool events are recorded in `agent-runs/<turn-id>.opencode.jsonl`.
+| Runtime | 执行程序 | 模型与认证来源 |
+| --- | --- | --- |
+| Default | 固定版本的 bundled OpenCode | OpenDirector 模型配置，经本地模型代理访问服务 |
+| OpenCode CLI | PATH 中的 opencode | CLI 原生配置与模型目录 |
+| Codex | PATH 中的 codex | 原生认证与模型目录；隔离启动前解析所选模型或默认模型 |
+| Claude Code | PATH 中的 claude | 原生认证、环境变量与初始化模型目录 |
 
-Image reading requires both a compatible model/API and enabled image input in model settings. Native tool availability is not proof that a model can understand a video; inspect actual output. ComfyUI execution and character-replacement quality are outside this change. The richer Skill and preview UI follow separately.
+Default 与 OpenCode CLI 分别配置。外部 CLI 不读取 OpenDirector 保存的模型凭证。进程继承服务端环境，包括 PATH 和第三方 API 配置。
 
-Validation covers the real bundled OpenCode process with a simulated model transport, shared MCP calls, cancellation, persisted conversation state, and actual FFmpeg outputs published through business commands. Simulated model tests do not establish real model planning or visual quality.
+会话保存 runtime、模型和推理强度，浏览器偏好用于辅助恢复选择。适配层不指定固定迭代轮数，沿用 harness 的预算和停止机制。
 
-## External CLI selection
+## 执行链路
 
-The assistant picker separates installed OpenCode CLI, Codex and Claude Code from Default. Default continues to use bundled OpenCode and OpenDirector model settings; external harnesses use their installed binary, native authentication and model catalog. Unavailable harnesses provide setup guidance. Model and effort choices persist with each conversation, with a browser preference used while the draft is saving.
+```text
+会话消息、素材引用、技能选择
+              ↓
+       Runtime 适配层
+              ↓
+ Harness 执行循环与原生工具
+              ↓ MCP
+         ToolGateway
+              ↓
+    共用业务命令与应用服务
+              ↓
+     工程回执与界面状态刷新
+```
 
-OpenCode CLI reads its configured model, recent selection or native provider default. Codex reads its native model catalog and configured default before an isolated execution; Claude Code reads its native initialization catalog. The server inherits authentication environment variables, including third-party API configuration, so launch it from the configured shell environment.
+适配层为每轮创建 `agent-runs/<turn-id>/work/`，启动 harness 并连接本轮 MCP 工具入口。原生工具以此目录为工作目录，通过继承的 PATH 查找 FFmpeg、ffprobe 等程序。
 
-All harnesses receive the same turn-scoped business gateway and execution directory. Codex runs with workspace-write sandboxing; Claude Code receives the explicit Skill, Bash, Read and OpenDirector tool allowlist. Native events are recorded under the corresponding runtime name. Automated CLI fixtures validate routing and process behavior; each installed CLI and real model still require separate acceptance testing.
+业务工具分为工程查询 `read_project`、技能或文本素材读取 `read`、命令契约查询 `command_schema` 和命令执行 `execute_command`。Gateway 按调用身份保留任务和结果：相同身份、相同输入复用结果，不同输入拒绝执行。
+
+新文件通过 `artifact.publish` 登记，再根据需要调用 `canvas.show` 展示。发布回执、素材登记和画布展示分别表达，不以创建节点代替文件交付。
+
+## Skill 加载与媒体输入
+
+技能发现范围包括工程和工作空间的 `.opendirector/skills/`，以及内置的 `packages/agent/skills/`。发现阶段调用 bundled OpenCode 的原生加载器；执行阶段将发现的技能复制到本轮目录，向所选 harness 提供目录和显式选择信息，由其加载正文与资源。
+
+Default 将模型配置中的输入模态传入 bundled OpenCode。外部 harness 使用自身的模型能力配置。媒体引用和前端预览不直接构成模型视觉输入，实际观察能力取决于模型/API 以及原生工具传入的内容。
+
+## 运行生命周期
+
+同一工程同时只接受一个回复运行。运行事件转换为回复正文和工具活动，保存到对应会话；原生事件与业务工具事件追加到 `agent-runs/<turn-id>.<runtime>.jsonl`。Default 使用 `opencode` 作为轨迹文件的 runtime 名称。
+
+停止或流连接断开时，适配层终止进程组，Gateway 关闭新调用入口并等待已接受操作结束；API 保存部分回复并释放运行占用。业务操作以各自回执确认，远端生成任务仍通过任务取消命令处理。
+
+## 原生工具权限
+
+| Harness | 执行约束 |
+| --- | --- |
+| OpenCode | 工具权限配置开放 Shell、文件读取、已发现技能和业务工具 |
+| Codex | workspace-write 沙箱，开放 Shell 和业务工具 |
+| Claude Code | 明确允许 Skill、Bash、Read 和业务工具 |
+
+工具允许列表与操作系统沙箱提供不同约束。业务工具独立校验工程范围和输入；原生文件访问权限不授予直接改写工程存储的业务权限。
