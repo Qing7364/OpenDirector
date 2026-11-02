@@ -1,7 +1,9 @@
 <p align="center">
   <picture>
-    <source media="(prefers-reduced-motion: reduce)" srcset="src/assets/opendirector-readme-logo.png" />
-    <img src="src/assets/opendirector-readme-logo.gif" alt="OpenDirector — animated clapperboard logo" width="660" />
+    <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="src/assets/opendirector-header-dark.png" />
+    <source media="(prefers-reduced-motion: reduce)" srcset="src/assets/opendirector-header-light.png" />
+    <source media="(prefers-color-scheme: dark)" srcset="src/assets/opendirector-header-dark.gif" />
+    <img src="src/assets/opendirector-header-light.gif" alt="OpenDirector — animated logo" width="660" />
   </picture>
 </p>
 
