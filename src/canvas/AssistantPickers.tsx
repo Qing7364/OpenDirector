@@ -47,20 +47,24 @@ export function ModelPicker({
   onChange,
   onConfigure,
   disabled,
+  includeAgent = true,
 }: {
   models: ModelConfig[];
   selections: ModelSelections;
   onChange: (kind: AssistantKind, id: string) => void;
   onConfigure: () => void;
   disabled: boolean;
+  includeAgent?: boolean;
 }) {
+  const kinds = includeAgent ? MODEL_KINDS : MODEL_KINDS.filter(item => item.id !== "agent");
   const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<AssistantKind>("agent");
+  const [selection, setKind] = useState<AssistantKind>("agent");
+  const kind = !includeAgent && selection === "agent" ? "image" : selection;
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const id = useId();
-  const category = MODEL_KINDS.find((item) => item.id === kind)!;
+  const category = kinds.find((item) => item.id === kind)!;
   const options = modelOptions(models, kind);
   const agent = modelOptions(models, "agent").find(
     (item) => item.id === selections.agent,
@@ -106,17 +110,17 @@ export function ModelPicker({
     );
     const next =
       event.key === "ArrowRight"
-        ? (current + 1) % MODEL_KINDS.length
+        ? (current + 1) % kinds.length
         : event.key === "ArrowLeft"
-          ? (current - 1 + MODEL_KINDS.length) % MODEL_KINDS.length
+          ? (current - 1 + kinds.length) % kinds.length
           : event.key === "Home"
             ? 0
             : event.key === "End"
-              ? MODEL_KINDS.length - 1
+              ? kinds.length - 1
               : null;
     if (next !== null) {
       event.preventDefault();
-      setKind(MODEL_KINDS[next].id);
+      setKind(kinds[next].id);
       buttons[next].focus();
     }
     if (event.key === "ArrowDown") {
@@ -159,8 +163,8 @@ export function ModelPicker({
         type="button"
         className="chat-picker-trigger"
         disabled={disabled}
-        aria-label={`模型配置：${agent?.label ?? "未配置 Agent"}`}
-        title="选择 Agent、图片、视频和音频模型"
+        aria-label={`模型配置：${includeAgent ? agent?.label ?? "未配置 Agent" : "媒体模型"}`}
+        title={includeAgent ? "选择 Agent、图片、视频和音频模型" : "选择图片、视频和音频模型"}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? id : undefined}
@@ -173,7 +177,7 @@ export function ModelPicker({
         }}
       >
         <Icon name="cube" />
-        <span>{agent?.label ?? "选择模型"}</span>
+        <span>{includeAgent ? agent?.label ?? "选择模型" : "媒体模型"}</span>
         <Icon name="chevron" />
       </button>
       {open && (
@@ -210,7 +214,7 @@ export function ModelPicker({
             aria-label="模型类型"
             onKeyDown={tabKeys}
           >
-            {MODEL_KINDS.map((tab) => (
+            {kinds.map((tab) => (
               <button
                 key={tab.id}
                 id={`${id}-${tab.id}`}

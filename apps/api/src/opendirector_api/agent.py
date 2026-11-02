@@ -12,6 +12,7 @@ from fastapi import APIRouter, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
+from opendirector.agent.catalog import model_choices
 from opendirector.agent.context import RunContext, RuntimeId
 from opendirector.agent.runtime import AgentRuntimes, runtime_available, configured_runtimes, runtime_spec
 from opendirector.agent.skills import skills
@@ -182,6 +183,11 @@ def agent_routes(projects, generation, configs, provider=None) -> APIRouter:
     async def available_runtimes(project_id: UUID):
         await asyncio.to_thread(conversations.path, project_id)
         return await configured_runtimes()
+
+    @router.get('/runtimes/{runtime}/models')
+    async def runtime_models(project_id: UUID, runtime: Literal['opencode', 'codex', 'claude']):
+        await asyncio.to_thread(conversations.path, project_id)
+        return await model_choices(runtime)
 
     @router.get('/skills')
     async def catalog(project_id: UUID):

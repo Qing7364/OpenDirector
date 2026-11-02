@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { rememberAgentSelection, restoreAgentSelection } from "./agentPreferences";
 import { errorMessage } from "../backend/api";
 import {
   conversation,
@@ -113,7 +114,7 @@ export function useAssistantChat(
         setThreads(list.items);
         if (cancelled) return;
         setRuntimes(available);
-        const restored = saved;
+        const restored = restoreAgentSelection(projectId, saved);
         setValue({
           ...restored,
           messages: saved.messages.map((message) =>
@@ -434,7 +435,7 @@ export function useAssistantChat(
     try {
       rememberChat(projectId, current.current);
       await flushChatDraft(projectId);
-      const saved = await activateConversation(projectId, id, create);
+      const saved = restoreAgentSelection(projectId, await activateConversation(projectId, id, create));
       if (!alive.current) return;
       current.current = saved;
       rememberChat(projectId, saved);
@@ -470,6 +471,7 @@ export function useAssistantChat(
     setValue,
     selectAgent: (patch: Partial<Conversation>) => {
       const next = {...current.current, ...patch};
+      rememberAgentSelection(projectId, next);
       current.current = next;
       rememberChat(projectId, next);
       setValue(next);
