@@ -5,7 +5,7 @@ import {
 
 // An atomic reference occupies one editing position, regardless of its label.
 export function units(node: Node): number {
-  if (node instanceof HTMLElement && node.dataset.reference) return 1;
+  if (node instanceof HTMLElement && (node.dataset.reference || node.dataset.skill)) return 1;
   if (node.nodeType === Node.TEXT_NODE)
     return (node.textContent ?? "").replaceAll("\u200b", "").length;
   if (node.nodeName === "BR") return 1;
@@ -50,7 +50,7 @@ export function select(root: HTMLElement, caret: Caret) {
         }
         if (node.nodeType === Node.TEXT_NODE) return [node, remaining];
         if (
-          (node instanceof HTMLElement && node.dataset.reference) ||
+          (node instanceof HTMLElement && (node.dataset.reference || node.dataset.skill)) ||
           node.nodeName === "BR"
         )
           return [parent, index + (remaining ? 1 : 0)];
@@ -74,7 +74,9 @@ export function readDOM(root: HTMLElement): ReferenceContent {
   if (root.childNodes.length === 1 && root.firstChild?.nodeName === "BR") return [];
   const parts: ReferenceContent = [];
   function read(node: Node) {
-    if (node instanceof HTMLElement && node.dataset.reference) {
+    if (node instanceof HTMLElement && node.dataset.skill) {
+      parts.push({type: "skill", name: node.dataset.skill});
+    } else if (node instanceof HTMLElement && node.dataset.reference) {
       try {
         parts.push(JSON.parse(node.dataset.reference));
       } catch {

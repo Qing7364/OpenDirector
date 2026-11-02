@@ -8,6 +8,7 @@ import {
   insertMention,
   mentionCategories,
   mentionRange,
+  slashRange,
   nodeMentionOptions,
 } from "../src/canvas/referenceMentions.ts";
 
@@ -124,4 +125,21 @@ test("upstream references exclude blank/missing/timeline nodes and include subje
   assert.equal(options[1]!.thumbnail, image.data.src);
   assert.deepEqual(mentionCategories(options), ["all", "image", "subject"]);
   assert.deepEqual(mentionCategories([]), ["all"]);
+});
+
+
+test("skill slash commands follow the caret after text and atomic references", () => {
+  assert.deepEqual(slashRange("\ufffc\ufffc /character", 13), {start: 3, end: 13, query: "character"});
+  assert.deepEqual(slashRange("\ufffc/", 2), {start: 1, end: 2, query: ""});
+  assert.deepEqual(slashRange("先规划\n/换人 后文", 7), {start: 4, end: 7, query: "换人"});
+  assert.equal(slashRange("https://example.com", 19), null);
+  assert.equal(slashRange("/tmp/file", 9), null);
+  assert.equal(slashRange("文字/skill", 8), null);
+  assert.equal(slashRange("/skill", 1, 6), null);
+  assert.equal(slashRange("/skill", 0), null);
+});
+
+
+test("choosing a skill from the middle of a slash token replaces the complete token", () => {
+  assert.deepEqual(slashRange("\ufffc /character 后文", 7), {start: 2, end: 12, query: "char"});
 });

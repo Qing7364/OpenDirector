@@ -37,6 +37,13 @@ export function mentionRange(
   return value[start - 1] === "@" ? { start: start - 1, end } : null;
 }
 
+export function slashRange(value: string, start: number, end = start) {
+  if (start !== end || start < 1 || start > value.length) return null;
+  const match = /(?:^|[\s\ufffc])\/([^\s/\ufffc]*)$/u.exec(value.slice(0, start));
+  const suffix = /^[^\s/\ufffc]*/u.exec(value.slice(start))![0];
+  return match ? {start: start - match[1]!.length - 1, end: start + suffix.length, query: match[1]!} : null;
+}
+
 export function insertMention(
   value: string,
   range: MentionRange,
