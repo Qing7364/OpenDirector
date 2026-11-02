@@ -41,9 +41,9 @@ OpenDirector 是一个在本地运行、通过浏览器使用的 AI 视频创作
 
 **验收成片**
 
-[![观看《我们还能赢》60 秒验收成片](docs/guides/assets/dota2-short-film-poster.jpg)](docs/guides/assets/dota2-short-film.mp4)
+https://github.com/user-attachments/assets/11babc03-e35c-40e7-b5f6-7d476b6bf11a
 
-[▶ 观看或下载验收成片（MP4，15.7 MiB）](docs/guides/assets/dota2-short-film.mp4?raw=true) · 60 秒 · 1280 × 720 · 24 fps · 配乐：《岁月神偷》。
+[下载原始成片（MP4，15.7 MiB）](docs/guides/assets/dota2-short-film.mp4?raw=true) · 60 秒 · 1280 × 720 · 24 fps · 配乐：《岁月神偷》。
 
 ## 快速开始
 

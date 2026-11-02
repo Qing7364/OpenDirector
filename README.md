@@ -41,9 +41,9 @@ This screenshot shows the actual project reopened in OpenDirector: the script, s
 
 **Finished film**
 
-[![Watch We Can Still Win: the finished 60-second film](docs/guides/assets/dota2-short-film-poster.jpg)](docs/guides/assets/dota2-short-film.mp4)
+https://github.com/user-attachments/assets/11babc03-e35c-40e7-b5f6-7d476b6bf11a
 
-[▶ Watch or download the finished film (MP4, 15.7 MiB)](docs/guides/assets/dota2-short-film.mp4?raw=true) · 60 seconds · 1280 × 720 · 24 fps · Music: 《岁月神偷》.
+[Download the original film (MP4, 15.7 MiB)](docs/guides/assets/dota2-short-film.mp4?raw=true) · 60 seconds · 1280 × 720 · 24 fps · Music: 《岁月神偷》.
 
 ## Quick start
 
