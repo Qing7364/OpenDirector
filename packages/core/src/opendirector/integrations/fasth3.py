@@ -10,6 +10,8 @@ from opendirector.domain.assets import MAX_ASSET_BYTES
 from opendirector.domain.projects import ProjectError
 from opendirector.domain.references import project_content
 
+MP4_AUDIO_CODECS = {'aac', 'mp3', 'opus'}
+
 
 def native_prompt(task, sources):
     """Render each rich reference in place using H3's per-modality ordinals."""
@@ -73,13 +75,22 @@ def video_parameters(node, records, *, duration_seconds=None):
     return result
 
 
+def _mp4_audio_arguments(path):
+    """Keep MP4-playable soundtrack packets and transcode the rest, such as MOV PCM."""
+    process = subprocess.run(['ffprobe', '-v', 'error', '-protocol_whitelist', 'file,pipe', '-select_streams', 'a:0',
+                              '-show_entries', 'stream=codec_name', '-of', 'csv=p=0', str(path)],
+                             check=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=15)
+    codec = process.stdout.decode(errors='replace').strip()
+    return ['-c:a', 'copy'] if not codec or codec in MP4_AUDIO_CODECS else ['-c:a', 'aac', '-b:a', '192k']
+
+
 def finalize_video_edit(store, task, suffix, data):
     policy = task.get('parameters', {}).get('videoEdit')
     if task.get('protocol') != 'vllm_omni' or task['kind'] != 'video' or not policy:
         return suffix, data
     if not policy.get('preserveAudio') and not policy.get('preserveDuration'):
         return suffix, data
-    if not shutil.which('ffmpeg'):
+    if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):
         raise ProjectError('保留原片音轨和时长需要 FFmpeg；生成结果可继续下载恢复，无需重新生成。', 409)
     # Reuse the same fingerprint validation as submission when recovering a download.
     from opendirector.integrations.reference_inputs import references
@@ -95,16 +106,17 @@ def finalize_video_edit(store, task, suffix, data):
         original.write_bytes(source)
         # Stream-copy trimming is not frame-accurate with reordered B-frames:
         # packets after the target timestamp can extend the output duration.
-        # Re-encode video for an exact boundary while retaining audio packets.
+        # Re-encode video for an exact boundary; audio packets stay intact when MP4 can carry them.
         command = ['ffmpeg', '-nostdin', '-v', 'error', '-y', '-protocol_whitelist', 'file,pipe', '-i', str(generated),
                    '-protocol_whitelist', 'file,pipe', '-i', str(original), '-map', '0:v:0',
                    '-map', '1:a:0?' if policy.get('preserveAudio') else '0:a:0?',
-                   '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-c:a', 'copy', '-map_metadata', '-1']
+                   '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-map_metadata', '-1']
         # A longer source soundtrack must never extend an explicitly shorter edit.
         duration = policy['sourceDurationMs'] / 1000 if policy.get('preserveDuration') else float(task['parameters'].get('duration', task['parameters'].get('seconds', 5)))
         command += ['-t', str(duration)]
-        command += ['-movflags', '+faststart', str(output)]
         try:
+            command += _mp4_audio_arguments(original if policy.get('preserveAudio') else generated)
+            command += ['-movflags', '+faststart', str(output)]
             subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=60)
         except (subprocess.SubprocessError, OSError):
             raise ProjectError('保留原片音轨或时长失败；请检查 FFmpeg，稍后继续下载原任务，无需重新生成。', 409) from None

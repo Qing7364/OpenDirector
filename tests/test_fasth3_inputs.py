@@ -131,13 +131,15 @@ def test_preserved_soundtrack_does_not_extend_an_explicit_shorter_output(tmp_pat
     monkeypatch.setattr(shutil, 'which', lambda _: 'ffmpeg')
     def run(command, **kwargs):
         commands.append(command)
+        if command[0] == 'ffprobe':
+            return SimpleNamespace(stdout=b'aac\n')
         Path(command[-1]).write_bytes(b'final')
     monkeypatch.setattr(subprocess, 'run', run)
     task = {'kind': 'video', 'protocol': 'vllm_omni', 'projectId': 'owner',
             'parameters': {'duration': 5, 'videoEdit': {'sourceAssetId': original['id'],
                 'sourceDurationMs': 15000, 'preserveDuration': False, 'preserveAudio': True}}}
     assert finalize_video_edit(store, task, 'mp4', b'generated') == ('mp4', b'final')
-    command = commands[0]
+    command = commands[-1]
     assert command[command.index('-t') + 1] == '5.0'
 
 
@@ -172,6 +174,33 @@ def test_real_shorter_output_trims_reordered_video_and_keeps_the_selected_audio(
     selected = packets(original if preserve_audio else generated)
     actual = packets(output)
     assert actual and actual == selected[:len(actual)]
+    decoded = subprocess.run(['ffmpeg', '-v', 'error', '-i', str(output), '-f', 'null', '-'], capture_output=True, check=True)
+    assert not decoded.stderr.strip()
+
+
+def test_real_pcm_source_soundtrack_is_transcoded_for_the_mp4_output(tmp_path):
+    if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):
+        pytest.skip('FFmpeg required')
+    original, generated = tmp_path/'source.mov', tmp_path/'generated.mp4'
+    for path, seconds, frequency, audio in [(original, 5, 440, 'pcm_s16le'), (generated, 8, 880, 'aac')]:
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=24',
+            '-f', 'lavfi', '-i', f'sine=frequency={frequency}:sample_rate=48000', '-t', str(seconds),
+            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', audio, str(path)], check=True, capture_output=True)
+    meta = source('video', 'source.mov', fingerprint='fixture', durationMs=5000, hasAudio=True)
+    meta['type'] = 'video/quicktime'
+    store = SimpleNamespace(asset=lambda *args: (original.read_bytes(), meta))
+    task = {'kind': 'video', 'protocol': 'vllm_omni', 'projectId': 'test',
+            'inputSnapshot': {'references': {meta['id']: 'fixture'}},
+            'parameters': {'duration': 7, 'videoEdit': {'sourceAssetId': meta['id'], 'sourceDurationMs': 5000,
+                'preserveAudio': True, 'preserveDuration': False}}}
+    suffix, data = finalize_video_edit(store, task, 'mp4', generated.read_bytes())
+    output = tmp_path/'output.mp4'
+    output.write_bytes(data)
+    info = json.loads(subprocess.check_output(['ffprobe', '-v', 'error', '-show_streams', '-show_format', '-of', 'json', str(output)]))
+    audio = next(stream for stream in info['streams'] if stream['codec_type'] == 'audio')
+    assert suffix == 'mp4' and audio['codec_name'] == 'aac'
+    assert 4.9 <= float(audio['duration']) <= 5.1
+    assert 6.95 <= float(info['format']['duration']) <= 7.1
     decoded = subprocess.run(['ffmpeg', '-v', 'error', '-i', str(output), '-f', 'null', '-'], capture_output=True, check=True)
     assert not decoded.stderr.strip()
 

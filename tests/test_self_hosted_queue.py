@@ -102,6 +102,35 @@ def test_timeout_keeps_remote_id_and_explains_cloud_execution_continues(context,
     asyncio.run(run())
 
 
+def test_failed_video_finalization_keeps_remote_task_for_recovery_without_resubmission(context, monkeypatch):
+    store, _, project, configs, _ = context
+
+    def fail(*args):
+        raise ProjectError('保留原片音轨或时长失败；请检查 FFmpeg，稍后继续下载原任务，无需重新生成。', 409)
+    monkeypatch.setattr('opendirector.application.generation.finalize_video_edit', fail)
+
+    class Provider:
+        calls = 0
+        def validate(self, *args): pass
+        async def generate(self, config, task, submitted):
+            self.calls += 1
+            await submitted('paid-remote-job')
+            return 'mp4', b'fixture-video'
+
+    async def run():
+        provider = Provider()
+        manager = Generation(store, configs, provider)
+        try:
+            manager._launch(*prepare(manager, context))
+            await asyncio.gather(*(job.future for job in list(manager.jobs.values())))
+            task = manager.canvas.snapshot(project['id'])['tasks'][0]
+            assert task['status'] == 'failed' and task['recovery'] == 'remote' and task['resumeAllowed'] is True
+            assert task['externalTaskId'] == 'paid-remote-job' and provider.calls == 1
+        finally:
+            await manager.close()
+    asyncio.run(run())
+
+
 @pytest.mark.parametrize('state', ['interrupted', 'failed'])
 def test_interrupted_remote_video_can_be_cancelled_without_resubmission(context, state):
     store, session, project, configs, _ = context
