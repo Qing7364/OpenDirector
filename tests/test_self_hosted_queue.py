@@ -131,6 +131,46 @@ def test_failed_video_finalization_keeps_remote_task_for_recovery_without_resubm
     asyncio.run(run())
 
 
+def test_recovering_failed_finalization_downloads_again_without_a_second_submission(context, monkeypatch):
+    store, session, project, configs, _ = context
+    requests = []
+
+    def respond(request):
+        requests.append((request.method, request.url.path))
+        if request.method == 'POST':
+            return httpx.Response(200, json={'id': 'paid-remote-job', 'status': 'queued'})
+        if request.url.path.endswith('/content'):
+            return httpx.Response(200, content=b'fixture-video', headers={'content-type': 'video/mp4'})
+        return httpx.Response(200, json={'status': 'completed'})
+
+    attempts = []
+    def finalize(store, task, suffix, data):
+        attempts.append(data)
+        if len(attempts) == 1:
+            raise ProjectError('保留原片音轨或时长失败；请检查 FFmpeg，稍后继续下载原任务，无需重新生成。', 409)
+        return suffix, data
+    monkeypatch.setattr('opendirector.application.generation.finalize_video_edit', finalize)
+
+    async def run():
+        manager = Generation(store, configs, GenerationProviders(store, httpx.MockTransport(respond), .001))
+        try:
+            manager._launch(*prepare(manager, context))
+            await asyncio.gather(*(job.future for job in list(manager.jobs.values())))
+            failed = manager.canvas.snapshot(project['id'])['tasks'][0]
+            assert failed['status'] == 'failed' and failed['recovery'] == 'remote' and failed['resumeAllowed'] is True
+            await manager.recover(project['id'], failed['id'], session)
+            await asyncio.gather(*(job.future for job in list(manager.jobs.values())))
+            task = manager.canvas.snapshot(project['id'])['tasks'][0]
+            assert task['status'] == 'succeeded' and task['id'] == failed['id']
+            assert task['externalTaskId'] == 'paid-remote-job' and task['assetId']
+        finally:
+            await manager.close()
+    asyncio.run(run())
+    assert attempts == [b'fixture-video', b'fixture-video']
+    assert [path for method, path in requests if method == 'POST'] == ['/v1/videos']
+    assert sum(path.endswith('/content') for _, path in requests) == 2
+
+
 @pytest.mark.parametrize('state', ['interrupted', 'failed'])
 def test_interrupted_remote_video_can_be_cancelled_without_resubmission(context, state):
     store, session, project, configs, _ = context

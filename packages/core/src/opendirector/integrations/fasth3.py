@@ -88,29 +88,34 @@ def finalize_video_edit(store, task, suffix, data):
     policy = task.get('parameters', {}).get('videoEdit')
     if task.get('protocol') != 'vllm_omni' or task['kind'] != 'video' or not policy:
         return suffix, data
-    if not policy.get('preserveAudio') and not policy.get('preserveDuration'):
-        return suffix, data
     if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):
         raise ProjectError('保留原片音轨和时长需要 FFmpeg；生成结果可继续下载恢复，无需重新生成。', 409)
-    # Reuse the same fingerprint validation as submission when recovering a download.
-    from opendirector.integrations.reference_inputs import references
-    source, meta, _ = next(references(store, task['projectId'], [policy['sourceAssetId']]))
-    expected = task.get('inputSnapshot', {}).get('references', {}).get(policy['sourceAssetId'])
-    if expected and meta.get('fingerprint') != expected:
-        raise ProjectError('原视频已变化，无法保留其音轨；请恢复原素材后继续下载原任务。', 409)
+    # An edit that changes the audio and sets its own length only trims the result,
+    # so a later change to the source must not block a paid download.
+    uses_source = policy.get('preserveAudio') or policy.get('preserveDuration')
+    if uses_source:
+        # Reuse the same fingerprint validation as submission when recovering a download.
+        from opendirector.integrations.reference_inputs import references
+        source, meta, _ = next(references(store, task['projectId'], [policy['sourceAssetId']]))
+        expected = task.get('inputSnapshot', {}).get('references', {}).get(policy['sourceAssetId'])
+        if expected and meta.get('fingerprint') != expected:
+            raise ProjectError('原视频已变化，无法保留其音轨；请恢复原素材后继续下载原任务。', 409)
     with tempfile.TemporaryDirectory(prefix='opendirector-video-edit-') as folder:
         generated = Path(folder) / ('generated.' + suffix)
-        original = Path(folder) / ('source' + Path(meta['name']).suffix.lower())
         output = Path(folder) / 'output.mp4'
         generated.write_bytes(data)
-        original.write_bytes(source)
         # Stream-copy trimming is not frame-accurate with reordered B-frames:
         # packets after the target timestamp can extend the output duration.
         # Re-encode video for an exact boundary; audio packets stay intact when MP4 can carry them.
-        command = ['ffmpeg', '-nostdin', '-v', 'error', '-y', '-protocol_whitelist', 'file,pipe', '-i', str(generated),
-                   '-protocol_whitelist', 'file,pipe', '-i', str(original), '-map', '0:v:0',
-                   '-map', '1:a:0?' if policy.get('preserveAudio') else '0:a:0?',
-                   '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-map_metadata', '-1']
+        # Chrome also plays High 10 and High 4:4:4, but 8-bit 4:2:0 is the widely supported H.264 baseline.
+        command = ['ffmpeg', '-nostdin', '-v', 'error', '-y', '-protocol_whitelist', 'file,pipe', '-i', str(generated)]
+        if uses_source:
+            original = Path(folder) / ('source' + Path(meta['name']).suffix.lower())
+            original.write_bytes(source)
+            command += ['-protocol_whitelist', 'file,pipe', '-i', str(original)]
+        command += ['-map', '0:v:0', '-map', '1:a:0?' if policy.get('preserveAudio') else '0:a:0?',
+                    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p',
+                    '-map_metadata', '-1']
         # A longer source soundtrack must never extend an explicitly shorter edit.
         duration = policy['sourceDurationMs'] / 1000 if policy.get('preserveDuration') else float(task['parameters'].get('duration', task['parameters'].get('seconds', 5)))
         command += ['-t', str(duration)]

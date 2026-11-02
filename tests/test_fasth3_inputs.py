@@ -228,6 +228,50 @@ def test_explicit_seven_second_edit_is_not_trimmed_back_to_five_second_source(tm
     assert not decoded.stderr.strip()
 
 
+def test_real_audio_change_with_explicit_duration_trims_without_reading_the_source(tmp_path):
+    if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):
+        pytest.skip('FFmpeg required')
+    meta = source('video', 'source.mp4', durationMs=5000)
+    parameters = video_parameters({'referenceIds': [meta['id']], 'prompt': '替换人物并更换背景音乐'},
+                                  {meta['id']: meta}, duration_seconds=7)
+    assert parameters['num_frames'] == 175
+    assert not parameters['videoEdit']['preserveAudio'] and not parameters['videoEdit']['preserveDuration']
+    generated = tmp_path/'generated.mp4'
+    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=24',
+        '-f', 'lavfi', '-i', 'sine=frequency=880:sample_rate=48000', '-frames:v', '175', '-shortest',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', str(generated)], check=True, capture_output=True)
+    # The source may have changed since submission; this edit does not use it.
+    store = SimpleNamespace(asset=lambda *args: pytest.fail('source must not be read'))
+    task = {'kind': 'video', 'protocol': 'vllm_omni', 'projectId': 'test', 'parameters': parameters,
+            'inputSnapshot': {'references': {meta['id']: 'changed-since-submission'}}}
+    suffix, data = finalize_video_edit(store, task, 'mp4', generated.read_bytes())
+    output = tmp_path/'output.mp4'
+    output.write_bytes(data)
+    info = json.loads(subprocess.check_output(['ffprobe', '-v', 'error', '-show_streams', '-show_format', '-of', 'json', str(output)]))
+    assert suffix == 'mp4' and 6.95 <= float(info['format']['duration']) <= 7.05
+    assert any(s['codec_type'] == 'audio' for s in info['streams'])
+    decoded = subprocess.run(['ffmpeg', '-v', 'error', '-i', str(output), '-f', 'null', '-'], capture_output=True, check=True)
+    assert not decoded.stderr.strip()
+
+
+@pytest.mark.parametrize('pixel_format', ['yuv420p10le', 'yuv444p'])
+def test_real_output_is_always_8_bit_420(tmp_path, pixel_format):
+    if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):
+        pytest.skip('FFmpeg required')
+    generated = tmp_path/'generated.mp4'
+    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=24', '-t', '5',
+        '-c:v', 'libx264', '-pix_fmt', pixel_format, str(generated)], check=True, capture_output=True)
+    meta = source('video', 'source.mp4')
+    task = {'kind': 'video', 'protocol': 'vllm_omni', 'projectId': 'test', 'parameters': {'duration': 4, 'seconds': '4',
+            'videoEdit': {'sourceAssetId': meta['id'], 'sourceDurationMs': 4000, 'preserveAudio': False, 'preserveDuration': False}}}
+    _, data = finalize_video_edit(SimpleNamespace(), task, 'mp4', generated.read_bytes())
+    output = tmp_path/'output.mp4'
+    output.write_bytes(data)
+    stream = json.loads(subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', 'v:0',
+        '-show_entries', 'stream=pix_fmt,profile', '-of', 'json', str(output)]))['streams'][0]
+    assert stream == {'pix_fmt': 'yuv420p', 'profile': 'High'}
+
+
 def test_native_prompt_and_full_duration_reach_actual_video_multipart():
     import asyncio
     from email.parser import BytesParser
