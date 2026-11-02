@@ -60,6 +60,36 @@ def test_empty_structured_prompt_cannot_fall_back_to_deleted_inline_labels(proje
     assert store.snapshot(pid).references[-1].active
 
 
+@pytest.mark.parametrize('binding', ['follow_current', 'pinned'])
+def test_replacing_a_reference_to_the_same_source_commits_as_one_edit(project, binding):
+    store, pid, session = project
+    source, _, spec, ref, asset = setup_reference(project)
+    if binding == 'pinned':
+        from opendirector.application.creation_canvas import asset_ref
+        receipt = send(store, pid, 'reference.update', session=session, versions=[ver('reference', ref)],
+            reference={**ref.model_dump(mode='json'), 'binding': binding, 'source': asset_ref(asset).model_dump(mode='json')})
+        assert receipt.status == 'applied', receipt
+        ref = store.snapshot(pid).references[-1]
+    replacement_id = uuid4()
+    replacement = {**ref.model_dump(mode='json'), 'id': str(replacement_id), 'revision': 1, 'order': ref.order + 1}
+    receipt = send(store, pid, 'creation.batch', session=session,
+        versions=[ver('reference', ref), ver('generation_spec', spec)], operations=[
+            dict(type='reference.remove', payload=dict(referenceId=ref.id)),
+            dict(type='reference.add', payload=dict(reference=replacement)),
+            dict(type='generationSpec.setPrompt', payload=dict(specId=spec.id, prompt='', promptContent=[
+                dict(type='text', text='Keep '), dict(type='reference', referenceId=replacement_id)]))])
+    assert receipt.status == 'applied', receipt
+    from opendirector.infrastructure.creation_projects import CreationProjects
+    from opendirector.infrastructure.local_projects import LocalProjects
+    saved = CreationProjects(LocalProjects(store.local.repository)).snapshot(pid)
+    assert not next(item for item in saved.references if item.id == ref.id).active
+    assert next(item for item in saved.references if item.id == replacement_id).active
+    updated = next(item for item in saved.generationSpecs if item.id == spec.id)
+    assert updated.prompt == ('Keep @Original' if binding == 'follow_current' else 'Keep @Original.md')
+    assert updated.promptContent[-1].referenceId == replacement_id
+    assert resolved_inputs(saved, spec.id)[0].asset.assetId == asset.id
+
+
 def test_hidden_following_and_fixed_versions_survive_source_changes(project):
     store, pid, session = project
     source, _, spec, ref, first = setup_reference(project)

@@ -35,7 +35,7 @@ Use it to explore visual ideas, refine assets, and make short films. Projects st
 | --- | --- |
 | Node.js and npm | Node.js `24.22.1` or later, with npm |
 | Python | `3.11` or later |
-| FFmpeg | Both `ffmpeg` and `ffprobe` must be available in your terminal for media processing |
+| FFmpeg | `ffmpeg` with the `libx264` encoder and `ffprobe` must be available in your terminal for media processing |
 | Model service | A working service URL, Model ID, and any API key or other authentication information required by the service |
 
 Installing dependencies and calling remote models require a network connection. Prepare self-hosted model services separately; starting this application does not install or deploy models.

@@ -991,6 +991,31 @@ export class CreationProjection {
         operations.push({ type: "canvas.hide", payload: { itemId: id } });
       }
     const oldEdges = new Map(this.baseline.edges.map((e) => [e.id, e]));
+    // Hiding a node retains its business references. Explicit removals must
+    // precede additions so replacing a relation to the same source in one
+    // save does not have its new ID discarded as a duplicate.
+    const stillVisible = new Set(
+      [...document.nodes, ...(document.hiddenNodes ?? [])].map((n) => n.id),
+    );
+    for (const edge of this.baseline.edges)
+      if (
+        !document.edges.some((e) => e.id === edge.id) &&
+        stillVisible.has(edge.source) &&
+        stillVisible.has(edge.target)
+      ) {
+        const ref = basis.references.find((r) => r.id === edge.id);
+        if (ref) {
+          expect("reference", ref);
+          const spec = basis.generationSpecs.find(
+            (s) => s.id === ref.targetSpecId,
+          )!;
+          expect("generation_spec", spec);
+          operations.push({
+            type: "reference.remove",
+            payload: { referenceId: ref.id },
+          });
+        }
+      }
     for (const edge of document.edges) {
       if (edge.intent === "assembly_input") {
         if (!oldEdges.has(edge.id)) {
@@ -1026,29 +1051,6 @@ export class CreationProjection {
       };
       addReference(reference);
     }
-    // Hiding a node hides its rendered edges but retains business references.
-    const stillVisible = new Set(
-      [...document.nodes, ...(document.hiddenNodes ?? [])].map((n) => n.id),
-    );
-    for (const edge of this.baseline.edges)
-      if (
-        !document.edges.some((e) => e.id === edge.id) &&
-        stillVisible.has(edge.source) &&
-        stillVisible.has(edge.target)
-      ) {
-        const ref = basis.references.find((r) => r.id === edge.id);
-        if (ref) {
-          expect("reference", ref);
-          const spec = basis.generationSpecs.find(
-            (s) => s.id === ref.targetSpecId,
-          )!;
-          expect("generation_spec", spec);
-          operations.push({
-            type: "reference.remove",
-            payload: { referenceId: ref.id },
-          });
-        }
-      }
     for (const node of document.nodes.filter((node) => node.type === "video")) {
       const target = items.get(node.id),
         specId =
@@ -1134,6 +1136,44 @@ export class CreationProjection {
           same(node.data.promptMentions, old?.data.promptMentions))
       )
         continue;
+      const previousMentions = new Set(
+        old?.data.promptContent?.flatMap((part) =>
+          part.type === "reference" && part.referenceId
+            ? [part.referenceId]
+            : [],
+        ) ?? [],
+      );
+      const nextMentions = new Set(
+        node.data.promptContent?.flatMap((part) =>
+          part.type === "reference" && part.referenceId
+            ? [part.referenceId]
+            : [],
+        ) ?? [],
+      );
+      // Fixed references have no canvas edge, so their removals are derived
+      // from the prompt and must also precede any replacement additions.
+      for (const ref of basis.references.filter(
+        (ref) =>
+          ref.active &&
+          ref.targetSpecId === specId &&
+          node.data.promptContent !== undefined &&
+          (ref.binding === "pinned" || previousMentions.has(ref.id)) &&
+          !nextMentions.has(ref.id),
+      )) {
+        if (
+          operations.some(
+            (op) =>
+              op.type === "reference.remove" &&
+              op.payload.referenceId === ref.id,
+          )
+        )
+          continue;
+        expect("reference", ref);
+        operations.push({
+          type: "reference.remove",
+          payload: { referenceId: ref.id },
+        });
+      }
       for (const part of node.data.promptContent ?? []) {
         if (
           part.type !== "reference" ||
@@ -1183,42 +1223,6 @@ export class CreationProjection {
           binding: "pinned",
           source: assetReference(asset),
           order: Math.max(-1, ...orders) + 1,
-        });
-      }
-      const previousMentions = new Set(
-        old?.data.promptContent?.flatMap((part) =>
-          part.type === "reference" && part.referenceId
-            ? [part.referenceId]
-            : [],
-        ) ?? [],
-      );
-      const nextMentions = new Set(
-        node.data.promptContent?.flatMap((part) =>
-          part.type === "reference" && part.referenceId
-            ? [part.referenceId]
-            : [],
-        ) ?? [],
-      );
-      for (const ref of basis.references.filter(
-        (ref) =>
-          ref.active &&
-          ref.targetSpecId === specId &&
-          node.data.promptContent !== undefined &&
-          (ref.binding === "pinned" || previousMentions.has(ref.id)) &&
-          !nextMentions.has(ref.id),
-      )) {
-        if (
-          operations.some(
-            (op) =>
-              op.type === "reference.remove" &&
-              op.payload.referenceId === ref.id,
-          )
-        )
-          continue;
-        expect("reference", ref);
-        operations.push({
-          type: "reference.remove",
-          payload: { referenceId: ref.id },
         });
       }
       const content: (

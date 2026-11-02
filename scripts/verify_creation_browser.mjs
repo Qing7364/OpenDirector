@@ -153,7 +153,9 @@ try {
       (value) => value.references.some((ref) => ref.active),
       "dragged reference committed",
     );
-    const referenceId = snapshot.references.find((ref) => ref.active).id;
+    const targetSpecId = snapshot.references.find(
+      (ref) => ref.active,
+    ).targetSpecId;
     await target.locator(".cw-node-title").click();
     const prompt = page.getByRole("textbox", {
       name: "文本生成提示词",
@@ -161,16 +163,7 @@ try {
     });
     await prompt.fill("Based on @");
     await prompt.press("Enter");
-    snapshot = await until(
-      (value) =>
-        value.generationSpecs.some((spec) =>
-          spec.promptContent?.some(
-            (part) =>
-              part.type === "reference" && part.referenceId === referenceId,
-          ),
-        ),
-      "structured mention saved",
-    );
+    await prompt.locator("[data-reference]").waitFor();
     await source.locator(".cw-node-title").dblclick();
     await page
       .getByRole("textbox", { name: "节点名称", exact: true })
@@ -178,20 +171,41 @@ try {
     await page
       .getByRole("textbox", { name: "节点名称", exact: true })
       .press("Enter");
-    await until(
-      (value) =>
-        value.canvasItems.find((item) => item.id === sourceId).title ===
-        "Source A",
-      "rename saved",
-    );
+    snapshot = await until((value) => {
+      const spec = value.generationSpecs.find(
+        (entry) => entry.id === targetSpecId,
+      );
+      const ref = value.references.find(
+        (entry) =>
+          entry.active &&
+          entry.targetSpecId === targetSpecId &&
+          entry.binding === "follow_current" &&
+          entry.source.id === sourceId,
+      );
+      return (
+        value.canvasItems.find((item) => item.id === sourceId)?.title ===
+          "Source A" &&
+        spec?.prompt === "Based on @Source A" &&
+        spec.promptContent?.some(
+          (part) => part.type === "text" && part.text === "Based on ",
+        ) &&
+        spec.promptContent?.some(
+          (part) => part.type === "reference" && part.referenceId === ref?.id,
+        )
+      );
+    }, "rename and structured mention saved");
+    const referenceId = snapshot.references.find(
+      (ref) =>
+        ref.active &&
+        ref.targetSpecId === targetSpecId &&
+        ref.binding === "follow_current" &&
+        ref.source.id === sourceId,
+    ).id;
     await target.locator(".cw-node-title").click();
-    await page.waitForFunction(() =>
-      [...document.querySelectorAll("textarea")].some(
-        (input) =>
-          input.getAttribute("aria-label") === "文本生成提示词" &&
-          input.value.includes("Source A"),
-      ),
-    );
+    await prompt
+      .locator("[data-reference]")
+      .filter({ hasText: "Source A" })
+      .waitFor();
     await call("/api/creation-test-gate", { open: false });
     await page
       .getByRole("textbox", { name: "文本生成提示词", exact: true })
@@ -214,6 +228,14 @@ try {
     assert.equal(
       snapshot.jobs[0].inputSnapshot.references[0].asset.assetId,
       sourceAsset.id,
+    );
+    assert.equal(
+      snapshot.jobs[0].inputSnapshot.references[0].referenceId,
+      referenceId,
+    );
+    assert.equal(
+      snapshot.jobs[0].inputSnapshot.spec.prompt,
+      "Based on @Source A",
     );
     assert.equal(snapshot.canvasItems.length, 2);
     assert.equal(snapshot.generationSpecs.length, 2);

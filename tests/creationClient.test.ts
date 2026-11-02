@@ -294,7 +294,7 @@ test("edited projections retain their original revision basis and emit semantic 
   assert.ok(!JSON.stringify(batch).includes("Another actor changed it"));
 });
 
-test("hiding a source removes its rendered edge while retaining the business reference", async () => {
+test("reference replacement and hiding preserve the intended project relationships", async () => {
   const snapshot = empty(),
     source = createNode("text", undefined, { text: "Actual source" }),
     target = createNode("text");
@@ -398,6 +398,52 @@ test("hiding a source removes its rendered edge while retaining the business ref
     };
   projection.baseline = document;
   projection.basis = basis;
+  // Removing a mention and re-adding the same source before autosave creates a
+  // new local relation. The server must remove the old one before accepting it.
+  const replacementId = crypto.randomUUID();
+  const { generationContentPatch } =
+    await import("../src/canvas/generationReferenceContent.ts");
+  const replacement = generationContentPatch([
+    { type: "text", text: "Based on " },
+    {
+      type: "reference",
+      assetId: `node:${source.id}`,
+      nodeId: source.id,
+      referenceId: replacementId,
+      name: source.data.title,
+      fingerprint: null,
+    },
+  ]);
+  await projection.save({
+    ...document,
+    nodes: [source, { ...target, data: { ...target.data, ...replacement } }],
+    edges: [{ id: replacementId, source: source.id, target: target.id }],
+  });
+  const operations = client.batches[0]!.operations;
+  const removeIndex = operations.findIndex(
+    (op) => op.type === "reference.remove" && op.payload.referenceId === ref.id,
+  );
+  const addIndex = operations.findIndex(
+    (op) =>
+      op.type === "reference.add" && op.payload.reference.id === replacementId,
+  );
+  assert.ok(removeIndex >= 0 && addIndex > removeIndex);
+  const update = operations.find(
+    (op) => op.type === "generationSpec.setPrompt",
+  );
+  assert.ok(update?.type === "generationSpec.setPrompt");
+  assert.deepEqual(update.payload.promptContent, [
+    { type: "text", text: "Based on " },
+    { type: "reference", referenceId: replacementId },
+  ]);
+  assert.ok(
+    client.batches[0]!.versions.some(
+      (version) => version.objectType === "reference" && version.id === ref.id,
+    ),
+  );
+  projection.baseline = document;
+  projection.basis = basis;
+  client.batches = [];
   await projection.save({ ...document, nodes: [target], edges: [] });
   assert.deepEqual(
     client.batches[0]!.operations.map((op) => op.type),
@@ -435,6 +481,46 @@ test("hiding a source removes its rendered edge while retaining the business ref
     projection.baseline = rendered;
     projection.basis = hidden;
     client.batches = [];
+    if (binding === "pinned") {
+      const replacementId = crypto.randomUUID();
+      const replacement = generationContentPatch([
+        { type: "text", text: "Keep " },
+        {
+          type: "reference",
+          binding: "asset",
+          assetId: asset.id,
+          referenceId: replacementId,
+          name: asset.name,
+          fingerprint: asset.fingerprint,
+        },
+      ]);
+      await projection.save({
+        ...rendered,
+        nodes: [{ ...current, data: { ...current.data, ...replacement } }],
+      });
+      const operations = client.batches[0]!.operations;
+      const removeIndex = operations.findIndex(
+        (op) =>
+          op.type === "reference.remove" && op.payload.referenceId === ref.id,
+      );
+      const addIndex = operations.findIndex(
+        (op) =>
+          op.type === "reference.add" &&
+          op.payload.reference.id === replacementId,
+      );
+      assert.ok(removeIndex >= 0 && addIndex > removeIndex);
+      const prompt = operations.find(
+        (op) => op.type === "generationSpec.setPrompt",
+      );
+      assert.ok(prompt?.type === "generationSpec.setPrompt");
+      assert.deepEqual(prompt.payload.promptContent, [
+        { type: "text", text: "Keep " },
+        { type: "reference", referenceId: replacementId },
+      ]);
+      projection.baseline = rendered;
+      projection.basis = hidden;
+      client.batches = [];
+    }
     await projection.save({
       ...rendered,
       nodes: [

@@ -93,9 +93,13 @@ def finalize_video_edit(store, task, suffix, data):
         output = Path(folder) / 'output.mp4'
         generated.write_bytes(data)
         original.write_bytes(source)
+        # Stream-copy trimming is not frame-accurate with reordered B-frames:
+        # packets after the target timestamp can extend the output duration.
+        # Re-encode video for an exact boundary while retaining audio packets.
         command = ['ffmpeg', '-nostdin', '-v', 'error', '-y', '-protocol_whitelist', 'file,pipe', '-i', str(generated),
                    '-protocol_whitelist', 'file,pipe', '-i', str(original), '-map', '0:v:0',
-                   '-map', '1:a:0?' if policy.get('preserveAudio') else '0:a:0?', '-c', 'copy', '-map_metadata', '-1']
+                   '-map', '1:a:0?' if policy.get('preserveAudio') else '0:a:0?',
+                   '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-c:a', 'copy', '-map_metadata', '-1']
         # A longer source soundtrack must never extend an explicitly shorter edit.
         duration = policy['sourceDurationMs'] / 1000 if policy.get('preserveDuration') else float(task['parameters'].get('duration', task['parameters'].get('seconds', 5)))
         command += ['-t', str(duration)]

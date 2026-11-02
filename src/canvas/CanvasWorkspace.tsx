@@ -1746,7 +1746,7 @@ function Workspace() {
       }
       const issue = referenceIssue(current, source, target);
       if (issue) {
-        if (issue !== "duplicate_relation") notify(REFERENCE_ISSUE_TEXT[issue]);
+        notify(REFERENCE_ISSUE_TEXT[issue]);
         return;
       }
       command({
@@ -3568,7 +3568,7 @@ function Workspace() {
     // These components own their keyboard shortcuts and cancellation lifecycle.
     if (
       el.closest(
-        ".cw-composer-dock,.cw-composer-popover,.cw-node-toolbar-anchor,.cw-domain-dialog,.cw-selection-menu,.cw-action-media-host,.cw-project-selector,.cw-project-dialog,.cw-settings-dialog,.cw-assistant-panel,.cw-canvas-menu,.cw-node-title-input,.cw-subject-description",
+        ".cw-composer-dock,.cw-composer-popover,.cw-node-toolbar-anchor,.cw-domain-dialog,.cw-selection-menu,.cw-action-media-host,.cw-project-selector,.cw-project-dialog,.cw-settings-dialog,.cw-assistant-panel,.cw-context-menu,.cw-node-title-input,.cw-subject-description",
       )
     )
       return;
@@ -3988,13 +3988,13 @@ function Workspace() {
       y={menu!.y}
       className={menu?.connected ? "cw-canvas-menu" : undefined}
       onKeyDown={(event) => {
-        if (!menu?.connected) return;
         if (event.key === "Escape") {
           event.preventDefault();
           event.stopPropagation();
           setMenu(null);
           return;
         }
+        if (!menu?.connected) return;
         if (["ArrowDown", "ArrowUp"].includes(event.key)) {
           event.preventDefault();
           const buttons = [
@@ -4034,17 +4034,24 @@ function Workspace() {
     </button>
   );
   useEffect(() => {
-    if (!menu?.connected) return;
-    const element = root.current?.querySelector<HTMLElement>(".cw-canvas-menu");
-    element
-      ?.querySelector<HTMLButtonElement>("button:not(:disabled)")
-      ?.focus({ preventScroll: true });
+    if (!menu) return;
+    if (menu.connected) {
+      const element =
+        root.current?.querySelector<HTMLElement>(".cw-canvas-menu");
+      element
+        ?.querySelector<HTMLButtonElement>("button:not(:disabled)")
+        ?.focus({ preventScroll: true });
+    }
     const close = (event: PointerEvent) => {
-      if (!(event.target as Element).closest(".cw-context-menu")) setMenu(null);
+      if (
+        !(event.target instanceof Element) ||
+        !event.target.closest(".cw-context-menu")
+      )
+        setMenu(null);
     };
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
-  }, [menu?.connected]);
+  }, [menu]);
   const portMetrics = referencePortMetrics(zoom);
   const pendingSource =
     menu?.connected && doc.nodes.find((node) => node.id === menu.connected!.id);

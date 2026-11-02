@@ -110,6 +110,8 @@ def test_real_finalization_preserves_source_soundtrack_or_silence_and_duration(t
     info = probe(output)
     assert suffix == 'mp4' and .99 <= float(info['format']['duration']) <= 1.1
     assert any(s['codec_type'] == 'audio' for s in info['streams']) is has_audio
+    decoded = subprocess.run(['ffmpeg', '-v', 'error', '-i', str(output), '-f', 'null', '-'], capture_output=True, check=True)
+    assert not decoded.stderr.strip()
     if has_audio:
         def packets(path):
             value = json.loads(subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', 'a',
@@ -137,6 +139,41 @@ def test_preserved_soundtrack_does_not_extend_an_explicit_shorter_output(tmp_pat
     assert finalize_video_edit(store, task, 'mp4', b'generated') == ('mp4', b'final')
     command = commands[0]
     assert command[command.index('-t') + 1] == '5.0'
+
+
+@pytest.mark.parametrize('preserve_audio', [True, False])
+def test_real_shorter_output_trims_reordered_video_and_keeps_the_selected_audio(tmp_path, preserve_audio):
+    if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):
+        pytest.skip('FFmpeg required')
+    original, generated = tmp_path/'source.mp4', tmp_path/'generated.mp4'
+    for path, seconds, frequency in [(original, 6 if preserve_audio else 4, 440), (generated, 5, 880)]:
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=24',
+            '-f', 'lavfi', '-i', f'sine=frequency={frequency}:sample_rate=48000', '-t', str(seconds),
+            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', str(path)], check=True, capture_output=True)
+    video_info = json.loads(subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', 'v:0',
+        '-show_entries', 'stream=has_b_frames', '-of', 'json', str(generated)]))
+    assert video_info['streams'][0]['has_b_frames'] > 0
+    meta = source('video', 'source.mp4', fingerprint='fixture', hasAudio=True)
+    store = SimpleNamespace(asset=lambda *args: (original.read_bytes(), meta))
+    task = {'kind': 'video', 'protocol': 'vllm_omni', 'projectId': 'test',
+            'inputSnapshot': {'references': {meta['id']: 'fixture'}},
+            'parameters': {'duration': 4, 'videoEdit': {'sourceAssetId': meta['id'], 'sourceDurationMs': 4000,
+                'preserveAudio': preserve_audio, 'preserveDuration': not preserve_audio}}}
+    suffix, data = finalize_video_edit(store, task, 'mp4', generated.read_bytes())
+    output = tmp_path/'output.mp4'
+    output.write_bytes(data)
+    info = json.loads(subprocess.check_output(['ffprobe', '-v', 'error', '-show_streams', '-show_format', '-of', 'json', str(output)]))
+    assert suffix == 'mp4' and 3.95 <= float(info['format']['duration']) <= 4.1
+    assert 3.95 <= float(next(stream for stream in info['streams'] if stream['codec_type'] == 'video')['duration']) <= 4.05
+    def packets(path):
+        value = json.loads(subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', 'a',
+            '-show_packets', '-show_data_hash', 'sha256', '-show_entries', 'packet=data_hash', '-of', 'json', str(path)]))
+        return [packet['data_hash'] for packet in value['packets']]
+    selected = packets(original if preserve_audio else generated)
+    actual = packets(output)
+    assert actual and actual == selected[:len(actual)]
+    decoded = subprocess.run(['ffmpeg', '-v', 'error', '-i', str(output), '-f', 'null', '-'], capture_output=True, check=True)
+    assert not decoded.stderr.strip()
 
 
 def test_explicit_seven_second_edit_is_not_trimmed_back_to_five_second_source(tmp_path):
