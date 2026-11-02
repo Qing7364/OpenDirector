@@ -1,8 +1,9 @@
-import { createDocument, createNode } from "./model";
-import type { CanvasDocument } from "./model";
-import { createLocalStage } from "./stageDocument";
-import { dataUrlToBlob } from "./downloadAssets";
-export { downloadFilename } from "./downloadAssets";
+import { createDocument, createNode } from "./model.ts";
+import type { CanvasDocument } from "./model.ts";
+import { createLocalStage } from "./stageDocument.ts";
+import { loadLayerImage } from "./layerRenderer.ts";
+import { dataUrlToBlob } from "./downloadAssets.ts";
+export { downloadFilename } from "./downloadAssets.ts";
 
 /** Original vector study assets; these are illustrations, not AI results or remote media. */
 export function studyImage(seed = 0, title = "光与山之间"): string {
@@ -28,7 +29,19 @@ export function studyImage(seed = 0, title = "光与山之间"): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-export function exampleDocument(): CanvasDocument {
+export async function exampleDocument(): Promise<CanvasDocument> {
+  const images = await Promise.all(
+    [studyImage(0), studyImage(1, "暮色抵达之前")].map(async (src) => {
+      const image = await loadLayerImage(src);
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("无法创建示例图片。");
+      context.drawImage(image, 0, 0);
+      return canvas.toDataURL("image/png");
+    }),
+  );
   const doc = createDocument("光与山之间 · 镜头研究");
   const notes = createNode(
     "text",
@@ -46,9 +59,9 @@ export function exampleDocument(): CanvasDocument {
     { x: 460, y: 130 },
     {
       title: "场景 · 清晨",
-      src: studyImage(0),
+      src: images[0]!,
       assetState: "ready",
-      mimeType: "image/svg+xml",
+      mimeType: "image/png",
       media: { width: 1200, height: 1000 },
       prompt: "清晨，远山与湖泊，薄雾，低饱和青绿色，电影感广角构图",
     },
@@ -58,9 +71,9 @@ export function exampleDocument(): CanvasDocument {
     { x: 930, y: 130 },
     {
       title: "色彩 · 暖调",
-      src: studyImage(1, "暮色抵达之前"),
+      src: images[1]!,
       assetState: "ready",
-      mimeType: "image/svg+xml",
+      mimeType: "image/png",
       media: { width: 1200, height: 1000 },
       prompt: "参考场景结构，转为暮色暖调，保留静谧的氛围",
     },
@@ -167,13 +180,28 @@ export function exampleDocument(): CanvasDocument {
   );
   doc.nodes = [notes, a, b, video, timeline, subject, camera, director];
   doc.edges = [
-    { id: crypto.randomUUID(), source: notes.id, target: a.id },
-    { id: crypto.randomUUID(), source: a.id, target: b.id },
     { id: crypto.randomUUID(), source: b.id, target: video.id },
-    { id: crypto.randomUUID(), source: a.id, target: timeline.id },
-    { id: crypto.randomUUID(), source: b.id, target: timeline.id },
-    { id: crypto.randomUUID(), source: a.id, target: subject.id },
-    { id: crypto.randomUUID(), source: camera.id, target: video.id },
+    {
+      id: crypto.randomUUID(),
+      source: a.id,
+      target: timeline.id,
+      intent: "assembly_input",
+      assemblySlotId: timeline.data.timeline!.tracks[0]!.clips[0]!.id,
+    },
+    {
+      id: crypto.randomUUID(),
+      source: b.id,
+      target: timeline.id,
+      intent: "assembly_input",
+      assemblySlotId: timeline.data.timeline!.tracks[0]!.clips[1]!.id,
+    },
+    {
+      id: crypto.randomUUID(),
+      source: a.id,
+      target: subject.id,
+      intent: "assembly_input",
+      assemblySlotId: "main",
+    },
   ];
   return doc;
 }

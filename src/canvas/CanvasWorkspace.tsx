@@ -4230,7 +4230,7 @@ function Workspace() {
             <button
               onClick={() => {
                 void switchDocument(
-                  () => importWorkspaceDocument(exampleDocument()),
+                  async () => importWorkspaceDocument(await exampleDocument()),
                   true,
                 );
               }}
