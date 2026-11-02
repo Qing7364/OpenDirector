@@ -19,7 +19,7 @@ OpenDirector is an AI video creation workspace that runs locally and is accessed
 
 Use it to explore visual ideas, refine assets, and make short films. Projects stay on your machine; generation uses the provider APIs or self-hosted model services you choose.
 
-[Quick start](#quick-start) · [Connect models](#connect-models) · [Make your first short film](#make-your-first-short-film) · [Troubleshooting](#troubleshooting) · [More documentation](#more-documentation)
+[Example film](#example-film-we-can-still-win) · [Quick start](#quick-start) · [Connect models](#connect-models) · [Make your first short film](#make-your-first-short-film) · [Troubleshooting](#troubleshooting) · [More documentation](#more-documentation)
 
 ## What you can do
 
@@ -28,6 +28,16 @@ Use it to explore visual ideas, refine assets, and make short films. Projects st
 - **Media editing**: Crop, adjust colors, and work with layers and clips. AI tools such as image extension, erasing, and background removal depend on the connected models' capabilities.
 - **Timeline editing**: Arrange assets, adjust start and end points, speed, and volume, then preview and render an MP4. You can also export JSON, FCPXML, and asset bundles.
 - **Local projects, your choice of models**: The canvas saves automatically to your machine. Configure multiple models for a service and switch between them as needed.
+
+## Example film: We Can Still Win
+
+*We Can Still Win* (《我们还能赢》) is a 60-second short about a middle-aged Dota 2 player, made by [@david6666666](https://github.com/david6666666), who works in AI infrastructure and plays Dota 2.
+
+This screenshot shows the actual project reopened in OpenDirector: the script, six video shots, the editable timeline, and the rendered film. The production workflow was script and storyboard → reference images → video generation → narration and music → timeline editing → MP4 export. Video generation used FastH3 served through [vLLM-Omni](https://github.com/vllm-project/vllm-omni).
+
+[![The We Can Still Win project in OpenDirector, showing its script, six shots, timeline, and rendered film](docs/guides/assets/dota2-short-film-canvas.jpg)](docs/guides/assets/dota2-short-film-canvas.jpg)
+
+*Actual OpenDirector canvas; click the image to view it at full resolution.*
 
 ## Quick start
 
