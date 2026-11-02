@@ -30,7 +30,7 @@ def test_four_categories_survive_restart_without_exposing_secrets(api):
         response = client.post("/api/model-configs", json=payload(kind))
         assert response.status_code == 200
         assert "test-secret" not in response.text
-        assert set(response.json()) == {"id", "kind", "url", "modelId", "inputRules", "connectionType", "protocol", "authMode", "videoAdapter", "videoCapabilities"}
+        assert set(response.json()) == {"id", "kind", "url", "modelId", "inputRules", "connectionType", "protocol", "authMode", "videoAdapter", "videoCapabilities", "inputModalities"}
         configs.append(response.json())
     assert len({item["id"] for item in configs}) == 5
     assert client.get("/api/model-configs").json() == configs
@@ -322,3 +322,33 @@ def test_batch_edit_legacy_segmentation_preserves_identity(api):
     assert response.status_code == 200, response.text
     assert response.json()[0]['id'] == saved['id']
     assert len(client.get('/api/model-configs').json()) == 2
+
+
+def test_agent_image_input_persists_through_batch_edits_and_restart(api):
+    client, store = api
+    saved = client.post('/api/model-configs/batch', json=payload(modelIds=['vision-agent'],
+        inputModalities=['text', 'image'])).json()[0]
+    assert saved['inputModalities'] == ['text', 'image']
+    resolved = ModelConfigs(store.repository).resolve(saved['id'], 'agent')
+    assert resolved['inputModalities'] == ['text', 'image']
+    unchanged = client.patch('/api/model-configs/' + saved['id'], json=payload(modelId='vision-agent', apiKey=''))
+    assert unchanged.status_code == 200
+    assert unchanged.json()['inputModalities'] == ['text', 'image']
+    disabled = client.post('/api/model-configs/batch', json=payload(configId=saved['id'],
+        modelIds=['vision-agent'], apiKey='', inputModalities=['text']))
+    assert disabled.status_code == 200
+    assert disabled.json()[0]['inputModalities'] == ['text']
+
+
+@pytest.mark.parametrize('modalities', [[], ['image'], ['text', 'text'], ['text', 'video']])
+def test_invalid_agent_input_modalities_do_not_write(api, modalities):
+    client, store = api
+    response = client.post('/api/model-configs', json=payload(inputModalities=modalities))
+    assert response.status_code in {400, 422}
+    assert ModelConfigs(store.repository).list() == []
+
+
+def test_media_generation_model_cannot_declare_agent_modalities(api):
+    client, _ = api
+    response = client.post('/api/model-configs', json=payload(kind='image', inputModalities=['text', 'image']))
+    assert response.status_code == 400

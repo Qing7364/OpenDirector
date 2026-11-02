@@ -11,6 +11,7 @@ from filelock import FileLock
 
 from opendirector.domain.projects import ProjectError, identifier
 from opendirector.domain.input_rules import input_rules
+from opendirector.domain.capabilities import agent_input_modalities
 from opendirector.domain.video_capabilities import check_video_config
 from opendirector.infrastructure.local_projects import child, read_json, write_json
 
@@ -78,7 +79,7 @@ class ModelConfigs:
                     item.update(services[item['providerId']])
             seen = set()
             for item in value["models"]:
-                if not {'id', 'kind', 'url', 'modelId', 'apiKey'} <= set(item) or set(item) - {'id', 'kind', 'url', 'modelId', 'apiKey', 'connectionType', 'protocol', 'authMode', 'videoAdapter', 'videoCapabilities', 'providerId'}:
+                if not {'id', 'kind', 'url', 'modelId', 'apiKey'} <= set(item) or set(item) - {'id', 'kind', 'url', 'modelId', 'apiKey', 'connectionType', 'protocol', 'authMode', 'videoAdapter', 'videoCapabilities', 'providerId', 'inputModalities'}:
                     raise ValueError()
                 identifier(item["id"])
                 if item["id"] in seen or item["kind"] not in MODEL_KINDS:
@@ -91,6 +92,7 @@ class ModelConfigs:
                 if 'videoAdapter' not in item:
                     item['videoAdapter'] = ('minimax_h3' if item['modelId'].rsplit('/', 1)[-1].lower() == 'minimax-h3'
                                             else 'fasth3') if item['kind'] == 'video' and item['protocol'] == 'vllm_omni' else 'auto'
+                item['inputModalities'] = agent_input_modalities(item['kind'], item.get('inputModalities'))
                 item['videoCapabilities'] = check_video_config(item['kind'], item['protocol'], item['videoAdapter'], item.get('videoCapabilities'))
                 if item['authMode'] == 'bearer' and not fields['apiKey']:
                     raise ValueError()
@@ -100,7 +102,7 @@ class ModelConfigs:
 
     @staticmethod
     def _public(item: dict) -> dict:
-        return {**({'providerId': item['providerId']} if 'providerId' in item else {}), **{key: item[key] for key in ("id", "kind", "url", "modelId", "connectionType", "protocol", "authMode", "videoAdapter", "videoCapabilities")}, 'inputRules': input_rules(item)}
+        return {**({'providerId': item['providerId']} if 'providerId' in item else {}), **{key: item[key] for key in ("id", "kind", "url", "modelId", "connectionType", "protocol", "authMode", "videoAdapter", "videoCapabilities", "inputModalities")}, 'inputRules': input_rules(item)}
 
     def list(self) -> list[dict]:
         with self.lock:
@@ -117,7 +119,7 @@ class ModelConfigs:
                 raise ProjectError("所选模型不存在或类别不符，请在设置中配置并重新选择。", 409)
             return dict(item)
 
-    def save(self, kind: str, url: str, model_id: str, api_key: str, config_id: str | None = None, *, connection_type='api', protocol=None, auth_mode=None, video_adapter=None, video_capabilities=None, capabilities_supplied=False) -> dict:
+    def save(self, kind: str, url: str, model_id: str, api_key: str, config_id: str | None = None, *, connection_type='api', protocol=None, auth_mode=None, video_adapter=None, video_capabilities=None, capabilities_supplied=False, input_modalities=None) -> dict:
         if kind not in MODEL_KINDS:
             raise ProjectError("无效的模型类别。")
         fields = model_fields(url, model_id, api_key)
@@ -139,6 +141,7 @@ class ModelConfigs:
                     raise ProjectError('请填写 API Key，或将鉴权方式设为无需鉴权。')
                 fields['apiKey'] = existing['apiKey']
             item = {'id': config_id or str(uuid4()), 'kind': kind, **fields, **connection}
+            item['inputModalities'] = agent_input_modalities(kind, input_modalities if input_modalities is not None else (existing or {}).get('inputModalities'))
             item['videoAdapter'] = video_adapter if video_adapter is not None else (existing or {}).get('videoAdapter', 'auto')
             raw = video_capabilities if capabilities_supplied or video_capabilities is not None else (existing or {}).get('videoCapabilities')
             item['videoCapabilities'] = check_video_config(kind, connection['protocol'], item['videoAdapter'], raw)
@@ -177,7 +180,7 @@ class ModelConfigs:
 
     def save_many(self, kind: str, url: str, model_ids: list[str], api_key: str,
                   config_id: str | None = None, *, connection_type='api', protocol=None,
-                  auth_mode=None, video_adapter=None, video_capabilities=None) -> list[dict]:
+                  auth_mode=None, video_adapter=None, video_capabilities=None, input_modalities=None) -> list[dict]:
         if kind not in MODEL_KINDS or not 1 <= len(model_ids) <= 200:
             raise ProjectError('请选择 1—200 个模型。')
         connection = connection_fields(kind, connection_type, protocol, auth_mode)
@@ -209,6 +212,7 @@ class ModelConfigs:
                     old = existing
                 item = {'id': old['id'] if old else str(uuid4()), 'kind': kind, **field, **connection,
                         'apiKey': key, 'providerId': provider_id, 'videoAdapter': video_adapter or 'auto'}
+                item['inputModalities'] = agent_input_modalities(kind, input_modalities if input_modalities is not None else (old or {}).get('inputModalities'))
                 item['videoCapabilities'] = check_video_config(kind, connection['protocol'], item['videoAdapter'], video_capabilities)
                 profile = input_rules(item)['profile']
                 if item['videoCapabilities'] is not None and profile in {'fasth3-omni', 'vllm-omni-h3'}:

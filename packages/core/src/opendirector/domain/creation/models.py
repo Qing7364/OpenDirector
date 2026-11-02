@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 
+from opendirector.domain.capabilities import agent_input_modalities
 from opendirector.domain.video_capabilities import VideoCapabilities as ExistingVideoCapabilities
 from opendirector.domain.video_capabilities import VideoAdapter, check_video_config
 from opendirector.domain.projects import ProjectError
@@ -63,6 +64,7 @@ class ModelConnection(Contract):
     connectionType: Literal['api', 'self_hosted']
     protocol: Protocol
     authMode: Literal['none', 'bearer']
+    inputModalities: tuple[Literal['text', 'image'], ...] | None = None
     videoAdapter: VideoAdapter = 'auto'
     videoCapabilities: VideoCapabilities | None = None
 
@@ -96,6 +98,7 @@ class ModelConnection(Contract):
         if self.protocol not in allowed[self.kind]:
             raise ValueError('Protocol is incompatible with model category')
         try:
+            agent_input_modalities(self.kind, self.inputModalities)
             check_video_config(self.kind, self.protocol, self.videoAdapter,
                                self.videoCapabilities.model_dump(exclude_none=True) if self.videoCapabilities else None)
         except ProjectError as error:
@@ -129,6 +132,7 @@ class ModelSnapshot(Contract):
     url: str = Field(min_length=1, max_length=2048)
     protocol: Protocol
     connectionType: Literal['api', 'self_hosted']
+    inputModalities: tuple[Literal['text', 'image'], ...] | None = Field(default=None, exclude_if=lambda value: value is None)
     videoAdapter: VideoAdapter = 'auto'
     inputRules: InputRules | None = None
 
@@ -146,5 +150,5 @@ class ModelSnapshot(Contract):
     def connection(self):
         ModelConnection(kind=self.kind, url=self.url, modelId=self.modelId,
                         connectionType=self.connectionType, protocol=self.protocol,
-                        authMode='none', videoAdapter=self.videoAdapter)
+                        authMode='none', videoAdapter=self.videoAdapter, inputModalities=self.inputModalities)
         return self

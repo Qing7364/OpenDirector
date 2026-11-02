@@ -6597,6 +6597,25 @@
             "title": "Authmode",
             "type": "string"
           },
+          "inputModalities": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "text",
+                    "image"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Inputmodalities"
+          },
           "videoAdapter": {
             "default": "auto",
             "enum": [
@@ -6708,6 +6727,25 @@
             "title": "Authmode",
             "type": "string"
           },
+          "inputModalities": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "text",
+                    "image"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Inputmodalities"
+          },
           "videoAdapter": {
             "default": "auto",
             "enum": [
@@ -6810,6 +6848,25 @@
             "title": "Authmode",
             "type": "string"
           },
+          "inputModalities": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "text",
+                    "image"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Inputmodalities"
+          },
           "videoAdapter": {
             "default": "auto",
             "enum": [
@@ -6893,6 +6950,25 @@
             ],
             "title": "Connectiontype",
             "type": "string"
+          },
+          "inputModalities": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "text",
+                    "image"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Inputmodalities"
           },
           "videoAdapter": {
             "default": "auto",
@@ -18838,6 +18914,25 @@
             "title": "Authmode",
             "type": "string"
           },
+          "inputModalities": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "text",
+                    "image"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Inputmodalities"
+          },
           "videoAdapter": {
             "default": "auto",
             "enum": [
@@ -18876,6 +18971,7 @@
           "connectionType",
           "protocol",
           "authMode",
+          "inputModalities",
           "videoAdapter",
           "videoCapabilities",
           "id",
@@ -18938,6 +19034,25 @@
             "title": "Authmode",
             "type": "string"
           },
+          "inputModalities": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "text",
+                    "image"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Inputmodalities"
+          },
           "videoAdapter": {
             "default": "auto",
             "enum": [
@@ -18983,6 +19098,7 @@
           "connectionType",
           "protocol",
           "authMode",
+          "inputModalities",
           "videoAdapter",
           "videoCapabilities",
           "apiKey"
@@ -19043,6 +19159,25 @@
             "title": "Authmode",
             "type": "string"
           },
+          "inputModalities": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "text",
+                    "image"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Inputmodalities"
+          },
           "videoAdapter": {
             "default": "auto",
             "enum": [
@@ -19073,6 +19208,7 @@
           "connectionType",
           "protocol",
           "authMode",
+          "inputModalities",
           "videoAdapter",
           "videoCapabilities"
         ],
@@ -19128,6 +19264,25 @@
             ],
             "title": "Connectiontype",
             "type": "string"
+          },
+          "inputModalities": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "text",
+                    "image"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Inputmodalities"
           },
           "videoAdapter": {
             "default": "auto",

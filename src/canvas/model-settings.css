@@ -642,3 +642,8 @@
 .cw-model-connection-details[open] > summary svg {
   transform: rotate(180deg);
 }
+
+.cw-model-modalities { border: 0; border-top: 1px solid var(--settings-border); margin: 0 0 20px; padding: 16px 0 0; display: flex; flex-wrap: wrap; gap: 12px 24px; }
+.cw-model-modalities legend { padding: 0 8px 0 0; font-size: var(--settings-label-size); }
+.cw-model-modalities label { display: flex; align-items: center; gap: 6px; font-size: var(--settings-control-size); }
+.cw-model-modalities .cw-model-note { flex-basis: 100%; margin: 0; }

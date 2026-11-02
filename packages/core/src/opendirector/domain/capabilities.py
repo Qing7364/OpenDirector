@@ -8,6 +8,8 @@ capabilities a configured model offers and translate these requests to its API.
 from dataclasses import dataclass
 from typing import Literal
 
+from opendirector.domain.projects import ProjectError
+
 Capability = Literal[
     'text.chat', 'image.generate', 'image.edit', 'image.cutout', 'video.generate', 'video.first_frame', 'video.edit',
     'audio.speech', 'audio.music', 'image.segment', 'video.matting',
@@ -151,3 +153,16 @@ class ChatRequest:
 class MediaResult:
     data: bytes
     suffix: str
+
+
+AgentInputModality = Literal['text', 'image']
+
+
+def agent_input_modalities(kind, value):
+    """Declared agent inputs are separate from media-generation reference rules."""
+    if value is None:
+        return ['text'] if kind == 'agent' else None
+    if (kind != 'agent' or not isinstance(value, (list, tuple)) or 'text' not in value
+            or len(value) != len(set(value)) or any(item not in {'text', 'image'} for item in value)):
+        raise ProjectError('对话模型输入模态必须包含文本，可选图片，且不能重复。')
+    return ['text', *(['image'] if 'image' in value else [])]

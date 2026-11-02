@@ -53,6 +53,7 @@ export interface ModelConfig {
     | null;
   authMode: "none" | "bearer" | null;
   inputRules: InputRules;
+  inputModalities?: ("text" | "image")[] | null;
   videoAdapter?: VideoAdapter;
   videoCapabilities?: VideoCapabilities | null;
 }

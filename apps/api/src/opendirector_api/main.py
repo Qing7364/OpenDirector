@@ -116,7 +116,8 @@ def create_app(store: LocalProjects | None = None, chat_provider=None, generatio
         return model_configs.save_many(value.kind, value.url, value.modelIds, value.apiKey.get_secret_value(),
                                        str(value.configId) if value.configId else None, connection_type=value.connectionType,
                                        protocol=value.protocol, auth_mode=value.authMode, video_adapter=value.videoAdapter,
-                                       video_capabilities=value.videoCapabilities.model_dump(exclude_none=True) if value.videoCapabilities else None)
+                                       video_capabilities=value.videoCapabilities.model_dump(exclude_none=True) if value.videoCapabilities else None,
+                                       input_modalities=value.inputModalities)
 
     @app.post('/api/model-configs/discover')
     async def discover_models(value: ModelDiscoveryRequest):
@@ -158,7 +159,7 @@ def create_app(store: LocalProjects | None = None, chat_provider=None, generatio
     def create_model_config(value: ModelConfigInput):
         return model_configs.save(value.kind, value.url, value.modelId, value.apiKey.get_secret_value(), connection_type=value.connectionType, protocol=value.protocol, auth_mode=value.authMode,
                                   video_adapter=value.videoAdapter, video_capabilities=value.videoCapabilities.model_dump(exclude_none=True) if value.videoCapabilities else None,
-                                  capabilities_supplied='videoCapabilities' in value.model_fields_set)
+                                  capabilities_supplied='videoCapabilities' in value.model_fields_set, input_modalities=value.inputModalities)
 
     @app.post('/api/model-configs/capabilities')
     async def model_capabilities(value: ModelCapabilityRequest):
@@ -179,7 +180,7 @@ def create_app(store: LocalProjects | None = None, chat_provider=None, generatio
     def update_model_config(config_id: UUID, value: ModelConfigInput):
         return model_configs.save(value.kind, value.url, value.modelId, value.apiKey.get_secret_value(), str(config_id), connection_type=value.connectionType, protocol=value.protocol, auth_mode=value.authMode,
                                   video_adapter=value.videoAdapter, video_capabilities=value.videoCapabilities.model_dump(exclude_none=True) if value.videoCapabilities else None,
-                                  capabilities_supplied='videoCapabilities' in value.model_fields_set)
+                                  capabilities_supplied='videoCapabilities' in value.model_fields_set, input_modalities=value.inputModalities)
 
     @app.delete("/api/model-configs/{config_id}", status_code=204)
     def delete_model_config(config_id: UUID):

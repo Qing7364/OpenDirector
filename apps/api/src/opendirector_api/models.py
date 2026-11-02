@@ -3,6 +3,7 @@ from uuid import UUID
 
 from pydantic import model_validator, BaseModel, ConfigDict, Field, SecretStr
 from opendirector.domain.creation.editors import ToolDraftBinding
+from opendirector.domain.capabilities import AgentInputModality
 from opendirector.domain.video_capabilities import VideoAdapter, VideoCapabilities
 
 
@@ -25,6 +26,7 @@ class ModelConfigInput(ModelConnection):
     url: str = Field(max_length=2048)
     modelId: str = Field(max_length=200)
     apiKey: SecretStr = SecretStr("")
+    inputModalities: list[AgentInputModality] | None = Field(default=None, min_length=1, max_length=2)
     videoAdapter: VideoAdapter | None = None
     videoCapabilities: VideoCapabilities | None = None
 
@@ -54,6 +56,7 @@ class ModelConfigPublic(ModelConnection):
     providerId: UUID | None = Field(default=None, exclude_if=lambda value: value is None)
     videoAdapter: VideoAdapter = 'auto'
     videoCapabilities: VideoCapabilities | None = None
+    inputModalities: list[AgentInputModality] | None = None
     inputRules: dict = Field(default_factory=dict)
     id: UUID
     kind: Literal["agent", "image", "video", "audio", "vision"]

@@ -79,6 +79,7 @@ export function ModelServiceForm({
         : (existing?.protocol ?? PROTOCOLS[kind][0][0]),
     authMode: existing?.authMode ?? "none",
     videoAdapter: existing?.videoAdapter ?? "auto",
+    inputModalities: kind === "agent" ? existing?.inputModalities ?? ["text"] : undefined,
   });
   const [selectedModels, setSelectedModels] = useState<string[]>(() =>
     existing
@@ -370,6 +371,13 @@ export function ModelServiceForm({
             </p>
           </fieldset>
         </details>
+        {kind === "agent" && <fieldset className="cw-model-modalities" disabled={locked}>
+          <legend>输入能力</legend>
+          <label><input type="checkbox" checked disabled />文本</label>
+          <label><input type="checkbox" checked={value.inputModalities?.includes("image") ?? false}
+            onChange={event => update({inputModalities: event.target.checked ? ["text", "image"] : ["text"]})} />图片</label>
+          <p className="cw-model-note">应用于本次选中的模型。仅在模型及接口支持图片理解时启用。</p>
+        </fieldset>}
         <ModelPicker
           modelPlaceholder={placeholders[1]}
           available={modelIds}

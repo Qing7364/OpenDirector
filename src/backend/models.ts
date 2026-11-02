@@ -25,6 +25,7 @@ export interface ModelConfigInput {
   connectionType: "api" | "self_hosted";
   protocol: NonNullable<ModelConfig["protocol"]>;
   authMode: "none" | "bearer";
+  inputModalities?: ("text" | "image")[] | null;
   videoAdapter?: VideoAdapter;
   videoCapabilities?: VideoCapabilities | null;
 }

@@ -756,6 +756,7 @@ export interface ModelConnectionInput extends ContractInput {
   readonly connectionType: "api" | "self_hosted";
   readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music";
   readonly authMode: "none" | "bearer";
+  readonly inputModalities?: ReadonlyArray<"text" | "image"> | null;
   readonly videoAdapter?: "auto" | "fasth3" | "minimax_h3" | "standard";
   readonly videoCapabilities?: VideoCapabilitiesInput | null;
 }
@@ -767,6 +768,7 @@ export interface ModelSnapshotInput extends ContractInput {
   readonly url: string;
   readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music";
   readonly connectionType: "api" | "self_hosted";
+  readonly inputModalities?: ReadonlyArray<"text" | "image"> | null;
   readonly videoAdapter?: "auto" | "fasth3" | "minimax_h3" | "standard";
   readonly inputRules?: InputRulesInput | null;
 }
@@ -2124,6 +2126,7 @@ export interface ModelConnection extends Contract {
   readonly connectionType: "api" | "self_hosted";
   readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music";
   readonly authMode: "none" | "bearer";
+  readonly inputModalities: ReadonlyArray<"text" | "image"> | null;
   readonly videoAdapter: "auto" | "fasth3" | "minimax_h3" | "standard";
   readonly videoCapabilities: VideoCapabilities | null;
 }
@@ -2135,6 +2138,7 @@ export interface ModelSnapshot extends Contract {
   readonly url: string;
   readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music";
   readonly connectionType: "api" | "self_hosted";
+  readonly inputModalities?: ReadonlyArray<"text" | "image"> | null;
   readonly videoAdapter: "auto" | "fasth3" | "minimax_h3" | "standard";
   readonly inputRules: InputRules | null;
 }
