@@ -64,7 +64,7 @@ def project(client):
     return path
 
 
-@pytest.mark.parametrize('runtime', ['default'])
+@pytest.mark.parametrize('runtime', ['default', 'opencode', 'codex', 'claude'])
 def test_native_events_real_mcp_and_shared_write(tmp_path, monkeypatch, runtime):
     local = LocalProjects(tmp_path)
     config = ModelConfigs(tmp_path).save('agent','http://localhost:9999/v1','test','',auth_mode='none')
@@ -78,7 +78,7 @@ def test_native_events_real_mcp_and_shared_write(tmp_path, monkeypatch, runtime)
     monkeypatch.setattr(native, 'executable', lambda _: sys.executable)
     with TestClient(create_app(local), headers={'X-OpenDirector-Request':'1','X-OpenDirector-Session':str(uuid4())}) as client:
         path = project(client)
-        turn = {'id':str(uuid4()),'runtime':runtime,'text':'Save a plan','skills':['character-replacement']}
+        turn = {'id':str(uuid4()),'runtime':runtime,'runtimeModel':'test-model','text':'Save a plan','skills':['character-replacement']}
         if runtime == 'default':
             turn['modelId'] = config['id']
         response = client.post(path + '/assistant/turns', json=turn)
@@ -97,7 +97,7 @@ def test_native_events_real_mcp_and_shared_write(tmp_path, monkeypatch, runtime)
             assert provenance['agentRuntime'] == runtime
             assert provenance['modelSnapshot'] is None
         assert client.get(path + '/changes').json()['events'][-1]['source'] == 'agent'
-        trace = next(local.root.rglob('*.opencode.jsonl')).read_text()
+        trace = next(local.root.rglob(f'*.{"opencode" if runtime == "default" else runtime}.jsonl')).read_text()
         assert 'test-native' in trace
         assert 'Native saved.' in trace
         work = next(local.root.rglob(f'agent-runs/{turn["id"]}/work'))
@@ -107,7 +107,7 @@ def test_native_events_real_mcp_and_shared_write(tmp_path, monkeypatch, runtime)
 
 def test_native_commands_keep_auth_and_restrict_tools(tmp_path, monkeypatch):
     monkeypatch.setattr(native, "executable", lambda _: sys.executable)
-    for runtime in ('default',):
+    for runtime in ('default', 'opencode', 'codex', 'claude'):
         work = tmp_path / runtime
         work.mkdir()
         args, env = native.command(runtime, work, '/tmp/test.sock', 'private-token', 'test-model', 'http://localhost:1', [])
@@ -185,7 +185,7 @@ def test_real_opencode_native_skill_and_gateway_write(tmp_path, runtime):
         assert 'server-only-key' not in next(local.root.rglob('*.opencode.jsonl')).read_text()
 
 
-@pytest.mark.parametrize('runtime', ['default'])
+@pytest.mark.parametrize('runtime', ['default', 'opencode', 'codex', 'claude'])
 def test_cancel_native_process_group(tmp_path, monkeypatch, runtime):
     import signal
     async def check():
@@ -200,7 +200,7 @@ def test_cancel_native_process_group(tmp_path, monkeypatch, runtime):
         instance = AgentRuntimes(CreationProjects(local), None, ModelConfigs(tmp_path))
         async def consume():
             async for _ in instance.stream(RunContext(runtime=runtime, project_id=uuid4(), turn_id=uuid4(), session=str(uuid4()),
-                    directory=tmp_path, config={'modelId':'test', 'apiKey':'', 'url':'http://localhost/v1', 'protocol':'openai'}, messages=[{'role':'user','content':'wait'}], selected_skills=[])):
+                    runtime_model='test-model', directory=tmp_path, config={'modelId':'test', 'apiKey':'', 'url':'http://localhost/v1', 'protocol':'openai'}, messages=[{'role':'user','content':'wait'}], selected_skills=[])):
                 pass
         task = asyncio.create_task(consume())
         async with asyncio.timeout(10):

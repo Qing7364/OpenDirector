@@ -25,6 +25,9 @@ class RuntimeSpec:
 
 RUNTIMES = {
     'default': RuntimeSpec(id='default', label='Default', group='default', modelSource='settings', modelOverride=False, engine='default'),
+    'opencode': RuntimeSpec(id='opencode', label='OpenCode CLI', group='harness', modelSource='cli', modelOverride=True, engine='opencode'),
+    'codex': RuntimeSpec(id='codex', label='Codex', group='harness', modelSource='cli', modelOverride=True, engine='codex'),
+    'claude': RuntimeSpec(id='claude', label='Claude Code', group='harness', modelSource='cli', modelOverride=True, engine='claude'),
 }
 
 
@@ -86,6 +89,13 @@ class AgentRuntimes:
 
     async def stream(self, run: RunContext) -> AsyncIterator[AgentEvent]:
         runtime_spec(run.runtime)
+        if run.runtime == 'codex' and not run.runtime_model:
+            # Codex launch isolates user config; carry only its resolved model into this turn.
+            from opendirector.agent.catalog import model_choices
+            choices = await model_choices('codex')
+            default = next((item['id'] for item in choices if item.get('isDefault')), None)
+            if default:
+                run = replace(run, runtime_model=default)
         gateway = ToolGateway(self.business, run)
         try:
             async for event in self.adapter.stream(run, gateway):

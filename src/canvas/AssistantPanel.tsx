@@ -9,6 +9,7 @@ import "./assistant-panel.css";
 import "./assistant-experience.css";
 import { AttachmentStrip, AttachmentHover } from "./AssistantMedia";
 import { AssistantReply } from "./AssistantReply";
+import { AgentPicker } from "./AgentPicker";
 import { ChoicePicker, ModelPicker } from "./AssistantPickers";
 import { SkillPicker } from "./SkillPicker";
 import { CanvasIcon } from "./CanvasIcon";
@@ -622,6 +623,16 @@ export function AssistantPanel({
             >
               @
             </button>
+            <AgentPicker
+              projectId={documentId}
+              value={value}
+              models={catalog.models}
+              runtimes={chat.runtimes}
+              onRefresh={chat.refreshRuntimes}
+              disabled={!chat.loaded || chat.sending}
+              onChange={chat.selectAgent}
+              onConfigure={onOpenSettings}
+            />
             <SkillPicker
               projectId={documentId}
               selected={value.skills ?? []}
@@ -630,6 +641,7 @@ export function AssistantPanel({
               onChange={(skills, fromSlash) => editor.current?.setSkill(skills[0] ?? null, fromSlash)}
             />
             <ModelPicker
+              includeAgent={false}
               models={catalog.models}
               selections={value.modelSelections}
               disabled={!chat.loaded || !catalog.connected || chat.sending}
@@ -683,7 +695,7 @@ export function AssistantPanel({
           {chat.adding ? (
             "正在添加参考素材…"
           ) : (
-            "Default · OpenCode bundled"
+            `${chat.runtimes.find((item) => item.id === (value.runtime ?? "default"))?.label ?? "请选择 Agent"}`
           )}
         </p>
       </div>
