@@ -6,6 +6,9 @@ import { fingerprint } from "../backend/generation.ts";
 import type { BackendModels } from "../backend/models";
 import { loadReferenceCatalog } from "../backend/referenceCatalog.ts";
 import "./assistant-panel.css";
+import "./assistant-experience.css";
+import { AttachmentStrip, AttachmentHover } from "./AssistantMedia";
+import { AssistantReply } from "./AssistantReply";
 import { ChoicePicker, ModelPicker } from "./AssistantPickers";
 import { CanvasIcon } from "./CanvasIcon";
 import {
@@ -89,6 +92,7 @@ export function AssistantPanel({
   const projectReferences = useProjectMentionAssets(documentId);
   const editor = useRef<ChatReferenceEditorHandle>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [mediaPreview, setMediaPreview] = useState<{assetId: string; anchor: DOMRect} | null>(null);
   const log = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const [assetPreviews, setAssetPreviews] = useState<Record<string, string>>(
@@ -253,17 +257,40 @@ export function AssistantPanel({
       (assets) => editor.current?.insert(assets) ?? false,
     );
 
+  useEffect(() => {setMediaPreview(null);}, [documentId, value.conversationId, open]);
+  useEffect(() => {
+    const closePreview = () => setMediaPreview(null);
+    window.addEventListener("resize", closePreview);
+    return () => window.removeEventListener("resize", closePreview);
+  }, []);
+  const resolveAsset = (asset: ChatAsset) => projectReferences.assets.find(item => item.id === asset.id) ?? asset;
+  function previewTarget(target: EventTarget | null) {
+    if (!(target instanceof Element)) return null;
+    const element = target.closest<HTMLElement>("[data-preview-asset], [data-reference]");
+    if (!element) return null;
+    const assetId = element.dataset.previewAsset ?? JSON.parse(element.dataset.reference!).assetId;
+    return {assetId, anchor: element.getBoundingClientRect()};
+  }
+  const hoveredAsset = mediaPreview && displayedAssets.find(item => item.id === mediaPreview.assetId);
+
   return (
     <aside
       id="canvas-assistant"
       className={`cw-assistant-panel${dragOver ? " is-drag-over" : ""}`}
       aria-label="AI 对话"
       hidden={!open}
+      onScrollCapture={() => setMediaPreview(null)}
+      onMouseOver={event => {const target = previewTarget(event.target); if (target) setMediaPreview(previous => previous?.assetId === target.assetId ? previous : target);}}
+      onMouseOut={event => {const next = previewTarget(event.relatedTarget); if (!next) setMediaPreview(null);}}
+      onFocusCapture={event => {const target = previewTarget(event.target); if (target) setMediaPreview(target);}}
+      onBlurCapture={event => {if (!previewTarget(event.relatedTarget)) setMediaPreview(null);}}
+      onClickCapture={event => {const target = previewTarget(event.target); if (target) setMediaPreview(target);}}
       onKeyDown={(event) => {
         if (event.key === "Escape" && !event.defaultPrevented) {
           event.preventDefault();
           event.stopPropagation();
-          onClose();
+          if (mediaPreview) setMediaPreview(null);
+          else onClose();
         }
       }}
       onDragOver={(event) => {
@@ -286,6 +313,7 @@ export function AssistantPanel({
         }
       }}
     >
+      {open && mediaPreview && hoveredAsset && <AttachmentHover key={hoveredAsset.id} projectId={documentId} asset={resolveAsset(hoveredAsset)} anchor={mediaPreview.anchor} />}
       <header className="cw-assistant-header">
         <h2 title={documentTitle}>
           {value.messages.length ? "AI 对话" : "新会话"}
@@ -332,52 +360,57 @@ export function AssistantPanel({
             key={message.id}
             className={`cw-assistant-message is-${message.role}`}
           >
-            <div className="cw-assistant-message-heading">
-              {message.role === "user" ? "你" : "OpenDirector"}
-              {message.role === "assistant" && message.model && (
-                <small>{message.model}</small>
+            {message.role === "assistant" && (
+              <div className="cw-assistant-message-heading">
+                OpenDirector
+                {message.model && <small>{message.model}</small>}
+              </div>
+            )}
+            <div className="cw-assistant-message-text">
+              {message.role === "assistant" ? (
+                <AssistantReply message={message} thinking={chat.thinkingNow} />
+              ) : message.role === "user" &&
+                (message.content || message.assets?.length) ? (
+                referenceContent(
+                  message.text,
+                  (message.assets ?? []).map((asset) => asset.id),
+                  message.assets ?? [],
+                  message.content,
+                ).map((part, index) =>
+                  part.type === "text" ? (
+                    part.text
+                  ) : (
+                    <span
+                      key={index}
+                      className="cw-chat-reference"
+                      data-preview-asset={part.assetId}
+                    >
+                      {assetPreviews[part.assetId] ? (
+                        <img src={assetPreviews[part.assetId]} alt="" />
+                      ) : (
+                        <CanvasIcon
+                          name={kindOf(
+                            message.assets?.find(
+                              (asset) => asset.id === part.assetId,
+                            ) ?? ({ type: "text/plain" } as ChatAsset),
+                          )}
+                          size={18}
+                        />
+                      )}
+                      <span>{part.name}</span>
+                    </span>
+                  ),
+                )
+              ) : (
+                message.text ||
+                (message.status === "streaming"
+                  ? chat.thinkingNow
+                    ? "正在思考…"
+                    : "正在回复…"
+                  : "本次回复未生成内容。")
               )}
             </div>
-            <div className="cw-assistant-message-text">
-              {message.role === "user" &&
-              (message.content || message.assets?.length)
-                ? referenceContent(
-                    message.text,
-                    (message.assets ?? []).map((asset) => asset.id),
-                    message.assets ?? [],
-                    message.content,
-                  ).map((part, index) =>
-                    part.type === "text" ? (
-                      part.text
-                    ) : (
-                      <span
-                        key={index}
-                        className="cw-chat-reference"
-                        title={part.name}
-                      >
-                        {assetPreviews[part.assetId] ? (
-                          <img src={assetPreviews[part.assetId]} alt="" />
-                        ) : (
-                          <CanvasIcon
-                            name={kindOf(
-                              message.assets?.find(
-                                (asset) => asset.id === part.assetId,
-                              ) ?? ({ type: "text/plain" } as ChatAsset),
-                            )}
-                            size={18}
-                          />
-                        )}
-                        <span>{part.name}</span>
-                      </span>
-                    ),
-                  )
-                : message.text ||
-                  (message.status === "streaming"
-                    ? chat.thinkingNow
-                      ? "正在思考…"
-                      : "正在回复…"
-                    : "本次回复未生成内容。")}
-            </div>
+            {message.role === "user" && !!message.assets?.length && <AttachmentStrip projectId={documentId} assets={message.assets.map(resolveAsset)} />}
             {(message.status === "stopped" ||
               message.status === "interrupted") && (
               <small className="cw-assistant-message-status">
@@ -385,21 +418,6 @@ export function AssistantPanel({
               </small>
             )}
           </article>
-        ))}
-        {value.messages.flatMap(message => message.tools ?? []).map((tool, index) => (
-          <div
-            key={index}
-            className={`cw-assistant-tool is-${tool.status}`}
-            role="status"
-          >
-            <CanvasIcon
-              name={tool.status === "failed" ? "close" : "sparkle"}
-              size={14}
-            />
-            {tool.message ?? tool.name}
-            {tool.status === "running" && "…"}
-            {tool.error && ` · ${tool.error}`}
-          </div>
         ))}
       </div>
       <div className="cw-assistant-composer-area">
@@ -473,9 +491,6 @@ export function AssistantPanel({
                       <CanvasIcon name={item.kind} size={20} />
                     )}
                     <span>{item.title}</span>
-                    {item.metadataOnly && !item.error && (
-                      <small>仅素材信息</small>
-                    )}
                     {item.error && (
                       <small className="cw-pending-reference-error">
                         {item.error}
@@ -580,6 +595,7 @@ export function AssistantPanel({
               void chat.send();
             }}
           />
+          <AttachmentStrip projectId={documentId} assets={value.assets.map(resolveAsset)} />
           <div className="cw-assistant-toolbar">
             <button
               type="button"
