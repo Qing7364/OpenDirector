@@ -524,6 +524,23 @@
             "default": null,
             "title": "Agentrunid"
           },
+          "agentRuntime": {
+            "anyOf": [
+              {
+                "enum": [
+                  "opencode",
+                  "codex",
+                  "claude"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Agentruntime"
+          },
           "modelSnapshot": {
             "anyOf": [
               {
@@ -12547,6 +12564,23 @@
             "default": null,
             "title": "Agentrunid"
           },
+          "agentRuntime": {
+            "anyOf": [
+              {
+                "enum": [
+                  "opencode",
+                  "codex",
+                  "claude"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Agentruntime"
+          },
           "modelSnapshot": {
             "anyOf": [
               {
@@ -12582,6 +12616,7 @@
           "sources",
           "inputFingerprint",
           "agentRunId",
+          "agentRuntime",
           "modelSnapshot",
           "prompt"
         ],

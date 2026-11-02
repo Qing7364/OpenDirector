@@ -2,9 +2,14 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { errorMessage } from "../backend/api";
 import {
   conversation,
+  conversations,
+  activateConversation,
+  type ConversationSummary,
+  chatRuntimes,
+  type RuntimeInfo,
+  streamChat,
   stopChat,
   type ChatAsset,
-  type ChatEvent,
   type Conversation,
 } from "../backend/chat";
 import { flushChatDraft, rememberChat } from "../backend/chatDrafts";
@@ -40,7 +45,6 @@ const empty = (): Conversation => ({
   thinking: "auto",
   modelSelections: {},
 });
-type ToolEvent = Extract<ChatEvent, { type: "tool" }>;
 
 export function useAssistantChat(
   projectId: string,
@@ -48,6 +52,7 @@ export function useAssistantChat(
   onTurnEnd: () => void,
 ) {
   const [value, setValue] = useState<Conversation>(empty);
+  const [runtimes, setRuntimes] = useState<RuntimeInfo[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [sending, setSending] = useState(false);
@@ -55,7 +60,8 @@ export function useAssistantChat(
   const [stopping, setStopping] = useState(false);
   const [adding, setAdding] = useState(false);
   const [thinkingNow, setThinkingNow] = useState(false);
-  const [tools, setTools] = useState<ToolEvent[]>([]);
+  const [threads, setThreads] = useState<ConversationSummary[]>([]);
+  const switching = useRef(false);
   const [error, setError] = useState("");
   const alive = useRef(false);
   const controller = useRef<AbortController | null>(null);
@@ -98,11 +104,18 @@ export function useAssistantChat(
     alive.current = true;
     let cancelled = false;
     setLoaded(false);
-    void conversation(projectId)
-      .then((saved) => {
+    void Promise.all([
+      conversation(projectId),
+      chatRuntimes(projectId),
+      conversations(projectId),
+    ])
+      .then(([saved, available, list]) => {
+        setThreads(list.items);
         if (cancelled) return;
+        setRuntimes(available);
+        const restored = saved;
         setValue({
-          ...saved,
+          ...restored,
           messages: saved.messages.map((message) =>
             message.status === "streaming"
               ? { ...message, status: "interrupted" }
@@ -110,7 +123,11 @@ export function useAssistantChat(
           ),
         });
         setLoaded(true);
-        setError("");
+        setError(
+          restored.runtime && !available.some((item) => item.id === restored.runtime)
+            ? "原 Agent 引擎已移除，请重新选择模型后继续。"
+            : "",
+        );
       })
       .catch((reason) => {
         if (!cancelled) setError(`读取对话失败：${errorMessage(reason)}`);
@@ -127,7 +144,11 @@ export function useAssistantChat(
     if (loaded) rememberChat(projectId, value);
   }, [projectId, loaded, value]);
   useEffect(() => {
-    if (!loaded) return;
+    if (
+      !loaded ||
+      !runtimes.some((item) => item.id === (value.runtime ?? "default"))
+    )
+      return;
     const timer = window.setTimeout(() => {
       void flushChatDraft(projectId).catch((reason) => {
         if (alive.current)
@@ -138,11 +159,17 @@ export function useAssistantChat(
   }, [
     projectId,
     loaded,
+    value.conversationId,
     value.draft,
     value.draftContent,
     value.assets,
     value.thinking,
     value.modelSelections,
+    value.skills,
+    value.runtime,
+    value.runtimeModel,
+    value.harnessModels,
+    runtimes,
   ]);
 
   useEffect(() => {
@@ -170,6 +197,12 @@ export function useAssistantChat(
     (model) =>
       model.kind === "agent" && model.id === value.modelSelections.agent,
   );
+  const currentRuntime = runtimes.find(
+    (item) => item.id === (value.runtime ?? "default"),
+  );
+  const canSend =
+    !!currentRuntime?.available &&
+    (currentRuntime.modelSource === "cli" || !!agent);
   const addAssets = (assets: ChatAsset[]) => {
     assets.forEach((asset) =>
       knownAssets.current.set(asset.id, attachment(asset)),
@@ -290,8 +323,131 @@ export function useAssistantChat(
     );
 
   const send = async () => {
-    setError("该工程的助手对话尚未接入，请使用节点生成面板。");
-    return;
+    if (
+      !loaded ||
+      submitting.current ||
+      uploading.current ||
+      !canSend ||
+      !current.current.draft.trim()
+    )
+      return;
+    submitting.current = true;
+    setSending(true);
+    setStarted(false);
+    setError("");
+    setThinkingNow(false);
+    const abort = new AbortController();
+    controller.current = abort;
+    const id = crypto.randomUUID();
+    turnId.current = id;
+    const input = current.current;
+    const assistantId = crypto.randomUUID();
+    try {
+      await flushChatDraft(projectId);
+      await streamChat(
+        projectId,
+        {
+          id,
+          conversationId: input.conversationId,
+          modelId: agent?.id,
+          runtime: input.runtime ?? "default",
+          runtimeModel: input.runtimeModel,
+          text: input.draft,
+          content: input.draftContent,
+          assets: input.assets.map((asset) => asset.id),
+          thinking: input.thinking,
+          modelSelections: input.modelSelections,
+          skills: input.skills ?? [],
+        },
+        abort.signal,
+        (event) => {
+          if (!alive.current) return;
+          if (event.type === "start") {
+            setStarted(true);
+            setValue({
+              ...event.conversation,
+              messages: event.conversation.messages.map((message) =>
+                message.status === "streaming"
+                  ? {
+                      ...message,
+                      id: assistantId,
+                    }
+                  : message,
+              ),
+            });
+          } else if (event.type === "delta") {
+            setThinkingNow(false);
+            setValue((previous) => ({
+              ...previous,
+              messages: previous.messages.map((message) =>
+                message.id === assistantId
+                  ? { ...message, text: message.text + event.text }
+                  : message,
+              ),
+            }));
+          } else if (event.type === "thinking") setThinkingNow(true);
+          else if (event.type === "tool") {
+            const { type, ...tool } = event;
+            setValue((previous) => ({
+              ...previous,
+              messages: previous.messages.map((message) => {
+                if (message.id !== assistantId) return message;
+                const tools = [...(message.tools ?? [])];
+                const index = tools.findIndex((item) => item.id === tool.id);
+                if (index < 0) tools.push(tool);
+                else tools[index] = tool;
+                return { ...message, tools };
+              }),
+            }));
+            if (event.status !== "running") onEnd.current();
+          } else if (event.type === "end") {
+            if (event.conversation) setValue(event.conversation);
+            if (event.error) setError(event.error);
+          }
+        },
+      );
+    } catch (reason) {
+      if (alive.current && !abort.signal.aborted)
+        setError(errorMessage(reason));
+    } finally {
+      submitting.current = false;
+      turnId.current = null;
+      controller.current = null;
+      if (alive.current) {
+        setSending(false);
+        setStarted(false);
+        setStopping(false);
+        setThinkingNow(false);
+        onEnd.current();
+      }
+    }
+  };
+  const changeConversation = async (
+    id: string = crypto.randomUUID(),
+    create = false,
+  ) => {
+    if (!loaded || submitting.current || uploading.current || switching.current)
+      return;
+    switching.current = true;
+    setLoaded(false);
+    setError("");
+    try {
+      rememberChat(projectId, current.current);
+      await flushChatDraft(projectId);
+      const saved = await activateConversation(projectId, id, create);
+      if (!alive.current) return;
+      current.current = saved;
+      rememberChat(projectId, saved);
+      setValue(saved);
+      retryId.current = null;
+      setThinkingNow(false);
+      setThreads((await conversations(projectId)).items);
+    } catch (reason) {
+      if (alive.current) setError(errorMessage(reason));
+    } finally {
+      switching.current = false;
+      if (alive.current) setLoaded(true);
+    }
   };
   const stop = async () => {
     if (!turnId.current || stopping) return;
@@ -307,7 +463,18 @@ export function useAssistantChat(
   };
   return {
     value,
+    runtimes,
+    refreshRuntimes: async () => {
+      setRuntimes(await chatRuntimes(projectId));
+    },
     setValue,
+    selectAgent: (patch: Partial<Conversation>) => {
+      const next = {...current.current, ...patch};
+      current.current = next;
+      rememberChat(projectId, next);
+      setValue(next);
+      setError("");
+    },
     setContent,
     referenceAssets: [...knownAssets.current.values()],
     loaded,
@@ -315,10 +482,12 @@ export function useAssistantChat(
     started,
     stopping,
     thinkingNow,
-    tools,
+    threads,
+    changeConversation,
     error,
     setError,
     agent,
+    canSend,
     adding,
     upload,
     addNodes,

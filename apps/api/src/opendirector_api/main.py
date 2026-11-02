@@ -27,6 +27,7 @@ from opendirector.domain.input_rules import input_rules
 from opendirector.integrations.model_capabilities import read_service_models, read_video_capabilities
 from opendirector.integrations.chat_completions import ChatCompletions, chat_payload
 from opendirector_api.creation import creation_routes
+from opendirector_api.agent import agent_routes
 from opendirector_api.library import library_routes
 from opendirector_api.models import (ModelConfigInput, ModelConfigPublic, AgentModelTest,
     ModelCapabilityRequest, ModelDiscoveryRequest, ModelBatchInput,
@@ -55,6 +56,7 @@ def create_app(store: LocalProjects | None = None, chat_provider=None, generatio
 
     app = FastAPI(title="OpenDirector Local API", version="0.1.0", lifespan=lifespan)
     app.include_router(creation_routes(creation_projects, creation_generation))
+    app.include_router(agent_routes(creation_projects, creation_generation, model_configs, chat_provider))
     app.include_router(library_routes(creation_projects))
 
     @app.exception_handler(RequestValidationError)

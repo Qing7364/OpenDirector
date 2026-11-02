@@ -411,6 +411,7 @@ test("reference replacement and hiding preserve the intended project relationshi
       sources: [],
       inputFingerprint: null,
       agentRunId: null,
+      agentRuntime: null,
       modelSnapshot: null,
       prompt: null,
     },

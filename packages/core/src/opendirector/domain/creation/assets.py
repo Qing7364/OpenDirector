@@ -62,6 +62,7 @@ class AssetProvenance(Contract):
     sources: tuple[AssetRef, ...] = ()
     inputFingerprint: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$')
     agentRunId: UUID | None = None
+    agentRuntime: Literal['opencode', 'codex', 'claude'] | None = None
     modelSnapshot: ModelSnapshot | None = None
     prompt: str | None = Field(default=None, max_length=20000)
 
@@ -69,8 +70,9 @@ class AssetProvenance(Contract):
     def evidence(self):
         if self.source == 'generated' and (self.jobId is None or self.inputFingerprint is None):
             raise ValueError('Generated assets require job and input identity')
-        if self.source == 'agent_written' and (self.agentRunId is None or self.modelSnapshot is None or self.modelSnapshot.kind != 'agent'):
-            raise ValueError('Agent-written documents require the actual run and agent model')
+        if self.source == 'agent_written' and (self.agentRunId is None or
+                not ((self.modelSnapshot is not None and self.modelSnapshot.kind == 'agent') or self.agentRuntime is not None)):
+            raise ValueError('Agent-written documents require a run and an agent model or native runtime')
         if self.source in {'edited', 'rendered'} and (self.editorDocumentId is None or self.editorRevision is None):
             raise ValueError('Edited outputs require their source document version')
         if (self.editorDocumentId is None) != (self.editorRevision is None):

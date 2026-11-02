@@ -299,9 +299,9 @@ class CreationGeneration(GenerationRuntime):
             return ProjectSnapshot.model_validate(data)
         return self.projects.commit(command, accept, session=session, source=source)
 
-    async def execute(self, command, *, session=None):
+    async def execute(self, command, *, session=None, source='ui'):
         if command.type == 'generation.submit':
-            pending = asyncio.create_task(asyncio.to_thread(self.prepare, command, session=session))
+            pending = asyncio.create_task(asyncio.to_thread(self.prepare, command, session=session, source=source))
             async def finish():
                 try:
                     receipt = await pending
@@ -330,7 +330,7 @@ class CreationGeneration(GenerationRuntime):
         replay = self.projects.replay(command)
         if replay:
             return replay
-        receipt = await asyncio.to_thread(self.projects.commit, command, control, session=session)
+        receipt = await asyncio.to_thread(self.projects.commit, command, control, session=session, source=source)
         if receipt.status != 'rejected':
             if command.type == 'job.cancel':
                 await self.cancel(str(command.projectId), str(command.payload.jobId), session)

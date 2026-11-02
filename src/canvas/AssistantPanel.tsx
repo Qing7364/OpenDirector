@@ -170,7 +170,7 @@ export function AssistantPanel({
   useEffect(() => {
     if (nearBottom.current && log.current)
       log.current.scrollTop = log.current.scrollHeight;
-  }, [value.messages, chat.tools, open]);
+  }, [value.messages, open]);
   useEffect(() => () => confirming.current?.abort(), [pending?.id]);
   const confirmPending = async (end: number) => {
     if (!pending || referenceDisabled || confirming.current) return;
@@ -386,7 +386,7 @@ export function AssistantPanel({
             )}
           </article>
         ))}
-        {chat.tools.map((tool, index) => (
+        {value.messages.flatMap(message => message.tools ?? []).map((tool, index) => (
           <div
             key={index}
             className={`cw-assistant-tool is-${tool.status}`}
@@ -428,9 +428,6 @@ export function AssistantPanel({
             </button>
           </div>
         )}
-        <p className="cw-assistant-error" role="status">
-          助手对话尚未接入。请使用画布节点生成和编辑内容；此处输入仅为临时草稿。
-        </p>
         <form
           className="cw-assistant-composer"
           aria-label="聊天输入框"
@@ -493,7 +490,6 @@ export function AssistantPanel({
             key={documentId}
             ref={editor}
             scope={documentId}
-            metadataOnlyKinds={["video", "audio"]}
             value={referenceContent(
               value.draft,
               value.assets.map((asset) => asset.id),
@@ -648,8 +644,8 @@ export function AssistantPanel({
                 type="submit"
                 className="cw-assistant-send"
                 aria-label="发送消息"
-                title="助手对话尚未接入"
-                disabled
+                title="发送消息"
+                disabled={!chat.canSend || locked || !value.draft.trim()}
               >
                 <CanvasIcon name="arrow" size={19} />
               </button>
@@ -660,7 +656,7 @@ export function AssistantPanel({
           {chat.adding ? (
             "正在添加参考素材…"
           ) : (
-            "当前输入仅为临时草稿，刷新页面后不会保留。"
+            "Default · OpenCode bundled"
           )}
         </p>
       </div>
