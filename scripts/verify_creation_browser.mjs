@@ -207,8 +207,16 @@ try {
       .press("Control+Enter");
     snapshot = await until((value) => value.jobs.length === 1, "job accepted");
     const jobId = snapshot.jobs[0].id;
-    await source.click({ button: "right", position: { x: 80, y: 60 } });
-    await page.getByRole("menuitem", { name: /^删除/ }).click();
+    // Hide the display without changing the target's reference intent.
+    await page.evaluate(async ({ projectId, sourceId }) => {
+      const { creationClient, objectVersion } =
+        await import("/src/backend/creationClient.ts");
+      const client = creationClient(projectId);
+      const item = client.snapshot.canvasItems.find((item) => item.id === sourceId);
+      await client.command("canvas.hide", { itemId: sourceId }, [
+        objectVersion("canvas_item", item),
+      ]);
+    }, { projectId, sourceId });
     await until(
       (value) =>
         !value.canvasItems.find((item) => item.id === sourceId).visible,
