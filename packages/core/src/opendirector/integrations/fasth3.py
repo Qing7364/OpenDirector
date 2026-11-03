@@ -84,9 +84,43 @@ def _mp4_audio_arguments(path):
     return ['-c:a', 'copy'] if not codec or codec in MP4_AUDIO_CODECS else ['-c:a', 'aac', '-b:a', '192k']
 
 
+def _trim_plain_fasth3(task, suffix, data):
+    """FastH3 rounds frames up to its 17n+5 grid; a 7 s request returns 175 frames (7.29 s)."""
+    seconds = float(task['parameters']['duration'])
+    if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):
+        raise ProjectError('裁剪 FastH3 视频到所选时长需要 FFmpeg；生成结果可继续下载恢复，无需重新生成。', 409)
+    with tempfile.TemporaryDirectory(prefix='opendirector-video-trim-') as folder:
+        generated = Path(folder) / ('generated.' + suffix)
+        output = Path(folder) / 'output.mp4'
+        generated.write_bytes(data)
+        try:
+            probe = subprocess.run(['ffprobe', '-v', 'error', '-protocol_whitelist', 'file,pipe', '-select_streams', 'v:0',
+                                    '-show_entries', 'stream=duration', '-of', 'csv=p=0', str(generated)],
+                                   check=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=15)
+            actual = float(probe.stdout.decode(errors='replace').strip())
+            # Within one frame already matches; re-encoding it would only cost quality.
+            if actual <= seconds + 1 / 24:
+                return suffix, data
+            command = ['ffmpeg', '-nostdin', '-v', 'error', '-y', '-protocol_whitelist', 'file,pipe', '-i', str(generated),
+                       '-map', '0:v:0', '-map', '0:a:0?', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18',
+                       '-pix_fmt', 'yuv420p', '-map_metadata', '-1', '-t', str(seconds), *_mp4_audio_arguments(generated),
+                       '-movflags', '+faststart', str(output)]
+            subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=60)
+        except (subprocess.SubprocessError, OSError, ValueError):
+            raise ProjectError('裁剪 FastH3 视频到所选时长失败；请检查 FFmpeg，稍后继续下载原任务，无需重新生成。', 409) from None
+        if output.stat().st_size > MAX_ASSET_BYTES:
+            raise ProjectError('处理后的视频超过 50 MB，无法保存到项目。', 413)
+        return 'mp4', output.read_bytes()
+
+
 def finalize_video_edit(store, task, suffix, data):
     policy = task.get('parameters', {}).get('videoEdit')
-    if task.get('protocol') != 'vllm_omni' or task['kind'] != 'video' or not policy:
+    if task.get('protocol') != 'vllm_omni' or task['kind'] != 'video':
+        return suffix, data
+    if not policy:
+        # Native H3 continuation resumes from the server's untrimmed clip, so only FastH3 is trimmed.
+        if (task.get('referenceInputs') or {}).get('profile') == 'fasth3-omni' and task.get('parameters', {}).get('duration'):
+            return _trim_plain_fasth3(task, suffix, data)
         return suffix, data
     if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):
         raise ProjectError('保留原片音轨和时长需要 FFmpeg；生成结果可继续下载恢复，无需重新生成。', 409)

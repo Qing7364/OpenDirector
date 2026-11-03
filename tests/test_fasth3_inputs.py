@@ -272,6 +272,46 @@ def test_real_output_is_always_8_bit_420(tmp_path, pixel_format):
     assert stream == {'pix_fmt': 'yuv420p', 'profile': 'High'}
 
 
+def generated_clip(path, frames):
+    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=24',
+        '-f', 'lavfi', '-i', 'sine=frequency=880:sample_rate=48000', '-frames:v', str(frames), '-t', str(frames / 24),
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', str(path)], check=True, capture_output=True)
+
+
+def plain_task(profile='fasth3-omni', seconds=7):
+    return {'kind': 'video', 'protocol': 'vllm_omni', 'projectId': 'test', 'referenceInputs': {'profile': profile},
+            'parameters': {'duration': seconds, 'seconds': str(seconds)}}
+
+
+def test_real_plain_fasth3_output_is_trimmed_to_the_requested_duration(tmp_path):
+    if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):
+        pytest.skip('FFmpeg required')
+    generated = tmp_path/'generated.mp4'
+    generated_clip(generated, 175)  # 7 s rounded up to the 17n+5 frame grid.
+    store = SimpleNamespace(asset=lambda *args: pytest.fail('a plain generation has no source to read'))
+    suffix, data = finalize_video_edit(store, plain_task(), 'mp4', generated.read_bytes())
+    output = tmp_path/'output.mp4'
+    output.write_bytes(data)
+    info = json.loads(subprocess.check_output(['ffprobe', '-v', 'error', '-count_frames', '-show_streams', '-show_format', '-of', 'json', str(output)]))
+    video = next(stream for stream in info['streams'] if stream['codec_type'] == 'video')
+    assert suffix == 'mp4' and int(video['nb_read_frames']) == 168
+    assert 6.95 <= float(info['format']['duration']) <= 7.05
+    assert any(stream['codec_type'] == 'audio' for stream in info['streams'])
+    decoded = subprocess.run(['ffmpeg', '-v', 'error', '-i', str(output), '-f', 'null', '-'], capture_output=True, check=True)
+    assert not decoded.stderr.strip()
+
+
+@pytest.mark.parametrize('profile,frames', [('fasth3-omni', 168), ('vllm-omni-h3', 175)])
+def test_real_exact_or_continuable_output_is_returned_unchanged(tmp_path, profile, frames):
+    # Native H3 continues from the server's untrimmed clip, so trimming it would break the seam.
+    if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):
+        pytest.skip('FFmpeg required')
+    generated = tmp_path/'generated.mp4'
+    generated_clip(generated, frames)
+    store = SimpleNamespace(asset=lambda *args: pytest.fail('no source read expected'))
+    assert finalize_video_edit(store, plain_task(profile), 'mp4', generated.read_bytes()) == ('mp4', generated.read_bytes())
+
+
 def test_native_prompt_and_full_duration_reach_actual_video_multipart():
     import asyncio
     from email.parser import BytesParser
