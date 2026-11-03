@@ -10,6 +10,7 @@ from pydantic import JsonValue, TypeAdapter, ValidationError
 from opendirector.agent.context import AgentEvent, RunContext
 from opendirector.agent.tools import AgentTools, tools
 from opendirector.domain.projects import ProjectError
+from opendirector.domain.creation.commands import COMMAND_MODELS
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -71,7 +72,17 @@ class ToolGateway:
                     elif value.get('error'):
                         error = str(value['error'])
                 return ToolResult(value={**value, 'error': error} if error else value, error=error)
-            except (ProjectError, ValidationError, ValueError, KeyError, OSError, UnicodeError) as failure:
+            except ValidationError as failure:
+                messages = []
+                for issue in failure.errors(include_input=False, include_url=False):
+                    location = issue['loc']
+                    if location and location[0] in COMMAND_MODELS:
+                        location = location[1:]
+                    path = '.'.join(str(part) for part in location)
+                    messages.append(f"{path or 'command'}: {issue['msg']}")
+                error = '; '.join(messages)
+                return ToolResult(value={'error': error}, error=error)
+            except (ProjectError, ValueError, KeyError, OSError, UnicodeError) as failure:
                 return ToolResult(value={'error': str(failure)}, error=str(failure))
 
     async def close(self) -> None:

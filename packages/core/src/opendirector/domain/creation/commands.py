@@ -280,48 +280,48 @@ class CommandBase(Contract):
 
 # HTTP/application contracts; Agent tool registration is a separate boundary.
 _COMMANDS = (
-    ('ProjectCreateCommand', 'project.create', ProjectCreate),
-    ('ProjectRenameCommand', 'project.rename', ProjectRename),
-    ('ProjectTrashCommand', 'project.trash', EmptyPayload),
-    ('ProjectRestoreCommand', 'project.restore', EmptyPayload),
-    ('AssetImportCommand', 'asset.import', AssetImport),
-    ('ArtifactPublishCommand', 'artifact.publish', ArtifactPublish),
-    ('AssetWriteTextCommand', 'asset.writeText', AssetWriteText),
-    ('AssetMetadataCommand', 'asset.updateMetadata', AssetMetadataUpdate),
-    ('AssetDeleteCommand', 'asset.delete', AssetDelete),
-    ('CanvasShowCommand', 'canvas.show', CanvasShow),
-    ('CanvasMoveCommand', 'canvas.move', CanvasMove),
-    ('CanvasUpdateCommand', 'canvas.update', CanvasPresentationUpdate),
-    ('CanvasHideCommand', 'canvas.hide', CanvasHide),
-    ('CanvasMaterializeCommand', 'canvas.materialize', CanvasMaterialize),
-    ('CanvasApplyEditCommand', 'canvas.applyEdit', CanvasApplyEdit),
-    ('CanvasPublishMediaCommand', 'canvas.publishMedia', CanvasPublishMedia),
-    ('TimelinePublishRenderCommand', 'timeline.publishRender', TimelinePublishRender),
-    ('NodeVersionApplyCommand', 'canvas.applyVersion', NodeVersionApply),
-    ('CanvasConfigureCommand', 'canvas.configure', CanvasConfigure),
-    ('CanvasEditorAttachCommand', 'canvas.attachEditor', CanvasEditorAttach),
-    ('CanvasEditorDetachCommand', 'canvas.detachEditor', CanvasEditorAttach),
-    ('SpecCreateCommand', 'generationSpec.create', SpecWrite),
-    ('SpecUpdateCommand', 'generationSpec.update', SpecWrite),
-    ('SpecRestoreCommand', 'generationSpec.restore', SpecRestore),
-    ('SpecPromptCommand', 'generationSpec.setPrompt', SpecPromptWrite),
-    ('ReferenceAddCommand', 'reference.add', ReferenceWrite),
-    ('ReferenceUpdateCommand', 'reference.update', ReferenceWrite),
-    ('ReferenceRestoreCommand', 'reference.restore', ReferenceWrite),
-    ('ReferenceRemoveCommand', 'reference.remove', ReferenceRemove),
-    ('GenerationSubmitCommand', 'generation.submit', GenerationSubmit),
-    ('JobCancelCommand', 'job.cancel', JobControl),
-    ('JobRecoverCommand', 'job.recover', JobControl),
-    ('JobCheckpointCommand', 'job.checkpoint', JobCheckpoint),
-    ('ResultSelectCommand', 'result.select', ResultSelect),
-    ('EditorCreateCommand', 'editor.create', EditorWrite),
-    ('EditorSaveCommand', 'editor.save', EditorWrite),
-    ('HistoryUndoCommand', 'history.undo', HistoryReplay),
-    ('HistoryRedoCommand', 'history.redo', HistoryReplay),
+    ('ProjectCreateCommand', 'project.create', ProjectCreate, 'Create a project.'),
+    ('ProjectRenameCommand', 'project.rename', ProjectRename, 'Rename the project.'),
+    ('ProjectTrashCommand', 'project.trash', EmptyPayload, 'Move the project to trash.'),
+    ('ProjectRestoreCommand', 'project.restore', EmptyPayload, 'Restore a trashed project.'),
+    ('AssetImportCommand', 'asset.import', AssetImport, 'Register an uploaded file as a project asset.'),
+    ('ArtifactPublishCommand', 'artifact.publish', ArtifactPublish, 'Register an execution file as a project asset.'),
+    ('AssetWriteTextCommand', 'asset.writeText', AssetWriteText, 'Write a text asset or a new version of an existing text asset.'),
+    ('AssetMetadataCommand', 'asset.updateMetadata', AssetMetadataUpdate, 'Rename an asset.'),
+    ('AssetDeleteCommand', 'asset.delete', AssetDelete, 'Delete assets after an impact preview.'),
+    ('CanvasShowCommand', 'canvas.show', CanvasShow, 'Create or restore a canvas display item.'),
+    ('CanvasMoveCommand', 'canvas.move', CanvasMove, 'Move one or more canvas items.'),
+    ('CanvasUpdateCommand', 'canvas.update', CanvasPresentationUpdate, 'Update canvas presentation, grouping or lock state.'),
+    ('CanvasHideCommand', 'canvas.hide', CanvasHide, 'Remove a canvas item; preserves project contents. Remove all visible items to clear the canvas.'),
+    ('CanvasMaterializeCommand', 'canvas.materialize', CanvasMaterialize, 'Bind an asset to an empty or material canvas item.'),
+    ('CanvasApplyEditCommand', 'canvas.applyEdit', CanvasApplyEdit, 'Apply an editor result to a canvas item.'),
+    ('CanvasPublishMediaCommand', 'canvas.publishMedia', CanvasPublishMedia, 'Publish edited media outputs with their editor snapshot.'),
+    ('TimelinePublishRenderCommand', 'timeline.publishRender', TimelinePublishRender, 'Publish a rendered timeline result.'),
+    ('NodeVersionApplyCommand', 'canvas.applyVersion', NodeVersionApply, 'Apply a historical asset version and its reference policy to a canvas item.'),
+    ('CanvasConfigureCommand', 'canvas.configure', CanvasConfigure, 'Bind a generation configuration to a canvas item.'),
+    ('CanvasEditorAttachCommand', 'canvas.attachEditor', CanvasEditorAttach, 'Attach an editor document to a canvas item.'),
+    ('CanvasEditorDetachCommand', 'canvas.detachEditor', CanvasEditorAttach, 'Detach an editor document from a canvas item.'),
+    ('SpecCreateCommand', 'generationSpec.create', SpecWrite, 'Create a generation configuration without submitting a job.'),
+    ('SpecUpdateCommand', 'generationSpec.update', SpecWrite, 'Update a generation configuration without changing accepted jobs.'),
+    ('SpecRestoreCommand', 'generationSpec.restore', SpecRestore, 'Restore generation settings from a historical command.'),
+    ('SpecPromptCommand', 'generationSpec.setPrompt', SpecPromptWrite, 'Update prompt text and structured references.'),
+    ('ReferenceAddCommand', 'reference.add', ReferenceWrite, 'Add a generation reference.'),
+    ('ReferenceUpdateCommand', 'reference.update', ReferenceWrite, 'Update a generation reference.'),
+    ('ReferenceRestoreCommand', 'reference.restore', ReferenceWrite, 'Restore a generation reference.'),
+    ('ReferenceRemoveCommand', 'reference.remove', ReferenceRemove, 'Deactivate a generation reference.'),
+    ('GenerationSubmitCommand', 'generation.submit', GenerationSubmit, 'Submit a generation job with fixed inputs and an adoption policy.'),
+    ('JobCancelCommand', 'job.cancel', JobControl, 'Request cancellation of an existing job.'),
+    ('JobRecoverCommand', 'job.recover', JobControl, 'Recover an existing job without creating a new attempt.'),
+    ('JobCheckpointCommand', 'job.checkpoint', JobCheckpoint, 'Persist a job execution checkpoint.'),
+    ('ResultSelectCommand', 'result.select', ResultSelect, 'Adopt an existing generation result.'),
+    ('EditorCreateCommand', 'editor.create', EditorWrite, 'Create an editable document.'),
+    ('EditorSaveCommand', 'editor.save', EditorWrite, 'Save an editable document.'),
+    ('HistoryUndoCommand', 'history.undo', HistoryReplay, 'Undo a recorded reversible command.'),
+    ('HistoryRedoCommand', 'history.redo', HistoryReplay, 'Reapply an undone command.'),
 )
 COMMAND_MODELS = {}
-for _name, _type, _payload in _COMMANDS:
-    _model = create_model(_name, __base__=CommandBase, type=(Literal[_type], ...), payload=(_payload, ...))
+for _name, _type, _payload, _description in _COMMANDS:
+    _model = create_model(_name, __base__=CommandBase, __doc__=_description, type=(Literal[_type], ...), payload=(_payload, ...))
     COMMAND_MODELS[_type] = _model
     globals()[_name] = _model
 
@@ -329,8 +329,8 @@ _BATCH_TYPES = {'canvas.show', 'canvas.move', 'canvas.update', 'canvas.hide', 'c
                 'canvas.configure', 'canvas.attachEditor', 'canvas.detachEditor', 'generationSpec.create', 'generationSpec.update',
                 'reference.add', 'reference.update', 'reference.restore', 'reference.remove', 'editor.create', 'editor.save', 'result.select', 'generationSpec.setPrompt'}
 _OPERATIONS = tuple(create_model(name + 'Operation', __base__=Contract,
-                    type=(Literal[kind], ...), payload=(payload, ...))
-                    for name, kind, payload in _COMMANDS if kind in _BATCH_TYPES)
+                    __doc__=description, type=(Literal[kind], ...), payload=(payload, ...))
+                    for name, kind, payload, description in _COMMANDS if kind in _BATCH_TYPES)
 Operation = Annotated[Union[_OPERATIONS], Field(discriminator='type')]
 
 
@@ -339,6 +339,7 @@ class BatchPayload(Contract):
 
 
 BatchCommand = create_model('BatchCommand', __base__=CommandBase,
+                            __doc__='Apply multiple operations atomically; all succeed or none are committed.',
                             type=(Literal['creation.batch'], ...), payload=(BatchPayload, ...))
 COMMAND_MODELS['creation.batch'] = BatchCommand
 Command = Annotated[Union[tuple(COMMAND_MODELS.values())], Field(discriminator='type')]

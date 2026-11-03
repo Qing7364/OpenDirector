@@ -58,6 +58,7 @@
       },
       "ArtifactPublishCommand": {
         "additionalProperties": false,
+        "description": "Register an execution file as a project asset.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -200,6 +201,7 @@
       },
       "AssetDeleteCommand": {
         "additionalProperties": false,
+        "description": "Delete assets after an impact preview.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -286,6 +288,7 @@
       },
       "AssetImportCommand": {
         "additionalProperties": false,
+        "description": "Register an uploaded file as a project asset.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -338,6 +341,7 @@
       },
       "AssetMetadataCommand": {
         "additionalProperties": false,
+        "description": "Rename an asset.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -648,6 +652,7 @@
       },
       "AssetWriteTextCommand": {
         "additionalProperties": false,
+        "description": "Write a text asset or a new version of an existing text asset.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -1082,6 +1087,7 @@
       },
       "BatchCommand": {
         "additionalProperties": false,
+        "description": "Apply multiple operations atomically; all succeed or none are committed.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -1326,6 +1332,7 @@
       },
       "CanvasApplyEditCommand": {
         "additionalProperties": false,
+        "description": "Apply an editor result to a canvas item.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -1378,6 +1385,7 @@
       },
       "CanvasApplyEditCommandOperation": {
         "additionalProperties": false,
+        "description": "Apply an editor result to a canvas item.",
         "properties": {
           "type": {
             "const": "canvas.applyEdit",
@@ -1423,6 +1431,7 @@
       },
       "CanvasConfigureCommand": {
         "additionalProperties": false,
+        "description": "Bind a generation configuration to a canvas item.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -1475,6 +1484,7 @@
       },
       "CanvasConfigureCommandOperation": {
         "additionalProperties": false,
+        "description": "Bind a generation configuration to a canvas item.",
         "properties": {
           "type": {
             "const": "canvas.configure",
@@ -1515,6 +1525,7 @@
       },
       "CanvasEditorAttachCommand": {
         "additionalProperties": false,
+        "description": "Attach an editor document to a canvas item.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -1567,6 +1578,7 @@
       },
       "CanvasEditorAttachCommandOperation": {
         "additionalProperties": false,
+        "description": "Attach an editor document to a canvas item.",
         "properties": {
           "type": {
             "const": "canvas.attachEditor",
@@ -1586,6 +1598,7 @@
       },
       "CanvasEditorDetachCommand": {
         "additionalProperties": false,
+        "description": "Detach an editor document from a canvas item.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -1638,6 +1651,7 @@
       },
       "CanvasEditorDetachCommandOperation": {
         "additionalProperties": false,
+        "description": "Detach an editor document from a canvas item.",
         "properties": {
           "type": {
             "const": "canvas.detachEditor",
@@ -1672,6 +1686,7 @@
       },
       "CanvasHideCommand": {
         "additionalProperties": false,
+        "description": "Remove a canvas item; preserves project contents. Remove all visible items to clear the canvas.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -1724,6 +1739,7 @@
       },
       "CanvasHideCommandOperation": {
         "additionalProperties": false,
+        "description": "Remove a canvas item; preserves project contents. Remove all visible items to clear the canvas.",
         "properties": {
           "type": {
             "const": "canvas.hide",
@@ -1872,6 +1888,7 @@
       },
       "CanvasMaterializeCommand": {
         "additionalProperties": false,
+        "description": "Bind an asset to an empty or material canvas item.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -1924,6 +1941,7 @@
       },
       "CanvasMaterializeCommandOperation": {
         "additionalProperties": false,
+        "description": "Bind an asset to an empty or material canvas item.",
         "properties": {
           "type": {
             "const": "canvas.materialize",
@@ -1962,6 +1980,7 @@
       },
       "CanvasMoveCommand": {
         "additionalProperties": false,
+        "description": "Move one or more canvas items.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -2014,6 +2033,7 @@
       },
       "CanvasMoveCommandOperation": {
         "additionalProperties": false,
+        "description": "Move one or more canvas items.",
         "properties": {
           "type": {
             "const": "canvas.move",
@@ -2235,6 +2255,7 @@
       },
       "CanvasPublishMediaCommand": {
         "additionalProperties": false,
+        "description": "Publish edited media outputs with their editor snapshot.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -2351,6 +2372,7 @@
       },
       "CanvasShowCommand": {
         "additionalProperties": false,
+        "description": "Create or restore a canvas display item.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -2403,6 +2425,7 @@
       },
       "CanvasShowCommandOperation": {
         "additionalProperties": false,
+        "description": "Create or restore a canvas display item.",
         "properties": {
           "type": {
             "const": "canvas.show",
@@ -2422,6 +2445,7 @@
       },
       "CanvasUpdateCommand": {
         "additionalProperties": false,
+        "description": "Update canvas presentation, grouping or lock state.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -2474,6 +2498,7 @@
       },
       "CanvasUpdateCommandOperation": {
         "additionalProperties": false,
+        "description": "Update canvas presentation, grouping or lock state.",
         "properties": {
           "type": {
             "const": "canvas.update",
@@ -3490,6 +3515,7 @@
       },
       "EditorCreateCommand": {
         "additionalProperties": false,
+        "description": "Create an editable document.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -3542,6 +3568,7 @@
       },
       "EditorCreateCommandOperation": {
         "additionalProperties": false,
+        "description": "Create an editable document.",
         "properties": {
           "type": {
             "const": "editor.create",
@@ -3672,6 +3699,7 @@
       },
       "EditorSaveCommand": {
         "additionalProperties": false,
+        "description": "Save an editable document.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -3724,6 +3752,7 @@
       },
       "EditorSaveCommandOperation": {
         "additionalProperties": false,
+        "description": "Save an editable document.",
         "properties": {
           "type": {
             "const": "editor.save",
@@ -4382,6 +4411,7 @@
       },
       "GenerationSubmitCommand": {
         "additionalProperties": false,
+        "description": "Submit a generation job with fixed inputs and an adoption policy.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -4530,6 +4560,7 @@
       },
       "HistoryRedoCommand": {
         "additionalProperties": false,
+        "description": "Reapply an undone command.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -4597,6 +4628,7 @@
       },
       "HistoryUndoCommand": {
         "additionalProperties": false,
+        "description": "Undo a recorded reversible command.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -5776,6 +5808,7 @@
       },
       "JobCancelCommand": {
         "additionalProperties": false,
+        "description": "Request cancellation of an existing job.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -5841,6 +5874,7 @@
       },
       "JobCheckpointCommand": {
         "additionalProperties": false,
+        "description": "Persist a job execution checkpoint.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -5908,6 +5942,7 @@
       },
       "JobRecoverCommand": {
         "additionalProperties": false,
+        "description": "Recover an existing job without creating a new attempt.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -7149,6 +7184,7 @@
       },
       "NodeVersionApplyCommand": {
         "additionalProperties": false,
+        "description": "Apply a historical asset version and its reference policy to a canvas item.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -7467,6 +7503,7 @@
       },
       "ProjectCreateCommand": {
         "additionalProperties": false,
+        "description": "Create a project.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -7631,6 +7668,7 @@
       },
       "ProjectRenameCommand": {
         "additionalProperties": false,
+        "description": "Rename the project.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -7683,6 +7721,7 @@
       },
       "ProjectRestoreCommand": {
         "additionalProperties": false,
+        "description": "Restore a trashed project.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -7952,6 +7991,7 @@
       },
       "ProjectTrashCommand": {
         "additionalProperties": false,
+        "description": "Move the project to trash.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -8161,6 +8201,7 @@
       },
       "ReferenceAddCommand": {
         "additionalProperties": false,
+        "description": "Add a generation reference.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -8213,6 +8254,7 @@
       },
       "ReferenceAddCommandOperation": {
         "additionalProperties": false,
+        "description": "Add a generation reference.",
         "properties": {
           "type": {
             "const": "reference.add",
@@ -8301,6 +8343,7 @@
       },
       "ReferenceRemoveCommand": {
         "additionalProperties": false,
+        "description": "Deactivate a generation reference.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -8353,6 +8396,7 @@
       },
       "ReferenceRemoveCommandOperation": {
         "additionalProperties": false,
+        "description": "Deactivate a generation reference.",
         "properties": {
           "type": {
             "const": "reference.remove",
@@ -8372,6 +8416,7 @@
       },
       "ReferenceRestoreCommand": {
         "additionalProperties": false,
+        "description": "Restore a generation reference.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -8424,6 +8469,7 @@
       },
       "ReferenceRestoreCommandOperation": {
         "additionalProperties": false,
+        "description": "Restore a generation reference.",
         "properties": {
           "type": {
             "const": "reference.restore",
@@ -8443,6 +8489,7 @@
       },
       "ReferenceUpdateCommand": {
         "additionalProperties": false,
+        "description": "Update a generation reference.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -8495,6 +8542,7 @@
       },
       "ReferenceUpdateCommandOperation": {
         "additionalProperties": false,
+        "description": "Update a generation reference.",
         "properties": {
           "type": {
             "const": "reference.update",
@@ -8691,6 +8739,7 @@
       },
       "ResultSelectCommand": {
         "additionalProperties": false,
+        "description": "Adopt an existing generation result.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -8743,6 +8792,7 @@
       },
       "ResultSelectCommandOperation": {
         "additionalProperties": false,
+        "description": "Adopt an existing generation result.",
         "properties": {
           "type": {
             "const": "result.select",
@@ -8842,6 +8892,7 @@
       },
       "SpecCreateCommand": {
         "additionalProperties": false,
+        "description": "Create a generation configuration without submitting a job.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -8894,6 +8945,7 @@
       },
       "SpecCreateCommandOperation": {
         "additionalProperties": false,
+        "description": "Create a generation configuration without submitting a job.",
         "properties": {
           "type": {
             "const": "generationSpec.create",
@@ -8913,6 +8965,7 @@
       },
       "SpecPromptCommand": {
         "additionalProperties": false,
+        "description": "Update prompt text and structured references.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -8965,6 +9018,7 @@
       },
       "SpecPromptCommandOperation": {
         "additionalProperties": false,
+        "description": "Update prompt text and structured references.",
         "properties": {
           "type": {
             "const": "generationSpec.setPrompt",
@@ -9064,6 +9118,7 @@
       },
       "SpecRestoreCommand": {
         "additionalProperties": false,
+        "description": "Restore generation settings from a historical command.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -9116,6 +9171,7 @@
       },
       "SpecUpdateCommand": {
         "additionalProperties": false,
+        "description": "Update a generation configuration without changing accepted jobs.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -9168,6 +9224,7 @@
       },
       "SpecUpdateCommandOperation": {
         "additionalProperties": false,
+        "description": "Update a generation configuration without changing accepted jobs.",
         "properties": {
           "type": {
             "const": "generationSpec.update",
@@ -10445,6 +10502,7 @@
       },
       "TimelinePublishRenderCommand": {
         "additionalProperties": false,
+        "description": "Publish a rendered timeline result.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -12104,6 +12162,7 @@
       },
       "ArtifactPublishCommand": {
         "additionalProperties": false,
+        "description": "Register an execution file as a project asset.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -12250,6 +12309,7 @@
       },
       "AssetDeleteCommand": {
         "additionalProperties": false,
+        "description": "Delete assets after an impact preview.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -12338,6 +12398,7 @@
       },
       "AssetImportCommand": {
         "additionalProperties": false,
+        "description": "Register an uploaded file as a project asset.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -12392,6 +12453,7 @@
       },
       "AssetMetadataCommand": {
         "additionalProperties": false,
+        "description": "Rename an asset.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -12716,6 +12778,7 @@
       },
       "AssetWriteTextCommand": {
         "additionalProperties": false,
+        "description": "Write a text asset or a new version of an existing text asset.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -13178,6 +13241,7 @@
       },
       "BatchCommand": {
         "additionalProperties": false,
+        "description": "Apply multiple operations atomically; all succeed or none are committed.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -13425,6 +13489,7 @@
       },
       "CanvasApplyEditCommand": {
         "additionalProperties": false,
+        "description": "Apply an editor result to a canvas item.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -13479,6 +13544,7 @@
       },
       "CanvasApplyEditCommandOperation": {
         "additionalProperties": false,
+        "description": "Apply an editor result to a canvas item.",
         "properties": {
           "type": {
             "const": "canvas.applyEdit",
@@ -13525,6 +13591,7 @@
       },
       "CanvasConfigureCommand": {
         "additionalProperties": false,
+        "description": "Bind a generation configuration to a canvas item.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -13579,6 +13646,7 @@
       },
       "CanvasConfigureCommandOperation": {
         "additionalProperties": false,
+        "description": "Bind a generation configuration to a canvas item.",
         "properties": {
           "type": {
             "const": "canvas.configure",
@@ -13619,6 +13687,7 @@
       },
       "CanvasEditorAttachCommand": {
         "additionalProperties": false,
+        "description": "Attach an editor document to a canvas item.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -13673,6 +13742,7 @@
       },
       "CanvasEditorAttachCommandOperation": {
         "additionalProperties": false,
+        "description": "Attach an editor document to a canvas item.",
         "properties": {
           "type": {
             "const": "canvas.attachEditor",
@@ -13692,6 +13762,7 @@
       },
       "CanvasEditorDetachCommand": {
         "additionalProperties": false,
+        "description": "Detach an editor document from a canvas item.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -13746,6 +13817,7 @@
       },
       "CanvasEditorDetachCommandOperation": {
         "additionalProperties": false,
+        "description": "Detach an editor document from a canvas item.",
         "properties": {
           "type": {
             "const": "canvas.detachEditor",
@@ -13780,6 +13852,7 @@
       },
       "CanvasHideCommand": {
         "additionalProperties": false,
+        "description": "Remove a canvas item; preserves project contents. Remove all visible items to clear the canvas.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -13834,6 +13907,7 @@
       },
       "CanvasHideCommandOperation": {
         "additionalProperties": false,
+        "description": "Remove a canvas item; preserves project contents. Remove all visible items to clear the canvas.",
         "properties": {
           "type": {
             "const": "canvas.hide",
@@ -13993,6 +14067,7 @@
       },
       "CanvasMaterializeCommand": {
         "additionalProperties": false,
+        "description": "Bind an asset to an empty or material canvas item.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -14047,6 +14122,7 @@
       },
       "CanvasMaterializeCommandOperation": {
         "additionalProperties": false,
+        "description": "Bind an asset to an empty or material canvas item.",
         "properties": {
           "type": {
             "const": "canvas.materialize",
@@ -14085,6 +14161,7 @@
       },
       "CanvasMoveCommand": {
         "additionalProperties": false,
+        "description": "Move one or more canvas items.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -14139,6 +14216,7 @@
       },
       "CanvasMoveCommandOperation": {
         "additionalProperties": false,
+        "description": "Move one or more canvas items.",
         "properties": {
           "type": {
             "const": "canvas.move",
@@ -14368,6 +14446,7 @@
       },
       "CanvasPublishMediaCommand": {
         "additionalProperties": false,
+        "description": "Publish edited media outputs with their editor snapshot.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -14486,6 +14565,7 @@
       },
       "CanvasShowCommand": {
         "additionalProperties": false,
+        "description": "Create or restore a canvas display item.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -14540,6 +14620,7 @@
       },
       "CanvasShowCommandOperation": {
         "additionalProperties": false,
+        "description": "Create or restore a canvas display item.",
         "properties": {
           "type": {
             "const": "canvas.show",
@@ -14559,6 +14640,7 @@
       },
       "CanvasUpdateCommand": {
         "additionalProperties": false,
+        "description": "Update canvas presentation, grouping or lock state.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -14613,6 +14695,7 @@
       },
       "CanvasUpdateCommandOperation": {
         "additionalProperties": false,
+        "description": "Update canvas presentation, grouping or lock state.",
         "properties": {
           "type": {
             "const": "canvas.update",
@@ -15665,6 +15748,7 @@
       },
       "EditorCreateCommand": {
         "additionalProperties": false,
+        "description": "Create an editable document.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -15719,6 +15803,7 @@
       },
       "EditorCreateCommandOperation": {
         "additionalProperties": false,
+        "description": "Create an editable document.",
         "properties": {
           "type": {
             "const": "editor.create",
@@ -15853,6 +15938,7 @@
       },
       "EditorSaveCommand": {
         "additionalProperties": false,
+        "description": "Save an editable document.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -15907,6 +15993,7 @@
       },
       "EditorSaveCommandOperation": {
         "additionalProperties": false,
+        "description": "Save an editable document.",
         "properties": {
           "type": {
             "const": "editor.save",
@@ -16596,6 +16683,7 @@
       },
       "GenerationSubmitCommand": {
         "additionalProperties": false,
+        "description": "Submit a generation job with fixed inputs and an adoption policy.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -16757,6 +16845,7 @@
       },
       "HistoryRedoCommand": {
         "additionalProperties": false,
+        "description": "Reapply an undone command.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -16826,6 +16915,7 @@
       },
       "HistoryUndoCommand": {
         "additionalProperties": false,
+        "description": "Undo a recorded reversible command.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -18088,6 +18178,7 @@
       },
       "JobCancelCommand": {
         "additionalProperties": false,
+        "description": "Request cancellation of an existing job.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -18155,6 +18246,7 @@
       },
       "JobCheckpointCommand": {
         "additionalProperties": false,
+        "description": "Persist a job execution checkpoint.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -18224,6 +18316,7 @@
       },
       "JobRecoverCommand": {
         "additionalProperties": false,
+        "description": "Recover an existing job without creating a new attempt.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -19500,6 +19593,7 @@
       },
       "NodeVersionApplyCommand": {
         "additionalProperties": false,
+        "description": "Apply a historical asset version and its reference policy to a canvas item.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -19834,6 +19928,7 @@
       },
       "ProjectCreateCommand": {
         "additionalProperties": false,
+        "description": "Create a project.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -20005,6 +20100,7 @@
       },
       "ProjectRenameCommand": {
         "additionalProperties": false,
+        "description": "Rename the project.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -20059,6 +20155,7 @@
       },
       "ProjectRestoreCommand": {
         "additionalProperties": false,
+        "description": "Restore a trashed project.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -20341,6 +20438,7 @@
       },
       "ProjectTrashCommand": {
         "additionalProperties": false,
+        "description": "Move the project to trash.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -20557,6 +20655,7 @@
       },
       "ReferenceAddCommand": {
         "additionalProperties": false,
+        "description": "Add a generation reference.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -20611,6 +20710,7 @@
       },
       "ReferenceAddCommandOperation": {
         "additionalProperties": false,
+        "description": "Add a generation reference.",
         "properties": {
           "type": {
             "const": "reference.add",
@@ -20703,6 +20803,7 @@
       },
       "ReferenceRemoveCommand": {
         "additionalProperties": false,
+        "description": "Deactivate a generation reference.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -20757,6 +20858,7 @@
       },
       "ReferenceRemoveCommandOperation": {
         "additionalProperties": false,
+        "description": "Deactivate a generation reference.",
         "properties": {
           "type": {
             "const": "reference.remove",
@@ -20776,6 +20878,7 @@
       },
       "ReferenceRestoreCommand": {
         "additionalProperties": false,
+        "description": "Restore a generation reference.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -20830,6 +20933,7 @@
       },
       "ReferenceRestoreCommandOperation": {
         "additionalProperties": false,
+        "description": "Restore a generation reference.",
         "properties": {
           "type": {
             "const": "reference.restore",
@@ -20849,6 +20953,7 @@
       },
       "ReferenceUpdateCommand": {
         "additionalProperties": false,
+        "description": "Update a generation reference.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -20903,6 +21008,7 @@
       },
       "ReferenceUpdateCommandOperation": {
         "additionalProperties": false,
+        "description": "Update a generation reference.",
         "properties": {
           "type": {
             "const": "reference.update",
@@ -21105,6 +21211,7 @@
       },
       "ResultSelectCommand": {
         "additionalProperties": false,
+        "description": "Adopt an existing generation result.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -21159,6 +21266,7 @@
       },
       "ResultSelectCommandOperation": {
         "additionalProperties": false,
+        "description": "Adopt an existing generation result.",
         "properties": {
           "type": {
             "const": "result.select",
@@ -21259,6 +21367,7 @@
       },
       "SpecCreateCommand": {
         "additionalProperties": false,
+        "description": "Create a generation configuration without submitting a job.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -21313,6 +21422,7 @@
       },
       "SpecCreateCommandOperation": {
         "additionalProperties": false,
+        "description": "Create a generation configuration without submitting a job.",
         "properties": {
           "type": {
             "const": "generationSpec.create",
@@ -21332,6 +21442,7 @@
       },
       "SpecPromptCommand": {
         "additionalProperties": false,
+        "description": "Update prompt text and structured references.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -21386,6 +21497,7 @@
       },
       "SpecPromptCommandOperation": {
         "additionalProperties": false,
+        "description": "Update prompt text and structured references.",
         "properties": {
           "type": {
             "const": "generationSpec.setPrompt",
@@ -21487,6 +21599,7 @@
       },
       "SpecRestoreCommand": {
         "additionalProperties": false,
+        "description": "Restore generation settings from a historical command.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -21541,6 +21654,7 @@
       },
       "SpecUpdateCommand": {
         "additionalProperties": false,
+        "description": "Update a generation configuration without changing accepted jobs.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -21595,6 +21709,7 @@
       },
       "SpecUpdateCommandOperation": {
         "additionalProperties": false,
+        "description": "Update a generation configuration without changing accepted jobs.",
         "properties": {
           "type": {
             "const": "generationSpec.update",
@@ -22956,6 +23071,7 @@
       },
       "TimelinePublishRenderCommand": {
         "additionalProperties": false,
+        "description": "Publish a rendered timeline result.",
         "properties": {
           "commandId": {
             "format": "uuid",

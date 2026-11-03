@@ -50,6 +50,9 @@ assert 'skill_tool' in request['agent']['tools']
 assert request['mcp'] == []
 assert request['skills'] == ['example']
 sid='native-session'
+if mode == 'quota':
+ emit('result',status='failed',exit_code=1,error={'code':'RUNTIME_ERROR','message':'HTTP 429: Token Plan quota exceeded (2056)'},output=None)
+ raise SystemExit(1)
 if mode == 'interaction':
  emit('event',event_type='interaction.requested',payload={'interaction_id':'ask-1','interaction':{'source':'ask_user','questions':[{'question':'Choose a source'}]}})
  sys.stdin.readline()
@@ -182,3 +185,18 @@ def test_interaction_is_recorded_without_approval(cli, tmp_path, monkeypatch):
     asyncio.run(consume())
     trace = next(tmp_path.rglob('*.jiuwenswarm.jsonl')).read_text()
     assert 'interaction.requested' in trace and 'Choose a source' in trace
+
+
+def test_native_failure_reason_reaches_caller(cli, tmp_path, monkeypatch):
+    monkeypatch.setenv('JIUWEN_TEST', 'quota')
+    run = RunContext(runtime='jiuwenswarm', project_id=uuid4(), turn_id=uuid4(), session='test',
+        directory=tmp_path/'project', config=None, messages=[], selected_skills=['example'],
+        skills=[{'name':'example', 'filePath':str(cli/'SKILL.md')}])
+    async def consume():
+        runtimes = AgentRuntimes(None, None, None)
+        async with aclosing(runtimes.stream(run)) as stream:
+            async for _ in stream:
+                pass
+    with pytest.raises(ProjectError, match='HTTP 429: Token Plan quota exceeded'):
+        asyncio.run(consume())
+    assert '2056' in next(tmp_path.rglob('*.jiuwenswarm.jsonl')).read_text()

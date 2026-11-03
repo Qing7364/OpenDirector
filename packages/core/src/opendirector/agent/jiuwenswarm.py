@@ -230,6 +230,9 @@ class JiuwenSwarmRuntime:
                     trace.write(json.dumps({'native': result}, ensure_ascii=False) + '\n')
                     terminal_written = True
                     if result['status'] != 'completed':
+                        reason = (result.get('error') or {}).get('message')
+                        if reason:
+                            raise ProjectError(f"JiuwenSwarm 执行未完成（{result['status']}）：{reason}", 502)
                         raise ProjectError(f"JiuwenSwarm 执行未完成（{result['status']}），请检查原生轨迹。", 502)
                     # The terminal output includes the deltas and any unflushed final tail.
                     remaining = (result.get('output') or '')[emitted_chars:]

@@ -124,3 +124,120 @@ async def test_skill_read_resolves_directory_alias_and_preserves_boundary(gatewa
         rejected = await gateway.call(call_id, 'read', {'path': str(path)})
         assert rejected.error == '只能读取已发现技能目录内的文本资源。'
     await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_canvas_hide_schema_and_field_errors(gateway):
+    from opendirector.agent.tools import tools
+    item = str(uuid4())
+    schema = next(tool['function']['parameters'] for tool in tools()
+                  if tool['function']['name'] == 'execute_command')
+    assert schema['$defs']['ObjectVersion']['properties']['revision']['type'] == 'integer'
+    description = await gateway.call('schema', 'command_schema', {'type': 'canvas.hide'})
+    assert 'clear the canvas' in description.value['description']
+    bad = await gateway.call('bad', 'execute_command', {'type': 'canvas.hide',
+        'payload': {'itemId': item}, 'expectedVersions': [
+            {'objectType': 'canvas_item', 'id': item, 'revision': '1'}]})
+    assert 'expectedVersions.0.revision' in bad.error
+    assert 'integer' in bad.error and 'tagged-union' not in bad.error
+    assert set(bad.value) == {'error'}
+
+
+
+@pytest.mark.anyio
+async def test_clear_canvas_preserves_contents_and_respects_locks(gateway):
+    from opendirector.domain.creation.commands import parse_command
+    projects, run = gateway.business.projects, gateway.run
+    projects.execute(parse_command(dict(type='project.create', projectId=run.project_id,
+        commandId=uuid4(), payload={'name': 'Canvas removal'})))
+    projects.open(run.project_id, run.session)
+    for index in range(3):
+        result = await gateway.call(f'create-{index}', 'execute_command',
+            {'type': 'asset.writeText', 'payload': {'name': f'{index}.md', 'text': 'keep'}})
+        assert not result.error
+    snapshot = await gateway.call('before', 'read_project', {})
+    project = snapshot.value['project']
+    # Written assets have no canvas projection until explicitly shown.
+    for index, asset in enumerate(project['assets']):
+        item = {'id': str(uuid4()), 'projectId': str(run.project_id), 'kind': 'text',
+            'title': asset['name'], 'position': {'x': index * 100, 'y': 0},
+            'locked': index == 2, 'binding': {'role': 'material', 'objectRef': {
+                'assetId': asset['id'], 'revision': asset['revision'],
+                'fingerprint': asset['fingerprint'], 'kind': 'text'}}}
+        shown = await gateway.call(f'show-{index}', 'execute_command',
+            {'type': 'canvas.show', 'payload': {'item': item}})
+        assert not shown.error, shown
+    visible = (await gateway.call('visible', 'read_project', {})).value['project']
+    first = visible['canvasItems'][0]
+    assert not (await gateway.call('already-hidden', 'execute_command', {'type': 'canvas.hide',
+        'payload': {'itemId': first['id']}, 'expectedVersions': [
+            {'objectType': 'canvas_item', 'id': first['id'], 'revision': first['revision']}]})).error
+    before = (await gateway.call('before-clear', 'read_project', {})).value['project']
+    for index, item in enumerate(before['canvasItems']):
+        if not item['visible']:
+            continue
+        if not item['locked']:
+            invalid = await gateway.call(f'invalid-{index}', 'execute_command', {'type': 'canvas.hide',
+                'payload': {'itemId': item['id']}, 'expectedVersions': [
+                    {'objectType': 'canvas_item', 'id': item['id'], 'revision': str(item['revision'])}]})
+            assert 'expectedVersions.0.revision' in invalid.error
+        hidden = await gateway.call(f'hide-{index}', 'execute_command', {'type': 'canvas.hide',
+            'payload': {'itemId': item['id']}, 'expectedVersions': [
+                {'objectType': 'canvas_item', 'id': item['id'], 'revision': item['revision']}]})
+        assert bool(hidden.error) == item['locked']
+    after = (await gateway.call('after', 'read_project', {})).value['project']
+    assert [item['visible'] for item in after['canvasItems']] == [False, False, True]
+    assert after['canvasItems'][0] == before['canvasItems'][0]
+    assert after['assets'] == before['assets']
+    assert after['canvasItems'][2] == before['canvasItems'][2]
+
+
+@pytest.mark.anyio
+async def test_batch_schema_and_rejection_preserve_agent_scope(gateway):
+    schema = (await gateway.call('schema', 'command_schema', {'type': 'creation.batch'})).value
+    choices = schema['$defs']['BatchPayload']['properties']['operations']['items']
+    assert 'canvas.hide' in choices['discriminator']['mapping']
+    assert 'canvas.applyEdit' not in choices['discriminator']['mapping']
+    rejected = await gateway.call('restricted', 'execute_command', {'type': 'creation.batch',
+        'payload': {'operations': [{'type': 'canvas.applyEdit', 'payload': {
+            'itemId': str(uuid4()), 'source': {'assetId': str(uuid4()), 'revision': 1,
+            'fingerprint': 'sha256:' + '0' * 64, 'kind': 'image'}, 'asset': {'assetId': str(uuid4()), 'revision': 1,
+            'fingerprint': 'sha256:' + '0' * 64, 'kind': 'image'}, 'editorId': str(uuid4())}}]}})
+    assert rejected.error == '批量命令包含未开放的 Agent 操作。'
+
+
+@pytest.mark.anyio
+async def test_batch_hide_is_atomic_and_replayable(gateway):
+    from opendirector.domain.creation.commands import parse_command
+    run = gateway.run
+    gateway.business.projects.execute(parse_command(dict(type='project.create', projectId=run.project_id,
+        commandId=uuid4(), payload={'name': 'Batch'})))
+    gateway.business.projects.open(run.project_id, run.session)
+    ids = [str(uuid4()), str(uuid4())]
+    shown = await gateway.call('show', 'execute_command', {'type': 'creation.batch', 'payload': {
+        'operations': [{'type': 'canvas.show', 'payload': {'item': {'id': identity,
+            'projectId': str(run.project_id), 'kind': 'text', 'position': {'x': 0, 'y': 0},
+            'binding': {'role': 'empty'}}}} for identity in ids]}})
+    assert not shown.error, shown
+    discovered = (await gateway.call('discover', 'read_project', {})).value
+    schema = (await gateway.call('batch-schema', 'command_schema', {'type': 'creation.batch'})).value
+    assert discovered['commandMetadata']['creation.batch']['description'] == schema['description']
+    assert 'atomically' in schema['description']
+    assert set(discovered['commandMetadata']) == set(discovered['commands'])
+    for kind, metadata in discovered['commandMetadata'].items():
+        command_schema = (await gateway.call('schema-' + kind, 'command_schema', {'type': kind})).value
+        assert command_schema['description'] == metadata['description']
+        assert len(metadata['description']) <= 120
+    arguments = {'type': 'creation.batch', 'payload': {'operations': [
+        {'type': 'canvas.hide', 'payload': {'itemId': identity}} for identity in ids]},
+        'expectedVersions': [{'objectType': 'canvas_item', 'id': identity, 'revision': 1} for identity in ids]}
+    stale = {**arguments, 'expectedVersions': [*arguments['expectedVersions'][:-1],
+        {**arguments['expectedVersions'][-1], 'revision': 2}]}
+    assert (await gateway.call('stale', 'execute_command', stale)).error
+    snapshot = (await gateway.call('unchanged', 'read_project', {})).value['project']
+    assert all(item['visible'] for item in snapshot['canvasItems'])
+    hidden = await gateway.call('hide', 'execute_command', arguments)
+    assert not hidden.error, hidden
+    assert (await gateway.call('hide', 'execute_command', arguments)).value == hidden.value
+    snapshot = (await gateway.call('hidden', 'read_project', {})).value['project']
+    assert all(not item['visible'] and item['revision'] == 2 for item in snapshot['canvasItems'])
