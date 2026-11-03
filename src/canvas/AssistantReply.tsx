@@ -36,21 +36,13 @@ function ToolActivity({ tool }: { tool: ChatTool }) {
         <CanvasIcon name="chevronRight" size={14} />
       </summary>
       <div className="cw-chat-activity-detail">
-        <p>
-          {tool.error ||
-            tool.message ||
-            (tool.status === "complete"
-              ? "操作已完成。"
-              : tool.status === "running"
-                ? "正在执行，请稍候。"
-                : "操作未完成，请查看回复中的说明。")}
-        </p>
+        {(tool.error || tool.message) && <p>{tool.error || tool.message}</p>}
         {tool.arguments && <details className="cw-chat-tool-data">
-          <summary>调用参数</summary>
+          <summary><CanvasIcon name="chevronRight" size={12} />调用参数</summary>
           <pre>{JSON.stringify(tool.arguments, null, 2)}</pre>
         </details>}
         {tool.result !== undefined && <details className="cw-chat-tool-data">
-          <summary>返回结果{tool.resultTruncated ? "（已截断）" : ""}</summary>
+          <summary><CanvasIcon name="chevronRight" size={12} />返回结果{tool.resultTruncated ? "（已截断）" : ""}</summary>
           <pre>{tool.result}</pre>
           {tool.resultTruncated && <p>此处仅展示前 65,536 个字符，完整结果见本轮轨迹。</p>}
         </details>}

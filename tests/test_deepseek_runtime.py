@@ -49,6 +49,9 @@ for line in sys.stdin:
  elif req['method']=='session/prompt':
   text=req['params']['prompt'][0]['text']
   assert 'Use OpenDirector' in text and str(Path.cwd()) in text
+  if mode!='wait':
+   assert 'Summarize the delivered result and material limitations.' in text
+   assert 'User model preferences for this turn:' in text and 'selected-image' in text
   patch=json.loads(Path(sys.argv[sys.argv.index('--patch')+1]).read_text())
   assert next(row for row in patch if row['id']=='skill-filesystem')['config']['includeDefaultRoots'] is False
   if mode!='wait': assert list(Path('.agents/skills').glob('*/SKILL.md'))
@@ -67,7 +70,9 @@ for line in sys.stdin:
    response=json.loads(bridge.stdout.readline());assert 'error' not in response,response
    return response['result']
   rpc({'id':1,'method':'initialize'})
-  assert len(rpc({'id':2,'method':'tools/list'})['tools'])==4
+  assert len(rpc({'id':2,'method':'tools/list'})['tools'])==6
+  context=rpc({'id':20,'method':'tools/call','params':{'name':'read_project','arguments':{}}})
+  assert 'selected-image' in json.dumps(context),context
   outcome=rpc({'id':3,'method':'tools/call','params':{'name':'execute_command','arguments':{'type':'asset.writeText','payload':{'name':'deepseek.md','text':'CLI saved'}}}})
   assert not outcome['isError'],outcome
   bridge.stdin.close();bridge.wait()
@@ -103,7 +108,7 @@ def test_acp_shared_write_and_native_trace(cli, tmp_path, monkeypatch, mode):
         path = '/api/creation/projects/' + pid
         assert client.post(path+'/commands',json=dict(type='project.create',projectId=pid,commandId=str(uuid4()),payload={'name':'DeepSeek'})).status_code == 200
         assert client.post(path+'/open').status_code == 200
-        response = client.post(path+'/assistant/turns',json=dict(id=turn,runtime='deepseek',runtimeModel='route/default',text='Save',skills=['example']))
+        response = client.post(path+'/assistant/turns',json=dict(id=turn,runtime='deepseek',runtimeModel='route/default',text='Save',skills=['example'],modelSelections={'image':'selected-image'}))
         events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith('data: ')]
         assert (events[-1]['error'] is None) == (mode != 'incomplete'), events
         message = events[-1]['conversation']['messages'][-1]

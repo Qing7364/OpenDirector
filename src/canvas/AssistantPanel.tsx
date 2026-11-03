@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import openDirectorLogo from "../assets/open_director_logo.png";
-import type { ChatAsset, ModelSelections, Thinking } from "../backend/chat";
+import { runtimeModels, type ChatAsset, type ModelSelections, type Thinking } from "../backend/chat";
 import { creationClient } from "../backend/creationClient.ts";
 import { fingerprint } from "../backend/generation.ts";
 import type { BackendModels } from "../backend/models";
@@ -90,6 +90,22 @@ export function AssistantPanel({
 }) {
   const chat = useAssistantChat(documentId, catalog, onTurnEnd);
   const { value, setValue } = chat;
+  const [deepseekLabels, setDeepseekLabels] = useState<Record<string, string>>({});
+  const hasDeepseekMessages = value.messages.some((message) => message.runtime === "deepseek");
+  useEffect(() => {
+    let active = true;
+    setDeepseekLabels({});
+    if (hasDeepseekMessages) {
+      runtimeModels(documentId, "deepseek").then((models) => {
+        if (active) setDeepseekLabels(Object.fromEntries(models.map((model) => [model.id, model.label])));
+      }).catch(() => {
+        // Keep the harness label when its optional model catalog is unavailable.
+        if (active) setDeepseekLabels({});
+      });
+    }
+    return () => { active = false; };
+  }, [documentId, hasDeepseekMessages]);
+
   const uploads = useReferenceUploads(documentId);
   const projectReferences = useProjectMentionAssets(documentId);
   const editor = useRef<ChatReferenceEditorHandle>(null);
@@ -366,7 +382,9 @@ export function AssistantPanel({
             {message.role === "assistant" && (
               <div className="cw-assistant-message-heading">
                 OpenDirector
-                {message.model && <small>{message.model}</small>}
+                {message.model && <small>{message.runtime === "deepseek"
+                  ? (deepseekLabels[message.model] ?? "DeepSeek Harness")
+                  : message.model}</small>}
               </div>
             )}
             <div className="cw-assistant-message-text">

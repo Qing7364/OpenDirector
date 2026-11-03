@@ -244,6 +244,10 @@ def agent_routes(projects, generation, configs, provider=None) -> APIRouter:
                 if asset_id not in assets:
                     raise ProjectError('引用素材不属于当前工程。', 409)
             model = config['modelId'] if config else (value.runtimeModel or 'CLI 默认模型')
+            model_selections = dict(value.modelSelections)
+            model_names = {row['id']: row['modelId'] for row in configs.list()}
+            preferences = {kind: {'modelConfigId': model_id, 'modelName': model_names.get(model_id)}
+                for kind, model_id in model_selections.items() if model_id}
             queue: asyncio.Queue = asyncio.Queue(maxsize=128)
             async def produce() -> None:
                 text, status, error, accepted = '', 'complete', None, False
@@ -253,11 +257,16 @@ def agent_routes(projects, generation, configs, provider=None) -> APIRouter:
                         'assets': [{'id': str(assets[key].id), 'name': assets[key].name, 'type': assets[key].metadata.mimeType,
                             'size': assets[key].metadata.size, 'fingerprint': assets[key].fingerprint} for key in value.assets],
                         'skills': value.skills, 'runtime': value.runtime, 'runtimeModel': value.runtimeModel,
+                        'modelSelections': dict(value.modelSelections),
                         'model': model, 'status': 'complete'}
                     saved = await asyncio.to_thread(conversations.update, project_id, session, begin=user, conversation_id=value.conversationId)
                     accepted = True
                     await queue.put({'type': 'start', 'conversation': saved})
                     context = [{'role': message['role'], 'content': message['text'] or '(empty reply)'} for message in saved['messages'][:-1]]
+                    context[-1]['content'] += '\nSummarize the delivered result and material limitations. Keep execution IDs, revisions and receipts in tool details unless requested.'
+                    if preferences:
+                        context[-1]['content'] += '\nUser model preferences for this turn: ' + json.dumps(preferences, ensure_ascii=False)
+                        context[-1]['content'] += '\nUse these models for new generation unless the user explicitly requests another. If unavailable or unsuitable, explain and ask before substituting. Keep existing nodes on their configured models unless the user requests a change.'
                     if value.assets:
                         references = [{'id': str(assets[key].id), 'name': assets[key].name,
                             'kind': assets[key].kind, 'path': str((directory / assets[key].path).resolve()),
@@ -267,7 +276,7 @@ def agent_routes(projects, generation, configs, provider=None) -> APIRouter:
                         context[-1]['content'] += '\nThese are asset references, not visual observations. Inspect media with available tools before describing its contents.'
                     run = RunContext(runtime=value.runtime, project_id=project_id, turn_id=value.id,
                         session=session, directory=directory, config=config, messages=context,
-                        selected_skills=value.skills, thinking=value.thinking,
+                        selected_skills=value.skills, thinking=value.thinking, model_selections=model_selections,
                         runtime_model=value.runtimeModel, skills=available)
                     async with aclosing(runtimes.stream(run)) as stream:
                         async for event in stream:

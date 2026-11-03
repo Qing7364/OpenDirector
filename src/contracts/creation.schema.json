@@ -77,6 +77,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -220,6 +221,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -307,6 +309,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -360,6 +363,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -412,6 +416,22 @@
           "name"
         ],
         "title": "AssetMetadataUpdate",
+        "type": "object"
+      },
+      "AssetPreviewQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "assetId": {
+            "description": "Asset ID from the current project.",
+            "format": "uuid",
+            "title": "Assetid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assetId"
+        ],
+        "title": "AssetPreviewQuery",
         "type": "object"
       },
       "AssetProvenance": {
@@ -671,6 +691,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -1062,7 +1083,7 @@
           "voice": {
             "anyOf": [
               {
-                "pattern": "^[A-Za-z0-9_.-]{1,64}$",
+                "pattern": "^[\\w.-]{1,64}$",
                 "type": "string"
               },
               {
@@ -1145,6 +1166,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -1390,6 +1412,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -1489,6 +1512,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -1541,6 +1565,175 @@
         "title": "CanvasConfigureCommandOperation",
         "type": "object"
       },
+      "CanvasCreateGeneration": {
+        "additionalProperties": false,
+        "properties": {
+          "spec": {
+            "description": "New configuration with purpose=generation.",
+            "discriminator": {
+              "mapping": {
+                "audio": "#/$defs/AudioGenerationSpec",
+                "image": "#/$defs/ImageGenerationSpec",
+                "text": "#/$defs/TextGenerationSpec",
+                "video": "#/$defs/VideoGenerationSpec"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TextGenerationSpec"
+              },
+              {
+                "$ref": "#/$defs/ImageGenerationSpec"
+              },
+              {
+                "$ref": "#/$defs/VideoGenerationSpec"
+              },
+              {
+                "$ref": "#/$defs/AudioGenerationSpec"
+              }
+            ],
+            "title": "Spec"
+          },
+          "item": {
+            "description": "Visible item bound to spec.id with role=generation.",
+            "discriminator": {
+              "mapping": {
+                "audio": "#/$defs/AudioCanvasItem",
+                "external": "#/$defs/DirectorCanvasItem",
+                "file": "#/$defs/FileCanvasItem",
+                "group": "#/$defs/GroupCanvasItem",
+                "image": "#/$defs/ImageCanvasItem",
+                "stack": "#/$defs/StackCanvasItem",
+                "subject": "#/$defs/SubjectCanvasItem",
+                "text": "#/$defs/TextCanvasItem",
+                "timeline": "#/$defs/TimelineCanvasItem",
+                "tool": "#/$defs/ToolCanvasItem",
+                "video": "#/$defs/VideoCanvasItem"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TextCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/ImageCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/VideoCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/AudioCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/FileCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/SubjectCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/TimelineCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/StackCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/ToolCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/DirectorCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/GroupCanvasItem"
+              }
+            ],
+            "title": "Item"
+          },
+          "references": {
+            "default": [],
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "follow_current": "#/$defs/FollowingReference",
+                  "pinned": "#/$defs/PinnedReference"
+                },
+                "propertyName": "binding"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/PinnedReference"
+                },
+                {
+                  "$ref": "#/$defs/FollowingReference"
+                }
+              ]
+            },
+            "title": "References",
+            "type": "array"
+          }
+        },
+        "required": [
+          "spec",
+          "item"
+        ],
+        "title": "CanvasCreateGeneration",
+        "type": "object"
+      },
+      "CanvasCreateGenerationCommand": {
+        "additionalProperties": false,
+        "description": "Create a visible generation node with configuration and references atomically; does not submit generation.",
+        "properties": {
+          "commandId": {
+            "format": "uuid",
+            "title": "Commandid",
+            "type": "string"
+          },
+          "projectId": {
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "const": "canvas.createGeneration",
+            "title": "Type",
+            "type": "string"
+          },
+          "expectedVersions": {
+            "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
+            "items": {
+              "$ref": "#/$defs/ObjectVersion"
+            },
+            "title": "Expectedversions",
+            "type": "array"
+          },
+          "expectedPreview": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expectedpreview"
+          },
+          "payload": {
+            "$ref": "#/$defs/CanvasCreateGeneration"
+          }
+        },
+        "required": [
+          "commandId",
+          "projectId",
+          "type",
+          "payload"
+        ],
+        "title": "CanvasCreateGenerationCommand",
+        "type": "object"
+      },
       "CanvasEditorAttach": {
         "additionalProperties": false,
         "properties": {
@@ -1583,6 +1776,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -1656,6 +1850,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -1744,6 +1939,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -1901,6 +2097,30 @@
         "title": "CanvasItemBase",
         "type": "object"
       },
+      "CanvasItemQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "itemId": {
+            "description": "Canvas item ID from the current project.",
+            "format": "uuid",
+            "title": "Itemid",
+            "type": "string"
+          },
+          "waitSeconds": {
+            "default": 0,
+            "description": "Wait for status changes, up to 30 seconds; zero returns immediately.",
+            "maximum": 30,
+            "minimum": 0,
+            "title": "Waitseconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "itemId"
+        ],
+        "title": "CanvasItemQuery",
+        "type": "object"
+      },
       "CanvasMaterialize": {
         "additionalProperties": false,
         "properties": {
@@ -1946,6 +2166,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -2038,6 +2259,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -2313,6 +2535,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -2430,6 +2653,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -2503,6 +2727,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -2598,6 +2823,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -2940,6 +3166,7 @@
                 "canvas.applyVersion": "#/$defs/NodeVersionApplyCommand",
                 "canvas.attachEditor": "#/$defs/CanvasEditorAttachCommand",
                 "canvas.configure": "#/$defs/CanvasConfigureCommand",
+                "canvas.createGeneration": "#/$defs/CanvasCreateGenerationCommand",
                 "canvas.detachEditor": "#/$defs/CanvasEditorDetachCommand",
                 "canvas.hide": "#/$defs/CanvasHideCommand",
                 "canvas.materialize": "#/$defs/CanvasMaterializeCommand",
@@ -3000,6 +3227,9 @@
               },
               {
                 "$ref": "#/$defs/AssetDeleteCommand"
+              },
+              {
+                "$ref": "#/$defs/CanvasCreateGenerationCommand"
               },
               {
                 "$ref": "#/$defs/CanvasShowCommand"
@@ -3573,6 +3803,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -3757,6 +3988,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -4378,11 +4610,14 @@
         "additionalProperties": false,
         "properties": {
           "specId": {
+            "description": "Include its current generation_spec revision in expectedVersions.",
             "format": "uuid",
             "title": "Specid",
-            "type": "string"
+            "type": "string",
+            "x-version-object-type": "generation_spec"
           },
           "expectedSpecRevision": {
+            "description": "Must match the specId revision in expectedVersions.",
             "minimum": 1,
             "title": "Expectedspecrevision",
             "type": "integer"
@@ -4398,7 +4633,9 @@
               }
             ],
             "default": null,
-            "title": "Originitemid"
+            "description": "When set, include its current canvas_item revision in expectedVersions.",
+            "title": "Originitemid",
+            "x-version-object-type": "canvas_item"
           },
           "previousJobId": {
             "anyOf": [
@@ -4469,6 +4706,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -4618,6 +4856,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -4686,6 +4925,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -5866,6 +6106,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -5932,6 +6173,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -6000,6 +6242,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -7246,6 +7489,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -7565,6 +7809,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -7730,6 +7975,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -7783,6 +8029,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -8053,6 +8300,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -8244,7 +8492,7 @@
       },
       "ReferenceAddCommand": {
         "additionalProperties": false,
-        "description": "Add a generation reference.",
+        "description": "Add a generation reference; expectedVersions must include its target generation_spec.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -8263,6 +8511,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -8297,7 +8546,7 @@
       },
       "ReferenceAddCommandOperation": {
         "additionalProperties": false,
-        "description": "Add a generation reference.",
+        "description": "Add a generation reference; expectedVersions must include its target generation_spec.",
         "properties": {
           "type": {
             "const": "reference.add",
@@ -8405,6 +8654,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -8478,6 +8728,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -8551,6 +8802,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -8801,6 +9053,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -8954,6 +9207,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -9027,6 +9281,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -9180,6 +9435,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -9233,6 +9489,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -10564,6 +10821,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -11891,6 +12149,7 @@
             "canvas.applyVersion": "#/$defs/NodeVersionApplyCommand",
             "canvas.attachEditor": "#/$defs/CanvasEditorAttachCommand",
             "canvas.configure": "#/$defs/CanvasConfigureCommand",
+            "canvas.createGeneration": "#/$defs/CanvasCreateGenerationCommand",
             "canvas.detachEditor": "#/$defs/CanvasEditorDetachCommand",
             "canvas.hide": "#/$defs/CanvasHideCommand",
             "canvas.materialize": "#/$defs/CanvasMaterializeCommand",
@@ -11951,6 +12210,9 @@
           },
           {
             "$ref": "#/$defs/AssetDeleteCommand"
+          },
+          {
+            "$ref": "#/$defs/CanvasCreateGenerationCommand"
           },
           {
             "$ref": "#/$defs/CanvasShowCommand"
@@ -12224,6 +12486,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -12371,6 +12634,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -12460,6 +12724,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -12515,6 +12780,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -12569,6 +12835,22 @@
           "name"
         ],
         "title": "AssetMetadataUpdate",
+        "type": "object"
+      },
+      "AssetPreviewQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "assetId": {
+            "description": "Asset ID from the current project.",
+            "format": "uuid",
+            "title": "Assetid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assetId"
+        ],
+        "title": "AssetPreviewQuery",
         "type": "object"
       },
       "AssetProvenance": {
@@ -12840,6 +13122,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -13254,7 +13537,7 @@
           "voice": {
             "anyOf": [
               {
-                "pattern": "^[A-Za-z0-9_.-]{1,64}$",
+                "pattern": "^[\\w.-]{1,64}$",
                 "type": "string"
               },
               {
@@ -13342,6 +13625,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -13590,6 +13874,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -13692,6 +13977,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -13746,6 +14032,178 @@
         "title": "CanvasConfigureCommandOperation",
         "type": "object"
       },
+      "CanvasCreateGeneration": {
+        "additionalProperties": false,
+        "properties": {
+          "spec": {
+            "description": "New configuration with purpose=generation.",
+            "discriminator": {
+              "mapping": {
+                "audio": "#/$defs/AudioGenerationSpec",
+                "image": "#/$defs/ImageGenerationSpec",
+                "text": "#/$defs/TextGenerationSpec",
+                "video": "#/$defs/VideoGenerationSpec"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TextGenerationSpec"
+              },
+              {
+                "$ref": "#/$defs/ImageGenerationSpec"
+              },
+              {
+                "$ref": "#/$defs/VideoGenerationSpec"
+              },
+              {
+                "$ref": "#/$defs/AudioGenerationSpec"
+              }
+            ],
+            "title": "Spec"
+          },
+          "item": {
+            "description": "Visible item bound to spec.id with role=generation.",
+            "discriminator": {
+              "mapping": {
+                "audio": "#/$defs/AudioCanvasItem",
+                "external": "#/$defs/DirectorCanvasItem",
+                "file": "#/$defs/FileCanvasItem",
+                "group": "#/$defs/GroupCanvasItem",
+                "image": "#/$defs/ImageCanvasItem",
+                "stack": "#/$defs/StackCanvasItem",
+                "subject": "#/$defs/SubjectCanvasItem",
+                "text": "#/$defs/TextCanvasItem",
+                "timeline": "#/$defs/TimelineCanvasItem",
+                "tool": "#/$defs/ToolCanvasItem",
+                "video": "#/$defs/VideoCanvasItem"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TextCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/ImageCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/VideoCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/AudioCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/FileCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/SubjectCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/TimelineCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/StackCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/ToolCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/DirectorCanvasItem"
+              },
+              {
+                "$ref": "#/$defs/GroupCanvasItem"
+              }
+            ],
+            "title": "Item"
+          },
+          "references": {
+            "default": [],
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "follow_current": "#/$defs/FollowingReference",
+                  "pinned": "#/$defs/PinnedReference"
+                },
+                "propertyName": "binding"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/PinnedReference"
+                },
+                {
+                  "$ref": "#/$defs/FollowingReference"
+                }
+              ]
+            },
+            "title": "References",
+            "type": "array"
+          }
+        },
+        "required": [
+          "spec",
+          "item",
+          "references"
+        ],
+        "title": "CanvasCreateGeneration",
+        "type": "object"
+      },
+      "CanvasCreateGenerationCommand": {
+        "additionalProperties": false,
+        "description": "Create a visible generation node with configuration and references atomically; does not submit generation.",
+        "properties": {
+          "commandId": {
+            "format": "uuid",
+            "title": "Commandid",
+            "type": "string"
+          },
+          "projectId": {
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "const": "canvas.createGeneration",
+            "title": "Type",
+            "type": "string"
+          },
+          "expectedVersions": {
+            "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
+            "items": {
+              "$ref": "#/$defs/ObjectVersion"
+            },
+            "title": "Expectedversions",
+            "type": "array"
+          },
+          "expectedPreview": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expectedpreview"
+          },
+          "payload": {
+            "$ref": "#/$defs/CanvasCreateGeneration"
+          }
+        },
+        "required": [
+          "commandId",
+          "projectId",
+          "type",
+          "expectedVersions",
+          "expectedPreview",
+          "payload"
+        ],
+        "title": "CanvasCreateGenerationCommand",
+        "type": "object"
+      },
       "CanvasEditorAttach": {
         "additionalProperties": false,
         "properties": {
@@ -13788,6 +14246,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -13863,6 +14322,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -13953,6 +14413,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -14122,6 +14583,31 @@
         "title": "CanvasItemBase",
         "type": "object"
       },
+      "CanvasItemQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "itemId": {
+            "description": "Canvas item ID from the current project.",
+            "format": "uuid",
+            "title": "Itemid",
+            "type": "string"
+          },
+          "waitSeconds": {
+            "default": 0,
+            "description": "Wait for status changes, up to 30 seconds; zero returns immediately.",
+            "maximum": 30,
+            "minimum": 0,
+            "title": "Waitseconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "itemId",
+          "waitSeconds"
+        ],
+        "title": "CanvasItemQuery",
+        "type": "object"
+      },
       "CanvasMaterialize": {
         "additionalProperties": false,
         "properties": {
@@ -14168,6 +14654,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -14262,6 +14749,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -14547,6 +15035,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -14666,6 +15155,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -14741,6 +15231,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -14838,6 +15329,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -15188,6 +15680,7 @@
                 "canvas.applyVersion": "#/$defs/NodeVersionApplyCommand",
                 "canvas.attachEditor": "#/$defs/CanvasEditorAttachCommand",
                 "canvas.configure": "#/$defs/CanvasConfigureCommand",
+                "canvas.createGeneration": "#/$defs/CanvasCreateGenerationCommand",
                 "canvas.detachEditor": "#/$defs/CanvasEditorDetachCommand",
                 "canvas.hide": "#/$defs/CanvasHideCommand",
                 "canvas.materialize": "#/$defs/CanvasMaterializeCommand",
@@ -15248,6 +15741,9 @@
               },
               {
                 "$ref": "#/$defs/AssetDeleteCommand"
+              },
+              {
+                "$ref": "#/$defs/CanvasCreateGenerationCommand"
               },
               {
                 "$ref": "#/$defs/CanvasShowCommand"
@@ -15849,6 +16345,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -16039,6 +16536,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -16688,11 +17186,14 @@
         "additionalProperties": false,
         "properties": {
           "specId": {
+            "description": "Include its current generation_spec revision in expectedVersions.",
             "format": "uuid",
             "title": "Specid",
-            "type": "string"
+            "type": "string",
+            "x-version-object-type": "generation_spec"
           },
           "expectedSpecRevision": {
+            "description": "Must match the specId revision in expectedVersions.",
             "minimum": 1,
             "title": "Expectedspecrevision",
             "type": "integer"
@@ -16708,7 +17209,9 @@
               }
             ],
             "default": null,
-            "title": "Originitemid"
+            "description": "When set, include its current canvas_item revision in expectedVersions.",
+            "title": "Originitemid",
+            "x-version-object-type": "canvas_item"
           },
           "previousJobId": {
             "anyOf": [
@@ -16784,6 +17287,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -16946,6 +17450,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -17016,6 +17521,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -18279,6 +18785,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -18347,6 +18854,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -18417,6 +18925,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -19698,6 +20207,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -20033,6 +20543,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -20205,6 +20716,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -20260,6 +20772,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -20543,6 +21056,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -20741,7 +21255,7 @@
       },
       "ReferenceAddCommand": {
         "additionalProperties": false,
-        "description": "Add a generation reference.",
+        "description": "Add a generation reference; expectedVersions must include its target generation_spec.",
         "properties": {
           "commandId": {
             "format": "uuid",
@@ -20760,6 +21274,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -20796,7 +21311,7 @@
       },
       "ReferenceAddCommandOperation": {
         "additionalProperties": false,
-        "description": "Add a generation reference.",
+        "description": "Add a generation reference; expectedVersions must include its target generation_spec.",
         "properties": {
           "type": {
             "const": "reference.add",
@@ -20908,6 +21423,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -20983,6 +21499,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -21058,6 +21575,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -21316,6 +21834,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -21472,6 +21991,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -21547,6 +22067,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -21704,6 +22225,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -21759,6 +22281,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -23176,6 +23699,7 @@
           },
           "expectedVersions": {
             "default": [],
+            "description": "Current versions of mutated existing objects; payload revision fields do not replace these.",
             "items": {
               "$ref": "#/$defs/ObjectVersion"
             },
@@ -24578,6 +25102,7 @@
             "canvas.applyVersion": "#/$defs/NodeVersionApplyCommand",
             "canvas.attachEditor": "#/$defs/CanvasEditorAttachCommand",
             "canvas.configure": "#/$defs/CanvasConfigureCommand",
+            "canvas.createGeneration": "#/$defs/CanvasCreateGenerationCommand",
             "canvas.detachEditor": "#/$defs/CanvasEditorDetachCommand",
             "canvas.hide": "#/$defs/CanvasHideCommand",
             "canvas.materialize": "#/$defs/CanvasMaterializeCommand",
@@ -24638,6 +25163,9 @@
           },
           {
             "$ref": "#/$defs/AssetDeleteCommand"
+          },
+          {
+            "$ref": "#/$defs/CanvasCreateGenerationCommand"
           },
           {
             "$ref": "#/$defs/CanvasShowCommand"

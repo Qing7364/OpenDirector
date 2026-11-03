@@ -11,7 +11,7 @@ from opendirector.infrastructure.local_projects import child, read_json
 
 EDITABLE = {'canvasItems', 'generationSpecs', 'references', 'editorDocuments'}
 ABSENT = object()
-UNDOABLE = {'creation.batch', 'canvas.show', 'canvas.hide', 'canvas.move', 'canvas.update', 'canvas.configure',
+UNDOABLE = {'canvas.createGeneration', 'creation.batch', 'canvas.show', 'canvas.hide', 'canvas.move', 'canvas.update', 'canvas.configure',
     'canvas.materialize', 'canvas.applyEdit', 'timeline.publishRender', 'canvas.publishMedia', 'canvas.applyVersion', 'canvas.attachEditor', 'canvas.detachEditor', 'generationSpec.update', 'generationSpec.restore',
     'reference.add', 'reference.update', 'reference.restore', 'reference.remove', 'result.select', 'editor.save', 'generationSpec.setPrompt'}
 

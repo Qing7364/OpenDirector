@@ -20,6 +20,7 @@ class RunContext:
     config: dict[str, JsonValue] | None
     messages: list[dict[str, JsonValue]]
     selected_skills: list[str]
+    model_selections: dict[str, str | None] = field(default_factory=dict)
     thinking: str = 'auto'
     runtime_model: str | None = None
     skills: list[dict[str, str]] = field(default_factory=list)

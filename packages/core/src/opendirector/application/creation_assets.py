@@ -2,6 +2,9 @@
 from collections import OrderedDict
 from io import BytesIO
 import os
+import subprocess
+import shutil
+from tempfile import TemporaryDirectory
 from pathlib import Path
 from threading import Lock
 from uuid import UUID, uuid5
@@ -216,6 +219,43 @@ class CreationAssets:
         except BaseException:
             stream.close()
             raise
+
+    def preview(self, project_id: UUID, asset_id: UUID, target: Path) -> dict:
+        stream, asset = self.open_media(project_id, asset_id)
+        with stream:
+            target = directory(target)
+            target.mkdir(parents=True, exist_ok=True)
+            stem = f'{asset.id}-{asset.fingerprint.removeprefix("sha256:")}'
+            if asset.kind == 'image':
+                content, _ = self.thumbnail(project_id, asset_id)
+                output, mime = child(target, stem + '.webp'), 'image/webp'
+                output.write_bytes(content)
+            elif asset.kind in {'video', 'audio'}:
+                output = child(target, stem + ('.jpg' if asset.kind == 'video' else '.wav'))
+                command = ['ffmpeg', '-nostdin', '-v', 'error', '-y']
+                if asset.kind == 'video':
+                    command += ['-vf', "scale='min(960,iw)':-2", '-frames:v', '1', '-q:v', '3']
+                    mime = 'image/jpeg'
+                else:
+                    command += ['-t', '30', '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le']
+                    mime = 'audio/wav'
+                try:
+                    with TemporaryDirectory(prefix='source-', dir=target) as temporary:
+                        source = Path(temporary) / 'media'
+                        with source.open('wb') as destination:
+                            shutil.copyfileobj(stream, destination, length=1024 * 1024)
+                        subprocess.run([*command[:5], '-i', str(source), *command[5:], str(output)],
+                            capture_output=True, check=True, timeout=30)
+                except (OSError, subprocess.SubprocessError) as error:
+                    raise ProjectError('无法生成素材预览。', 422) from error
+            elif asset.kind == 'text':
+                return {'assetId': str(asset.id), 'kind': asset.kind,
+                    'text': stream.read(65536).decode('utf-8', errors='replace'), 'truncated': asset.metadata.size > 65536}
+            else:
+                raise ProjectError('该素材类型不支持预览。', 422)
+        return {'assetId': str(asset.id), 'kind': asset.kind, 'metadata': asset.metadata.model_dump(mode='json'),
+            'preview': {'path': str(output.resolve()), 'mimeType': mime,
+                'scope': 'first_frame' if asset.kind == 'video' else 'first_30_seconds' if asset.kind == 'audio' else 'thumbnail'}}
 
     def thumbnail(self, project_id, asset_id):
         """A bounded, disposable image preview; always verify its source first."""

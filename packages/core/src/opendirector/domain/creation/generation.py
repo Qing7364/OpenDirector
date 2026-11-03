@@ -49,7 +49,7 @@ def reference_music_seconds(reference_seconds):
 class AudioParameters(Contract):
     creationType: Literal['audio', 'music'] = 'audio'
     mode: Literal['tts', 'unified'] = 'tts'
-    voice: str | None = Field(default=None, pattern=r'^[A-Za-z0-9_.-]{1,64}$')
+    voice: str | None = Field(default=None, pattern=r'^[\w.-]{1,64}$')
     # Legacy: a release stored an explicit instrumental choice. It stays readable
     # so those specs and job fingerprints still load; generation ignores it.
     instrumental: bool = Field(default=False, exclude_if=lambda value: value is False)

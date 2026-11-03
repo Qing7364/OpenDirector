@@ -97,7 +97,7 @@
   color: var(--chat-muted);
   font-size: 12px;
 }
-.cw-chat-activity summary {
+.cw-chat-activity > summary {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -105,28 +105,28 @@
   cursor: pointer;
   list-style: none;
 }
-.cw-chat-activity summary::-webkit-details-marker {
+.cw-chat-activity > summary::-webkit-details-marker {
   display: none;
 }
-.cw-chat-activity summary > small {
+.cw-chat-activity > summary > small {
   margin-left: auto;
   font-size: 11px;
 }
-.cw-chat-activity summary > svg:last-child {
+.cw-chat-activity > summary > svg:last-child {
   transition: transform 0.15s;
 }
-.cw-chat-activity[open] summary > svg:last-child {
+.cw-chat-activity[open] > summary > svg:last-child {
   transform: rotate(90deg);
 }
-.cw-chat-activity.is-running summary {
+.cw-chat-activity.is-running > summary {
   color: var(--chat-text);
 }
-.cw-chat-activity.is-failed summary {
+.cw-chat-activity.is-failed > summary {
   color: #e6a7a7;
 }
 .cw-chat-activity-detail {
   margin: 0 0 8px 22px;
-  padding: 8px 12px;
+  padding: 2px 0 2px 12px;
   border-left: 1px solid var(--chat-border);
   overflow-wrap: anywhere;
 }
@@ -199,6 +199,9 @@
 
 .cw-chat-activity > summary > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cw-chat-activity > summary code { margin-left: 8px; font-size: 11px; background: transparent; color: var(--chat-muted); }
-.cw-chat-tool-data { margin-top: 8px; }
-.cw-chat-tool-data > summary { cursor: pointer; color: var(--chat-muted); }
-.cw-chat-tool-data > pre { max-height: 300px; overflow: auto; padding: 10px; border: 1px solid var(--chat-border); border-radius: 8px; background: var(--chat-input); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.6; }
+.cw-chat-tool-data { margin-top: 4px; }
+.cw-chat-tool-data > summary { display: flex; align-items: center; gap: 6px; padding: 5px 0; cursor: pointer; list-style: none; color: var(--chat-muted); font-size: 11px; }
+.cw-chat-tool-data > summary::-webkit-details-marker { display: none; }
+.cw-chat-tool-data > summary > svg { flex-shrink: 0; transition: transform 0.15s; }
+.cw-chat-tool-data[open] > summary > svg { transform: rotate(90deg); }
+.cw-chat-tool-data > pre { max-height: 240px; overflow: auto; margin: 4px 0 8px; padding: 8px 10px; border: 1px solid var(--chat-border); border-radius: 6px; background: var(--chat-input); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.5; }

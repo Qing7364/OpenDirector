@@ -28,6 +28,7 @@ class ToolGateway:
     def __init__(self, business: AgentTools, run: RunContext):
         self.business = business
         self.run = run
+        self.model_selections = dict(run.model_selections)
         self.roots: list[Path] = []
         self.closed = False
         self.calls: dict[str, tuple[str, asyncio.Task[ToolResult]]] = {}
@@ -65,6 +66,8 @@ class ToolGateway:
                 value = await self.business.execute(self.run.project_id, self.run.turn_id, self.run.session,
                     call_id, name, arguments, self.roots, self.run.config,
                     self.run.runtime if self.run.config is None else None)
+                if name == 'read_project':
+                    value['modelSelections'] = dict(self.model_selections)
                 error = None
                 if isinstance(value, dict):
                     if value.get('status') == 'rejected':
@@ -87,4 +90,7 @@ class ToolGateway:
 
     async def close(self) -> None:
         self.closed = True
+        for identity, task in self.calls.values():
+            if json.loads(identity)[0] == 'read_canvas_item':
+                task.cancel()
         await asyncio.gather(*(task for _, task in self.calls.values()), return_exceptions=True)

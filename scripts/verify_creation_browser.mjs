@@ -132,8 +132,11 @@ try {
       bounds.x + bounds.width + 22,
       bounds.y + bounds.height / 2,
     );
-    await page.locator(".cw-reference-port").waitFor();
-    const port = await page.locator(".cw-reference-port").boundingBox();
+    const outputPort = page.locator(
+      `.cw-reference-port[data-reference-source="${sourceId}"][data-side="right"]`,
+    );
+    await outputPort.waitFor();
+    const port = await outputPort.boundingBox();
     assert.ok(port);
     await page.mouse.move(port.x + port.width / 2, port.y + port.height / 2);
     await page.mouse.down();
@@ -240,7 +243,7 @@ try {
     await list.waitFor();
     const sourceRow = list
       .locator(".cw-creation-asset-row")
-      .filter({ has: page.getByText(sourceAsset.name, { exact: true }) });
+      .filter({ has: page.getByText("Source A", { exact: true }) });
     await sourceRow.waitFor();
     assert.equal(
       await page.getByRole("dialog", { name: "资产列表", exact: true }).count(),

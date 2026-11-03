@@ -181,4 +181,4 @@ def events(record, calls):
         'result': detail[:65536], 'resultTruncated': len(detail) > 65536}
     calls[identity] = event
     # Shared business activity is reported from authoritative gateway receipts.
-    return [] if any(name in {f'opendirector.{tool}', f'mcp__opendirector__{tool}'} for tool in ('read_project', 'read', 'command_schema', 'execute_command')) else [event]
+    return [] if any(name in {f'opendirector.{tool}', f'mcp__opendirector__{tool}'} for tool in ('read_project', 'read_canvas_item', 'preview_asset', 'read', 'command_schema', 'execute_command')) else [event]

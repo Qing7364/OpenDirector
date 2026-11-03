@@ -43,7 +43,7 @@ async def test_concurrent_replay_executes_once_and_conflicting_input_is_rejected
     assert conflict.error == '工具调用标识被用于不同输入。'
     release.set()
     left, right = await asyncio.gather(first, replay)
-    assert left.value == right.value == {'status': 'applied', 'commandId': 'same-id'}
+    assert left.value == right.value == {'status': 'applied', 'commandId': 'same-id', 'modelSelections': {}}
     assert effects == ['same-id']
     await gateway.close()
 
@@ -241,3 +241,67 @@ async def test_batch_hide_is_atomic_and_replayable(gateway):
     assert (await gateway.call('hide', 'execute_command', arguments)).value == hidden.value
     snapshot = (await gateway.call('hidden', 'read_project', {})).value['project']
     assert all(not item['visible'] and item['revision'] == 2 for item in snapshot['canvasItems'])
+
+
+@pytest.mark.anyio
+async def test_selected_models_are_turn_context_not_global_state(gateway, monkeypatch):
+    selected = str(uuid4())
+    from dataclasses import replace
+    run = replace(gateway.run, model_selections={'image': selected})
+    gateway = ToolGateway(gateway.business, run)
+    run.model_selections['image'] = 'changed'
+    async def read(*args):
+        return {'project': {}, 'models': []}
+    monkeypatch.setattr(gateway.business, 'execute', read)
+    result = await gateway.call('read', 'read_project', {})
+    assert result.value['modelSelections'] == {'image': selected}
+
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(('kind', 'payload', 'object_type'), [
+    ('generation.submit', {'specId': str(uuid4()), 'expectedSpecRevision': 1}, 'generation_spec'),
+    ('canvas.hide', {'itemId': str(uuid4())}, 'canvas_item'),
+])
+async def test_missing_versions_identify_target(gateway, kind, payload, object_type):
+    result = await gateway.call('missing', 'execute_command', {'type': kind, 'payload': payload})
+    identity = payload.get('specId', payload.get('itemId'))
+    assert f'{object_type}:{identity}' in result.error
+    assert 'expectedVersions' in result.error
+
+
+@pytest.mark.anyio
+async def test_model_preferences_do_not_add_a_business_veto(gateway):
+    from opendirector.domain.creation.commands import parse_command
+    run, projects = gateway.run, gateway.business.projects
+    projects.execute(parse_command(dict(type='project.create', projectId=run.project_id,
+        commandId=uuid4(), payload={'name': 'Model preference'})))
+    projects.open(run.project_id, run.session)
+    gateway.model_selections['image'] = str(uuid4())
+    alternative = str(uuid4())
+    result = await gateway.call('create', 'execute_command', {'type': 'generationSpec.create',
+        'payload': {'spec': {'id': str(uuid4()), 'projectId': str(run.project_id),
+            'kind': 'image', 'purpose': 'generation', 'modelConfigId': alternative}}})
+    assert not result.error, result
+    assert str(projects.snapshot(run.project_id).generationSpecs[0].modelConfigId) == alternative
+
+
+@pytest.mark.anyio
+async def test_close_cancels_pending_canvas_status_wait(gateway, monkeypatch):
+    entered = asyncio.Event()
+    cancelled = asyncio.Event()
+
+    async def execute(*args):
+        entered.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.set()
+
+    monkeypatch.setattr(gateway.business, 'execute', execute)
+    waiter = asyncio.create_task(gateway.call('status', 'read_canvas_item', {'itemId': str(uuid4()), 'waitSeconds': 30}))
+    await entered.wait()
+    await asyncio.wait_for(gateway.close(), timeout=1)
+    assert cancelled.is_set()
+    with pytest.raises(asyncio.CancelledError):
+        await waiter

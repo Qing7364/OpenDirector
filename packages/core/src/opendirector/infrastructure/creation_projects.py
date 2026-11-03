@@ -715,9 +715,11 @@ class CreationProjects:
         candidates = [temporary, target]
         if intent.fromName:
             candidates.append(child(self.root, intent.fromName))
+        # Path.exists also accepts aliases on case-insensitive filesystems.
+        existing_names = {entry.name for entry in self.root.iterdir()}
         locations = []
         for path in candidates:
-            if not path.exists():
+            if path.name not in existing_names or not path.exists():
                 continue
             directory(path)
             if any(path.samefile(other) for other in locations):

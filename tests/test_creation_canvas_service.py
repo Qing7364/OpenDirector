@@ -306,3 +306,85 @@ def test_missing_and_blank_text_sources_are_unavailable_and_cannot_be_connected(
     assert not store.snapshot(pid).references
     (store.root / 'Unified' / asset.path).unlink()
     assert not CreationCanvas(store).projection(pid)['capabilities'][str(source.id)].canExport
+
+
+def test_create_generation_is_visible_without_a_job_and_replayable(project):
+    store, pid, session = project
+    spec_id, item_id = uuid4(), uuid4()
+    value = dict(commandId=uuid4(), projectId=pid, type='canvas.createGeneration', payload={
+        'spec': dict(id=spec_id, projectId=pid, kind='image', purpose='generation', prompt='A lake'),
+        'item': dict(id=item_id, projectId=pid, kind='image', title='Lake',
+            binding=dict(role='generation', objectRef=dict(id=spec_id)))})
+    command = parse_command(value)
+    receipt = store.execute(command, session=session)
+    assert receipt.status == 'applied', receipt.issues
+    assert store.execute(command, session=session) == receipt
+    snapshot = store.snapshot(pid)
+    assert snapshot.canvasItems[0].visible
+    assert snapshot.canvasItems[0].binding.objectRef.id == spec_id
+    assert snapshot.generationSpecs[0].prompt == 'A lake'
+    assert not snapshot.jobs
+    undo = send(store, pid, 'history.undo', session=session,
+        versions=[ver('canvas_item', snapshot.canvasItems[0])], targetCommandId=command.commandId)
+    assert undo.status == 'applied', undo.issues
+    undone = store.snapshot(pid)
+    assert not any(item.visible for item in undone.canvasItems)
+
+
+def test_create_generation_reference_failure_rolls_back(project):
+    store, pid, session = project
+    spec_id = uuid4()
+    before = store.snapshot(pid)
+    receipt = send(store, pid, 'canvas.createGeneration', session=session,
+        spec=dict(id=spec_id, projectId=pid, kind='image', purpose='generation'),
+        item=dict(id=uuid4(), projectId=pid, kind='image',
+            binding=dict(role='generation', objectRef=dict(id=spec_id))),
+        references=[dict(id=uuid4(), projectId=pid, targetSpecId=spec_id,
+            binding='follow_current', source=dict(id=uuid4()))])
+    assert receipt.status == 'rejected'
+    assert store.snapshot(pid) == before
+
+
+def test_create_generation_connects_existing_reference(project):
+    store, pid, session = project
+    source, _ = text_material(project)
+    spec_id, item_id, reference_id = uuid4(), uuid4(), uuid4()
+    receipt = send(store, pid, 'canvas.createGeneration', session=session,
+        spec=dict(id=spec_id, projectId=pid, kind='text', purpose='generation', prompt='Continue the story'),
+        item=dict(id=item_id, projectId=pid, kind='text',
+            binding=dict(role='generation', objectRef=dict(id=spec_id))),
+        references=[dict(id=reference_id, projectId=pid, targetSpecId=spec_id,
+            binding='follow_current', source=dict(id=source.id))])
+    assert receipt.status == 'applied', receipt.issues
+    snapshot = store.snapshot(pid)
+    assert next(ref for ref in snapshot.references if ref.id == reference_id).source.id == source.id
+    assert next(item for item in snapshot.canvasItems if item.id == item_id).visible
+    assert not snapshot.jobs
+
+
+def test_canvas_item_status_is_scoped_and_read_only(project):
+    store, pid, session = project
+    item, _ = text_material(project)
+    before = store.snapshot(pid)
+    canvas = CreationCanvas(store)
+    result = canvas.item_status(pid, item.id)
+    assert result['item']['id'] == str(item.id)
+    assert result['status'] == 'idle'
+    assert result['asset']['id'] == str(item.binding.objectRef.assetId)
+    assert store.snapshot(pid) == before
+    from opendirector.domain.projects import ProjectError
+    with pytest.raises(ProjectError, match='当前工程'):
+        canvas.item_status(pid, uuid4())
+
+
+def test_canvas_item_wait_returns_on_change_and_timeout(project, monkeypatch):
+    import asyncio
+    store, pid, session = project
+    item, _ = media(project)
+    canvas = CreationCanvas(store)
+    states = [{'status': 'running', 'revision': 1}, {'status': 'succeeded', 'revision': 2}]
+    monkeypatch.setattr(canvas, 'item_status', lambda *args: states.pop(0) if len(states) > 1 else states[0])
+    result = asyncio.run(canvas.wait_item_status(pid, item.id, 2))
+    assert result['status'] == 'succeeded'
+    monkeypatch.setattr(canvas, 'item_status', lambda *args: {'status': 'running'})
+    assert asyncio.run(canvas.wait_item_status(pid, item.id, .01)) == {'status': 'running'}

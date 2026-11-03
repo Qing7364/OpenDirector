@@ -49,6 +49,7 @@ export interface ConversationSummary {
   messageCount: number;
 }
 export interface ChatMessage {
+  runtime?: AgentRuntime;
   tools?: ChatTool[];
   id: string;
   role: "user" | "assistant";

@@ -486,3 +486,29 @@ def test_music_fields_leave_speech_fingerprints_unchanged():
     assert AudioParameters(creationType='music', durationFromReference=False).model_dump()['durationFromReference'] is False
     from opendirector.domain.creation.generation import reference_music_seconds
     assert [reference_music_seconds(value) for value in (3, 239, 400)] == [8, 263, 360]
+
+
+def test_generation_version_requirements_generate_schema_without_rejecting_saved_commands():
+    from opendirector.domain.creation.commands import COMMAND_MODELS
+    model = COMMAND_MODELS['generation.submit']
+    schema = model.model_json_schema()['$defs']['GenerationSubmit']['properties']
+    for field, kind in [('specId', 'generation_spec'), ('originItemId', 'canvas_item')]:
+        assert schema[field]['x-version-object-type'] == kind
+        assert kind in schema[field]['description']
+    command('generation.submit', dict(specId=uid(30), expectedSpecRevision=1, originItemId=uid(40)),
+        [('generation_spec', 30, 1)])
+    command('generation.submit', dict(specId=uid(30), expectedSpecRevision=1, originItemId=uid(40)),
+        [('generation_spec', 30, 1), ('canvas_item', 40, 1)])
+
+
+@pytest.mark.parametrize('voice', ['voice_test-1', '动漫海绵'])
+def test_audio_voice_names_accept_provider_identifiers_and_unicode(voice):
+    from opendirector.domain.creation.generation import AudioParameters
+    assert AudioParameters(voice=voice).voice == voice
+
+
+@pytest.mark.parametrize('voice', ['', 'a' * 65, '../voice', 'voice\n', 'voice name'])
+def test_audio_voice_names_reject_invalid_characters_and_lengths(voice):
+    from opendirector.domain.creation.generation import AudioParameters
+    with pytest.raises(ValidationError):
+        AudioParameters(voice=voice)

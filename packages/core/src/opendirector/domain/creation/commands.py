@@ -59,6 +59,26 @@ class CanvasShow(Contract):
     item: CanvasItem
 
 
+class CanvasCreateGeneration(Contract):
+    spec: GenerationSpec = Field(description='New configuration with purpose=generation.')
+    item: CanvasItem = Field(description='Visible item bound to spec.id with role=generation.')
+    references: tuple[Reference, ...] = ()
+
+    @model_validator(mode='after')
+    def bindings(self):
+        if not self.item.visible:
+            raise ValueError('New generation node must be visible')
+        if self.spec.purpose != 'generation':
+            raise ValueError('Generation node requires spec.purpose=generation')
+        if self.item.binding.role != 'generation' or self.item.binding.objectRef.id != self.spec.id:
+            raise ValueError('Canvas item must bind to the new generation configuration')
+        if self.item.kind != self.spec.kind or self.item.projectId != self.spec.projectId:
+            raise ValueError('Canvas item and generation configuration must have the same project and kind')
+        if any(ref.targetSpecId != self.spec.id or ref.projectId != self.spec.projectId for ref in self.references):
+            raise ValueError('References must belong to the new generation configuration')
+        return self
+
+
 class CanvasMoveItem(Contract):
     itemId: UUID
     position: Point
@@ -178,9 +198,12 @@ class ReferenceRemove(Contract):
 
 
 class GenerationSubmit(Contract):
-    specId: UUID
-    expectedSpecRevision: Revision
-    originItemId: UUID | None = None
+    specId: UUID = Field(description='Include its current generation_spec revision in expectedVersions.',
+        json_schema_extra={'x-version-object-type': 'generation_spec'})
+    expectedSpecRevision: Revision = Field(description='Must match the specId revision in expectedVersions.')
+    originItemId: UUID | None = Field(default=None,
+        description='When set, include its current canvas_item revision in expectedVersions.',
+        json_schema_extra={'x-version-object-type': 'canvas_item'})
     previousJobId: UUID | None = None
     adoptionPolicy: Literal['if_current', 'candidate_only'] = 'if_current'
     batchId: UUID | None = None
@@ -222,7 +245,7 @@ class CommandBase(Contract):
     commandId: UUID
     projectId: UUID
     type: str
-    expectedVersions: tuple[ObjectVersion, ...] = ()
+    expectedVersions: tuple[ObjectVersion, ...] = Field(default=(), description='Current versions of mutated existing objects; payload revision fields do not replace these.')
     expectedPreview: Digest | None = None
 
     @model_validator(mode='after')
@@ -266,8 +289,9 @@ class CommandBase(Contract):
         elif self.type == 'editor.save':
             required = [('editor_document', payload.document.id)]
         versions = {(version.objectType, version.id): version.revision for version in self.expectedVersions}
-        if any(key not in versions for key in required):
-            raise ValueError('Mutation requires the current versions of all target objects')
+        missing = [f'{kind}:{identity}' for kind, identity in required if (kind, identity) not in versions]
+        if missing:
+            raise ValueError('expectedVersions missing current versions for ' + ', '.join(missing))
         if self.type == 'generation.submit' and versions[('generation_spec', payload.specId)] != payload.expectedSpecRevision:
             raise ValueError('Submission version differs from expected spec version')
         if self.type in {'generationSpec.update', 'editor.save', 'reference.update', 'reference.restore'}:
@@ -289,6 +313,7 @@ _COMMANDS = (
     ('AssetWriteTextCommand', 'asset.writeText', AssetWriteText, 'Write a text asset or a new version of an existing text asset.'),
     ('AssetMetadataCommand', 'asset.updateMetadata', AssetMetadataUpdate, 'Rename an asset.'),
     ('AssetDeleteCommand', 'asset.delete', AssetDelete, 'Delete assets after an impact preview.'),
+    ('CanvasCreateGenerationCommand', 'canvas.createGeneration', CanvasCreateGeneration, 'Create a visible generation node with configuration and references atomically; does not submit generation.'),
     ('CanvasShowCommand', 'canvas.show', CanvasShow, 'Create or restore a canvas display item.'),
     ('CanvasMoveCommand', 'canvas.move', CanvasMove, 'Move one or more canvas items.'),
     ('CanvasUpdateCommand', 'canvas.update', CanvasPresentationUpdate, 'Update canvas presentation, grouping or lock state.'),
@@ -305,7 +330,7 @@ _COMMANDS = (
     ('SpecUpdateCommand', 'generationSpec.update', SpecWrite, 'Update a generation configuration without changing accepted jobs.'),
     ('SpecRestoreCommand', 'generationSpec.restore', SpecRestore, 'Restore generation settings from a historical command.'),
     ('SpecPromptCommand', 'generationSpec.setPrompt', SpecPromptWrite, 'Update prompt text and structured references.'),
-    ('ReferenceAddCommand', 'reference.add', ReferenceWrite, 'Add a generation reference.'),
+    ('ReferenceAddCommand', 'reference.add', ReferenceWrite, 'Add a generation reference; expectedVersions must include its target generation_spec.'),
     ('ReferenceUpdateCommand', 'reference.update', ReferenceWrite, 'Update a generation reference.'),
     ('ReferenceRestoreCommand', 'reference.restore', ReferenceWrite, 'Restore a generation reference.'),
     ('ReferenceRemoveCommand', 'reference.remove', ReferenceRemove, 'Deactivate a generation reference.'),
@@ -383,6 +408,15 @@ class CommandReceipt(Contract):
         if self.status == 'noop' and (self.changed or self.jobIds):
             raise ValueError('A noop cannot create objects or tasks')
         return self
+
+
+class CanvasItemQuery(Contract):
+    itemId: UUID = Field(description='Canvas item ID from the current project.')
+    waitSeconds: float = Field(default=0, ge=0, le=30, description='Wait for status changes, up to 30 seconds; zero returns immediately.')
+
+
+class AssetPreviewQuery(Contract):
+    assetId: UUID = Field(description='Asset ID from the current project.')
 
 
 class Query(Contract):

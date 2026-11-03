@@ -3,10 +3,12 @@
 Mutations work on a private draft. The repository validates and publishes the
 entire transaction once, including versions, receipt and outbox event.
 """
+import asyncio
 from uuid import UUID
 
 from opendirector.domain.creation.assets import AssetRef
 from opendirector.domain.creation.base import ObjectVersion
+from opendirector.domain.creation.commands import CanvasShow, ReferenceWrite, SpecWrite
 from opendirector.domain.creation.generation import ResolvedReference
 from opendirector.domain.creation.canvas import media_card_size, node_capabilities, VideoCanvasItem
 from opendirector.domain.creation.models import ModelConfigPublic
@@ -401,6 +403,11 @@ class CreationCanvas:
             publish_media(self, data, payload)
         elif kind == 'timeline.publishRender':
             self._publish_render(data, payload)
+        elif kind == 'canvas.createGeneration':
+            self._mutate(data, 'generationSpec.create', SpecWrite(spec=payload.spec))
+            self._mutate(data, 'canvas.show', CanvasShow(item=payload.item))
+            for reference in payload.references:
+                self._mutate(data, 'reference.add', ReferenceWrite(reference=reference))
         elif kind in {'generationSpec.create', 'editor.create'}:
             key, collection = ('spec', 'generationSpecs') if kind.startswith('generation') else ('document', 'editorDocuments')
             obj = getattr(payload, key).model_dump(mode='json')
@@ -597,6 +604,41 @@ class CreationCanvas:
                     item['editors'] = [ref for ref in item.get('editors', []) if ref['kind'] not in {'layers', 'image_crop'}]
         else:
             raise ContractError('capability_unsupported', '未实现该业务命令。')
+
+    def item_status(self, project_id: UUID, item_id: UUID) -> dict:
+        snapshot = self.projects.snapshot(project_id)
+        item = next((item for item in snapshot.canvasItems if item.id == item_id), None)
+        if item is None:
+            raise ProjectError('画布组件不在当前工程中。', 404)
+        spec_id = (item.binding.objectRef.id if item.binding.role == 'generation' else
+            item.binding.draftSpec.id if item.binding.role == 'empty' and item.binding.draftSpec else None)
+        spec = next((spec for spec in snapshot.generationSpecs if spec.id == spec_id), None)
+        related = [job for job in reversed(snapshot.jobs) if job.originItemId == item.id or
+            spec_id is not None and job.inputSnapshot.spec.id == spec_id]
+        active = [job for job in related if job.status in {'queued', 'running'}]
+        jobs = active[:50] if active else related[:1]
+        asset = current_asset(snapshot, item)
+        return {'item': item.model_dump(mode='json'),
+            'generationSpec': {'id': str(spec.id), 'revision': spec.revision,
+                'modelConfigId': str(spec.modelConfigId) if spec.modelConfigId else None,
+                'currentResultId': str(spec.currentResultId) if spec.currentResultId else None} if spec else None,
+            'status': jobs[0].status if jobs else 'idle',
+            'jobs': [job.model_dump(mode='json', include={'id', 'revision', 'status', 'phase',
+                'errorDetails', 'technicalCheck', 'cancelRequested', 'adopted', 'asset'}) for job in jobs],
+            'asset': asset.model_dump(mode='json') if asset else None}
+
+    async def wait_item_status(self, project_id: UUID, item_id: UUID, wait_seconds: float = 0) -> dict:
+        current = await asyncio.to_thread(self.item_status, project_id, item_id)
+        deadline = asyncio.get_running_loop().time() + wait_seconds
+        while current['status'] in {'queued', 'running'}:
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                break
+            await asyncio.sleep(min(0.5, remaining))
+            updated = await asyncio.to_thread(self.item_status, project_id, item_id)
+            if updated != current:
+                return updated
+        return current
 
     def projection(self, project_id):
         snapshot = self.projects.snapshot(project_id)

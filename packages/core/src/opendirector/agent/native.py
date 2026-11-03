@@ -1,5 +1,6 @@
 """CLI runtimes use native skills and one turn-scoped MCP business gateway."""
 import asyncio
+import base64
 import json
 import os
 from pathlib import Path
@@ -145,6 +146,12 @@ class NativeRuntime:
                         outcome = await gateway.call('mcp:' + key, params['name'], params.get('arguments', {}))
                         result = {'content': [{'type': 'text', 'text': json.dumps(outcome.value, ensure_ascii=False)}],
                                   'isError': bool(outcome.error)}
+                        if params['name'] == 'preview_asset' and not outcome.error:
+                            preview = outcome.value.get('preview')
+                            if preview:
+                                content = base64.b64encode(await asyncio.to_thread(Path(preview['path']).read_bytes)).decode()
+                                media_type = 'image' if preview['mimeType'].startswith('image/') else 'audio'
+                                result['content'].append({'type': media_type, 'data': content, 'mimeType': preview['mimeType']})
                         detail = json.dumps(outcome.value, ensure_ascii=False, indent=2)
                         await queue.put({**outcome.event(params['name']), 'id': 'mcp:' + key,
                             'arguments': params.get('arguments', {}), 'result': detail[:65536],

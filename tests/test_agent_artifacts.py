@@ -2,7 +2,7 @@ import asyncio
 from pathlib import Path
 import shutil
 import subprocess
-from uuid import uuid4, uuid5
+from uuid import UUID, uuid4, uuid5
 
 from PIL import Image
 import pytest
@@ -191,3 +191,36 @@ def test_http_cannot_supply_its_own_execution_context(publication):
             'payload': {'path': '/etc/passwd', 'name': 'outside.txt'}})
         assert response.status_code == 403
         assert business.projects.snapshot(run.project_id).assets == ()
+
+
+@pytest.mark.parametrize('kind', ['image', 'video', 'audio'])
+def test_asset_id_preview_is_bounded_and_preserves_project(publication, kind):
+    business, run, work = publication
+    if kind == 'image':
+        source = work / 'image.png'
+        Image.new('RGB', (1000, 600), 'red').save(source)
+    else:
+        if not shutil.which('ffmpeg'):
+            pytest.skip('requires FFmpeg')
+        source = work / ('video.mp4' if kind == 'video' else 'audio.wav')
+        command = ['ffmpeg', '-nostdin', '-v', 'error', '-y', '-f', 'lavfi', '-i',
+            'color=red:s=160x120:r=5' if kind == 'video' else 'sine=frequency=440', '-t', '1']
+        subprocess.run([*command, str(source)], check=True)
+    published = publish(publication, source.name)
+    asset_id = UUID(published['asset']['id'])
+    before = business.projects.snapshot(run.project_id)
+    gateway = ToolGateway(business, run)
+    result = asyncio.run(gateway.call('preview', 'preview_asset', {'assetId': str(asset_id)}))
+    assert not result.error, result
+    preview = Path(result.value['preview']['path'])
+    assert preview.is_relative_to(work / 'previews') and preview.stat().st_size > 0
+    if kind != 'audio':
+        with Image.open(preview) as image:
+            assert max(image.size) <= (480 if kind == 'image' else 960)
+    else:
+        import wave
+        with wave.open(str(preview)) as audio:
+            assert audio.getnframes() / audio.getframerate() <= 30
+    assert business.projects.snapshot(run.project_id) == before
+    missing = asyncio.run(gateway.call('missing', 'preview_asset', {'assetId': str(uuid4())}))
+    assert missing.error

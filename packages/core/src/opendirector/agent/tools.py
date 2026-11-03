@@ -7,9 +7,10 @@ from pydantic import JsonValue, TypeAdapter
 
 from opendirector.application.creation_artifacts import publish_artifact
 from opendirector.application.creation_assets import CreationAssets
+from opendirector.application.creation_canvas import CreationCanvas
 from opendirector.domain.creation.assets import AssetProvenance
 from opendirector.domain.creation.base import ObjectVersion
-from opendirector.domain.creation.commands import COMMAND_MODELS, parse_command
+from opendirector.domain.creation.commands import AssetPreviewQuery, CanvasItemQuery, COMMAND_MODELS, parse_command
 from opendirector.domain.creation.models import ModelSnapshot
 from opendirector.domain.projects import ProjectError
 
@@ -40,10 +41,14 @@ def tool_schema(name: str, description: str, parameters: dict) -> dict:
 
 
 def tools() -> list[dict]:
-    result = [tool_schema('read_project', 'Read current authoritative project and available models.',
+    result = [tool_schema('read_project', 'Read current project, available models and user model selections.',
                          {'type': 'object', 'properties': {}, 'additionalProperties': False}),
               tool_schema('read', 'Read a discovered skill file/resource, or text asset via asset:<UUID>. No scripts.',
                          {'type': 'object', 'properties': {'path': {'type': 'string'}}, 'required': ['path'], 'additionalProperties': False})]
+    result += [tool_schema('read_canvas_item', 'Read a canvas item, generation status and current asset; optionally wait for changes.',
+                           CanvasItemQuery.model_json_schema()),
+               tool_schema('preview_asset', 'Preview an asset by ID: image thumbnail, video first frame, audio first 30 seconds or text excerpt.',
+                           AssetPreviewQuery.model_json_schema())]
     command_type = {'type': 'string', 'enum': list(COMMANDS)}
     result.append(tool_schema('command_schema', 'Read the exact input schema before executing a project command.',
         {'type': 'object', 'properties': {'type': command_type}, 'required': ['type'], 'additionalProperties': False}))
@@ -69,6 +74,15 @@ class AgentTools:
             snapshot = await asyncio.to_thread(self.projects.snapshot, project_id)
             return {'project': snapshot.model_dump(mode='json'), 'models': self.configs.list(), 'commands': list(COMMANDS),
                 'commandMetadata': {kind: {'description': model.__doc__} for kind, model in COMMANDS.items()}}
+        if name == 'read_canvas_item':
+            query = CanvasItemQuery.model_validate(arguments)
+            return await CreationCanvas(self.projects).wait_item_status(project_id, query.itemId, query.waitSeconds)
+        if name == 'preview_asset':
+            query = AssetPreviewQuery.model_validate(arguments)
+            with self.projects.local.transaction() as db:
+                directory, _, _ = self.projects._load(db, project_id)
+            target = directory / 'agent-runs' / str(turn_id) / 'work' / 'previews'
+            return await asyncio.to_thread(self.assets.preview, project_id, query.assetId, target)
         if name == 'read':
             path = TypeAdapter(str).validate_python(arguments['path'], strict=True)
             if path.startswith('asset:'):

@@ -76,6 +76,10 @@ def creation_routes(projects: CreationProjects, generation=None):
             return await generation.execute(value, session=session)
         return await run_in_threadpool(projects.execute, value, session=session)
 
+    @router.get('/projects/{project_id}/canvas/{item_id}/status')
+    async def item_status(project_id: UUID, item_id: UUID, wait_seconds: float = Query(default=0, ge=0, le=30)):
+        return await canvas.wait_item_status(project_id, item_id, wait_seconds)
+
     @router.get('/projects/{project_id}/canvas')
     def projection(project_id: UUID):
         return canvas.projection(project_id)

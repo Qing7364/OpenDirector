@@ -102,20 +102,21 @@ def test_creation_recovers_from_each_file_commit_checkpoint(projects, stage):
 
 
 @pytest.mark.parametrize('stage', ['journaled', 'directory_ready', 'bundle_written', 'directory_staged', 'directory_moved', 'published', 'finished'])
-def test_rename_recovers_with_snapshot_receipt_and_outbox_together(projects, stage):
+@pytest.mark.parametrize('name', ['Renamed', 'example'])
+def test_rename_recovers_with_snapshot_receipt_and_outbox_together(projects, stage, name):
     original = create(projects)
-    command = rename(original)
+    command = rename(original, name)
     marker = projects.root / 'Example' / 'keep.txt'
     marker.write_text('user-owned data')
     fail_at(projects, stage)
     with pytest.raises(OSError):
         projects.execute(command)
     restored = restarted(projects)
-    receipt = assert_committed(restored, command, name='Renamed', cursor=2)
+    receipt = assert_committed(restored, command, name=name, cursor=2)
     assert restored.execute(command) == receipt
     assert restored.receipt(original.projectId, original.commandId).eventCursor == 1
-    assert (restored.root / 'Renamed' / 'keep.txt').read_text() == 'user-owned data'
-    assert not marker.exists()
+    assert (restored.root / name / 'keep.txt').read_text() == 'user-owned data'
+    assert [path.name for path in restored.root.iterdir()] == [name]
     assert list(restored.intents.glob('*.json')) == []
 
 
@@ -397,7 +398,7 @@ def test_cached_history_still_detects_changed_ancestor_with_same_size_and_mtime(
     from opendirector.infrastructure import creation_projects as module
     created = create(projects)
     projects.execute(rename(created))
-    projects.snapshot(created.projectId)
+    projects.changes(created.projectId)
     reads = []
     original = module.read_json
     def reading(path):
@@ -405,7 +406,7 @@ def test_cached_history_still_detects_changed_ancestor_with_same_size_and_mtime(
             reads.append(path)
         return original(path)
     monkeypatch.setattr(module, 'read_json', reading)
-    assert projects.snapshot(created.projectId).project.name == 'Renamed'
+    assert projects.changes(created.projectId)['currentCursor'] == 2
     assert reads == []  # Validated records are reused, but every file is still checked.
     ancestor = projects.root / 'Renamed' / 'commits' / f'{created.commandId}.json'
     stat = ancestor.stat()
@@ -422,7 +423,7 @@ def test_cached_history_still_detects_changed_ancestor_with_same_size_and_mtime(
             ancestor.write_bytes(damaged)
         os.utime(ancestor, ns=(stat.st_atime_ns, stat.st_mtime_ns))
     with pytest.raises(ProjectError, match='缺失或损坏'):
-        projects.snapshot(created.projectId)
+        projects.changes(created.projectId)
 
 
 @pytest.mark.skipif(os.name == 'nt', reason='Commit signature caching requires POSIX change time')
@@ -617,13 +618,13 @@ def test_delete_mode_reports_the_platform_recycle_bin(projects, monkeypatch):
 
 def test_a_deletion_that_cannot_reach_the_recycle_bin_keeps_the_project(projects, monkeypatch):
     created = create(projects)
-    assert projects.delete_mode == 'recycle_bin'
     seen = {}
     def refuse(path, *, recoverable):
         seen['recoverable'] = recoverable
         raise OSError('项目未能移入回收站（Shell 返回 124），工程文件已保留。')
     monkeypatch.setattr(creation_projects.recycle, 'recyclable', lambda path: True)
     monkeypatch.setattr(creation_projects.recycle, 'remove', refuse)
+    assert projects.delete_mode == 'recycle_bin'
     with pytest.raises(ProjectError, match='回收站') as refused:
         projects.execute(trash(created))
     assert refused.value.status == 409 and refused.value.code == 'storage_unavailable'

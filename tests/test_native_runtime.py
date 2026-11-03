@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 import httpx
 import pytest
 
+from opendirector.application.creation_assets import CreationAssets
 from opendirector.agent import native
 from opendirector.agent.skills import skills
 from opendirector.agent.runtime import AgentRuntimes
@@ -32,10 +33,13 @@ def rpc(value):
  assert 'error' not in response, response
  return response['result']
 rpc({'id':1, 'method':'initialize'})
-assert len(rpc({'id':2, 'method':'tools/list'})['tools']) == 4
+assert len(rpc({'id':2, 'method':'tools/list'})['tools']) == 6
 result = rpc({'id':3, 'method':'tools/call', 'params':{'name':'execute_command', 'arguments':{'type':'asset.writeText','payload':{'name':'native.md','text':'Native plan'}}}})
 assert not result['isError'], result
 assert rpc({'id':3, 'method':'tools/call', 'params':{'name':'execute_command', 'arguments':{'type':'asset.writeText','payload':{'name':'native.md','text':'Native plan'}}}}) == result
+preview = rpc({'id':4, 'method':'tools/call', 'params':{'name':'preview_asset', 'arguments':{'assetId':'00000000-0000-0000-0000-000000000001'}}})
+assert not preview['isError'], preview
+assert preview['content'][1] == {'type':'image','data':'cHJldmlldw==','mimeType':'image/webp'}, preview
 bridge.stdin.close(); bridge.wait()
 runtime = os.environ['TEST_RUNTIME']
 if runtime == 'codex':
@@ -70,6 +74,10 @@ def test_native_events_real_mcp_and_shared_write(tmp_path, monkeypatch, runtime)
     config = ModelConfigs(tmp_path).save('agent','http://localhost:9999/v1','test','',auth_mode='none')
     script = tmp_path / 'fake_cli.py'
     script.write_text(FAKE)
+    preview = tmp_path / 'preview.webp'
+    preview.write_bytes(b'preview')
+    monkeypatch.setattr(CreationAssets, 'preview', lambda self, project_id, asset_id, target:
+        {'preview': {'path': str(preview), 'mimeType': 'image/webp'}})
     def command(kind, work, socket, token, model, model_url, catalog, **kwargs):
         return [sys.executable, str(script)], {**os.environ, 'TEST_RUNTIME':kind,
             'OPENDIRECTOR_AGENT_SOCKET':socket,'OPENDIRECTOR_AGENT_TOKEN':token,
