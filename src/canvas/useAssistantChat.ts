@@ -7,6 +7,8 @@ import {
   activateConversation,
   type ConversationSummary,
   chatRuntimes,
+  chatRuntimeStatus,
+  type AgentRuntime,
   type RuntimeInfo,
   streamChat,
   stopChat,
@@ -55,6 +57,7 @@ export function useAssistantChat(
   const [value, setValue] = useState<Conversation>(empty);
   const [runtimes, setRuntimes] = useState<RuntimeInfo[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [runtimesLoading, setRuntimesLoading] = useState(true);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [sending, setSending] = useState(false);
   const [started, setStarted] = useState(false);
@@ -106,15 +109,22 @@ export function useAssistantChat(
     alive.current = true;
     let cancelled = false;
     setLoaded(false);
-    void Promise.all([
-      conversation(projectId),
-      chatRuntimes(projectId),
-      conversations(projectId),
-    ])
-      .then(([saved, available, list]) => {
-        setThreads(list.items);
+    setRuntimes([]);
+    setRuntimesLoading(true);
+    setError("");
+    void chatRuntimes(projectId, (available) => {
+        if (!cancelled) setRuntimes(available);
+      })
+      .catch((reason) => {
+        if (!cancelled) setError(`读取引擎失败：${errorMessage(reason)}`);
+      })
+      .finally(() => {
+        if (!cancelled) setRuntimesLoading(false);
+      });
+    void Promise.all([conversation(projectId), conversations(projectId)])
+      .then(([saved, list]) => {
         if (cancelled) return;
-        setRuntimes(available);
+        setThreads(list.items);
         const restored = restoreAgentSelection(projectId, saved);
         setValue({
           ...restored,
@@ -125,11 +135,6 @@ export function useAssistantChat(
           ),
         });
         setLoaded(true);
-        setError(
-          restored.runtime && !available.some((item) => item.id === restored.runtime)
-            ? "原 Agent 引擎已移除，请重新选择模型后继续。"
-            : "",
-        );
       })
       .catch((reason) => {
         if (!cancelled) setError(`读取对话失败：${errorMessage(reason)}`);
@@ -141,6 +146,13 @@ export function useAssistantChat(
       uploadController.current?.abort();
     };
   }, [projectId, loadAttempt]);
+
+  useEffect(() => {
+    if (loaded && !runtimesLoading && runtimes.length && value.runtime &&
+        !runtimes.some((item) => item.id === value.runtime)) {
+      setError("原 Agent 引擎已移除，请重新选择模型后继续。");
+    }
+  }, [loaded, runtimesLoading, runtimes, value.runtime]);
 
   useLayoutEffect(() => {
     if (loaded) rememberChat(projectId, value);
@@ -203,8 +215,8 @@ export function useAssistantChat(
     (item) => item.id === (value.runtime ?? "default"),
   );
   const canSend =
-    !!currentRuntime?.available &&
-    (currentRuntime.id !== "jiuwenswarm" || currentRuntime.status === "ready") &&
+    currentRuntime?.status === "ready" &&
+    !!currentRuntime.available &&
     (currentRuntime.modelSource === "cli" || !!agent);
   const addAssets = (assets: ChatAsset[]) => {
     assets.forEach((asset) =>
@@ -467,8 +479,22 @@ export function useAssistantChat(
   return {
     value,
     runtimes,
-    refreshRuntimes: async () => {
-      setRuntimes(await chatRuntimes(projectId));
+    runtimesLoading,
+    refreshRuntimes: async (runtime?: AgentRuntime) => {
+      if (runtime) {
+        setRuntimes((items) => items.map((item) => item.id === runtime ? {...item, status: "checking"} : item));
+        try {
+          const status = await chatRuntimeStatus(projectId, runtime);
+          if (alive.current) setRuntimes((items) => items.map((item) => item.id === runtime ? status : item));
+        } catch (reason) {
+          if (alive.current) setRuntimes((items) => items.map((item) => item.id === runtime ? {...item, status: "unknown"} : item));
+          throw reason;
+        }
+        return;
+      }
+      await chatRuntimes(projectId, (available) => {
+        if (alive.current) setRuntimes(available);
+      });
     },
     setValue,
     selectAgent: (patch: Partial<Conversation>) => {

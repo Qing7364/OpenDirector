@@ -35,8 +35,8 @@ def test_catalog_probes_cli_and_bundled_separately(monkeypatch):
 
     monkeypatch.setattr(runtime, 'runtime_readiness', probe)
     result = asyncio.run(runtime.configured_runtimes())
-    assert calls == ['default', 'opencode', 'codex', 'claude', 'jiuwenswarm']
-    assert [item['status'] for item in result] == ['ready', 'ready', 'ready', 'needs_login', 'ready']
+    assert calls == ['default', 'opencode', 'jiuwenswarm', 'codex', 'claude']
+    assert [item['status'] for item in result] == ['ready', 'ready', 'ready', 'ready', 'needs_login']
 
 
 def test_opencode_binary_sources(monkeypatch, tmp_path):
@@ -70,3 +70,30 @@ def test_opencode_cli_and_default_use_separate_model_paths(tmp_path, monkeypatch
     assert config['provider']['opendirector']['options']['baseURL'] == 'http://loopback'
     assert runtime.runtime_spec('opencode').modelSource == 'cli'
     assert runtime.runtime_spec('default').modelSource == 'settings'
+
+
+def test_runtime_catalog_can_skip_probes_and_check_one_harness(tmp_path, monkeypatch):
+    from uuid import uuid4
+    from fastapi.testclient import TestClient
+    from opendirector_api.main import create_app
+    from opendirector.infrastructure.local_projects import LocalProjects
+    calls = []
+    async def probe(engine):
+        calls.append(engine)
+        return 'ready'
+    monkeypatch.setattr('opendirector_api.agent.runtime_readiness', probe)
+    monkeypatch.setattr(runtime.native, 'executable', lambda _: '/installed/cli')
+    pid = str(uuid4())
+    path = f'/api/creation/projects/{pid}'
+    with TestClient(create_app(LocalProjects(tmp_path)), headers={
+        'X-OpenDirector-Request':'1','X-OpenDirector-Session':str(uuid4())}) as client:
+        assert client.post(path+'/commands', json={'type':'project.create','projectId':pid,
+            'commandId':str(uuid4()),'payload':{'name':'Probes'}}).status_code == 200
+        rows = client.get(path+'/assistant/runtimes?probe=false').json()
+        assert not calls
+        assert next(row for row in rows if row['id']=='opencode')['status']=='ready'
+        assert next(row for row in rows if row['id']=='jiuwenswarm')['status']=='checking'
+        response = client.get(path+'/assistant/runtimes/codex/status')
+        assert response.status_code == 200
+        assert response.json()['status']=='ready'
+        assert calls == ['codex']

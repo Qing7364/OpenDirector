@@ -610,7 +610,7 @@ export function AssistantPanel({
               disabled={referenceDisabled || value.assets.length >= 64}
               onClick={() => fileInput.current?.click()}
             >
-              <CanvasIcon name={chat.adding ? "upload" : "plus"} size={20} />
+              <span className="cw-assistant-symbol cw-assistant-symbol-plus" aria-hidden="true">+</span>
             </button>
             <button
               type="button"
@@ -621,7 +621,7 @@ export function AssistantPanel({
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => editor.current?.openPicker()}
             >
-              @
+              <span className="cw-assistant-symbol cw-assistant-symbol-at" aria-hidden="true">@</span>
             </button>
             <AgentPicker
               projectId={documentId}
@@ -630,6 +630,7 @@ export function AssistantPanel({
               runtimes={chat.runtimes}
               onRefresh={chat.refreshRuntimes}
               disabled={!chat.loaded || chat.sending}
+              initializing={!chat.loaded || !chat.runtimes.length}
               onChange={chat.selectAgent}
               onConfigure={onOpenSettings}
             />
@@ -692,7 +693,11 @@ export function AssistantPanel({
           </div>
         </form>
         <p className="cw-assistant-footnote">
-          {chat.adding ? (
+          {!chat.loaded ? (
+            chat.error ? "对话加载失败" : "正在加载对话…"
+          ) : chat.runtimes.find((item) => item.id === (value.runtime ?? "default"))?.status === "checking" ? (
+            "正在检查当前引擎…"
+          ) : chat.adding ? (
             "正在添加参考素材…"
           ) : (
             `${chat.runtimes.find((item) => item.id === (value.runtime ?? "default"))?.label ?? "请选择 Agent"}`

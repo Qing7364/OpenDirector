@@ -1,4 +1,3 @@
-.cw-agent-picker .chat-picker-trigger { background: var(--chat-surface); }
 .cw-agent-menu {
   position: absolute; z-index: 90; left: 0; bottom: calc(100% + 10px);
   width: min(330px, calc(100cqw - 96px)); max-height: min(480px, 65dvh); overflow: visible;
@@ -6,7 +5,7 @@
   background: var(--chat-background); color: var(--chat-text); box-shadow: 0 10px 36px #0005;
 }
 .cw-agent-menu h3 { margin: 6px 8px 8px; font-size: 11px; font-weight: 500; color: var(--chat-muted); }
-.cw-agent-row { display: flex; align-items: center; gap: 3px; }
+.cw-agent-row { display: flex; align-items: center; gap: 3px; border-radius: 7px; }
 .cw-assistant-panel .cw-agent-row > button[role] {
   display: flex; align-items: center; flex: 1; min-width: 0; gap: 8px;
   padding: 10px 8px; color: var(--chat-text); text-align: left; border-radius: 7px;
@@ -14,8 +13,14 @@
 .cw-agent-row strong { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cw-agent-row small { margin-left: auto; min-width: 0; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--chat-muted); font-size: 11px; }
 .cw-agent-row svg { width: 14px; height: 14px; flex-shrink: 0; }
-.cw-assistant-panel .cw-agent-edit { padding: 7px 5px; color: var(--chat-muted); font-size: 11px; border-radius: 6px; }
-.cw-agent-row button:hover, .cw-agent-row button:focus-visible, .cw-agent-row [aria-checked="true"] { background: var(--chat-hover); }
+.cw-assistant-panel .cw-agent-edit { padding: 10px 8px; color: var(--chat-muted); font-size: 11px; border-radius: 7px; opacity: 0; text-underline-offset: 2px; }
+.cw-agent-row:has(> [aria-checked="true"]), .cw-agent-row:hover, .cw-agent-row:focus-within { background: var(--chat-hover); }
+.cw-agent-row:has(> [aria-checked="true"]) > .cw-agent-edit,
+.cw-agent-row:hover > .cw-agent-edit,
+.cw-agent-row:focus-within > .cw-agent-edit,
+.cw-agent-row > .cw-agent-edit[aria-expanded="true"] { opacity: 1; }
+.cw-assistant-panel .cw-agent-edit:hover { color: var(--chat-text); text-decoration: underline; }
+@media (hover: none) { .cw-assistant-panel .cw-agent-edit { opacity: 1; } }
 .cw-agent-default { border-top: 1px solid var(--chat-border); margin-top: 8px; padding-top: 8px; }
 .cw-agent-menu p { margin: 12px 8px; color: var(--chat-muted); font-size: 12px; }
 .cw-assistant-panel :is(.cw-agent-configure, .cw-agent-back) { padding: 8px; color: var(--chat-muted); font-size: 11px; }
@@ -24,7 +29,11 @@
 .cw-agent-edit-actions { display: flex; justify-content: space-between; padding: 8px; gap: 8px; }
 .cw-assistant-panel .cw-agent-edit-actions button { padding: 7px 10px; border: 1px solid var(--chat-border); border-radius: 7px; color: var(--chat-text); font-size: 11px; }
 
-.cw-agent-command { display: block; margin: 8px; padding: 10px; background: var(--chat-composer); border: 1px solid var(--chat-border); border-radius: 7px; font-size: 12px; user-select: text; }
+.cw-agent-command { display: flex; align-items: center; gap: 8px; margin: 8px; padding: 10px; background: var(--chat-composer); border: 1px solid var(--chat-border); border-radius: 7px; font-size: 12px; user-select: text; }
+.cw-agent-command code { flex: 1; min-width: 0; overflow-wrap: anywhere; padding: 0; background: transparent; color: inherit; font-size: inherit; }
+.cw-agent-command ::selection { background: #80808060; color: var(--chat-text); }
+.cw-assistant-panel .cw-agent-command-copy { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; padding: 4px; border-radius: 4px; color: var(--chat-muted); font-size: 11px; }
+.cw-agent-command-copy:hover, .cw-agent-command-copy:focus-visible { background: var(--chat-hover); color: var(--chat-text); }
 .cw-agent-guide { display: inline-block; margin: 8px; color: var(--chat-text); font-size: 12px; text-decoration: underline; }
 
 .cw-agent-submenu { position: fixed; inset: auto; margin: 0; z-index: 100; width: 280px; max-height: min(480px, 65dvh); overflow-y: auto; padding: 10px; border: 1px solid var(--chat-border); border-radius: 14px; background: var(--chat-background); color: var(--chat-text); box-shadow: 0 10px 36px #0005; }

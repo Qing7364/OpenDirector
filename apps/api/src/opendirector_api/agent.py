@@ -1,6 +1,6 @@
 """Project-scoped assistant persistence and native runtime streaming."""
 import asyncio
-from contextlib import suppress
+from contextlib import aclosing, suppress
 import json
 import logging
 from pathlib import Path
@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from opendirector.agent.catalog import model_choices
 from opendirector.agent.context import RunContext, RuntimeId
-from opendirector.agent.runtime import AgentRuntimes, runtime_available, configured_runtimes, runtime_spec
+from opendirector.agent.runtime import AgentRuntimes, runtime_available, configured_runtimes, runtime_spec, runtime_catalog, runtime_readiness
 from opendirector.agent.skills import skills
 from opendirector.domain.projects import ProjectError
 from opendirector.infrastructure.creation_projects import durable_json
@@ -180,9 +180,19 @@ def agent_routes(projects, generation, configs, provider=None) -> APIRouter:
         return await asyncio.to_thread(conversations.update, project_id, str(x_opendirector_session), draft=value)
 
     @router.get('/runtimes')
-    async def available_runtimes(project_id: UUID):
+    async def available_runtimes(project_id: UUID, probe: bool = True):
         await asyncio.to_thread(conversations.path, project_id)
-        return await configured_runtimes()
+        if probe:
+            return await configured_runtimes()
+        return [{**item, 'status': 'not_installed' if not item['available'] else
+                 'ready' if item['id'] in {'default', 'opencode'} else 'checking'}
+                for item in runtime_catalog()]
+
+    @router.get('/runtimes/{runtime}/status')
+    async def runtime_status(project_id: UUID, runtime: Runtime):
+        await asyncio.to_thread(conversations.path, project_id)
+        item = next(item for item in runtime_catalog() if item['id'] == runtime)
+        return {**item, 'status': await runtime_readiness(runtime)}
 
     @router.get('/runtimes/{runtime}/models')
     async def runtime_models(project_id: UUID, runtime: Literal['opencode', 'codex', 'claude', 'jiuwenswarm']):
@@ -256,19 +266,20 @@ def agent_routes(projects, generation, configs, provider=None) -> APIRouter:
                         session=session, directory=directory, config=config, messages=context,
                         selected_skills=value.skills, thinking=value.thinking,
                         runtime_model=value.runtimeModel, skills=available)
-                    async for event in runtimes.stream(run):
-                        if event['type'] == 'delta':
-                            text += event['text']
-                        if event['type'] == 'tool':
-                            previous = next((item for item in activities if item['id'] == event['id']), None)
-                            activity = {**{key: item for key, item in event.items() if key != 'type'},
-                                        'textOffset': previous['textOffset'] if previous else len(text)}
-                            if previous is None:
-                                activities.append(activity)
-                            else:
-                                activities[activities.index(previous)] = activity
-                            event = {'type': 'tool', **activity}
-                        await queue.put(event)
+                    async with aclosing(runtimes.stream(run)) as stream:
+                        async for event in stream:
+                            if event['type'] == 'delta':
+                                text += event['text']
+                            if event['type'] == 'tool':
+                                previous = next((item for item in activities if item['id'] == event['id']), None)
+                                activity = {**{key: item for key, item in event.items() if key != 'type'},
+                                            'textOffset': previous['textOffset'] if previous else len(text)}
+                                if previous is None:
+                                    activities.append(activity)
+                                else:
+                                    activities[activities.index(previous)] = activity
+                                event = {'type': 'tool', **activity}
+                            await queue.put(event)
                 except asyncio.CancelledError:
                     status = 'stopped'
                     raise

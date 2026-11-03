@@ -24,6 +24,7 @@ export function AgentPicker({
   models,
   runtimes,
   disabled,
+  initializing = false,
   onChange,
   onConfigure,
   onRefresh,
@@ -33,9 +34,10 @@ export function AgentPicker({
   models: ModelConfig[];
   runtimes: RuntimeInfo[];
   disabled: boolean;
+  initializing?: boolean;
   onChange: (patch: Partial<Conversation>) => void;
   onConfigure: () => void;
-  onRefresh: () => Promise<void>;
+  onRefresh: (runtime?: AgentRuntime) => Promise<void>;
 }) {
   const harnesses = runtimes.filter(
     (item): item is RuntimeInfo & { id: Harness } =>
@@ -46,6 +48,7 @@ export function AgentPicker({
   const [setup, setSetup] = useState<Harness | null>(null);
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState("");
+  const [commandCopied, setCommandCopied] = useState(false);
   const [catalogs, setCatalogs] = useState<
     Partial<Record<Harness, RuntimeModel[]>>
   >({});
@@ -72,7 +75,9 @@ export function AgentPicker({
     (item.modelSource !== "settings" || options.length > 0);
   const setupSpec = harnesses.find((item) => item.id === setup);
   const reason = (item: RuntimeInfo) =>
-    item.status === "not_installed"
+    item.status === "checking"
+      ? "检查中…"
+      : item.status === "not_installed"
       ? "尚未安装"
       : item.status === "needs_login"
         ? "尚未登录"
@@ -110,8 +115,10 @@ export function AgentPicker({
   const editingSpec = harnesses.find((item) => item.id === editing);
   const runtime = value.runtime ?? "default";
   const harness = harnesses.find((item) => item.id === runtime);
-  const title = !runtimes.some((item) => item.id === runtime)
-    ? "重新选择模型"
+  const title = initializing
+    ? "正在加载引擎…"
+    : !runtimes.some((item) => item.id === runtime)
+      ? "重新选择模型"
     : runtime === "default"
       ? (agent?.modelId ?? "选择模型")
       : harness?.modelSource === "settings"
@@ -140,7 +147,8 @@ export function AgentPicker({
       if (
         item.id === "default" ||
         item.modelSource !== "cli" ||
-        item.status !== "ready"
+        item.status !== "ready" ||
+        !!catalogs[item.id]
       )
         continue;
       const id = item.id;
@@ -317,6 +325,7 @@ export function AgentPicker({
       {open && !disabled && (
         <div
           className="cw-agent-menu"
+          tabIndex={-1}
           role="menu"
           aria-label="选择 Agent"
           ref={menu}
@@ -362,7 +371,26 @@ export function AgentPicker({
                   ) : (
                     <>
                       <p>在终端执行：</p>
-                      <code className="cw-agent-command">{setupCommand}</code>
+                      <div className="cw-agent-command">
+                        <code>{setupCommand}</code>
+                        <button
+                          type="button"
+                          className="cw-agent-command-copy"
+                          aria-label={commandCopied ? "已复制" : "复制命令"}
+                          title={commandCopied ? "已复制" : "复制命令"}
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(setupCommand);
+                              setCommandCopied(true);
+                            } catch {
+                              setCheckError("复制失败，请选中命令手动复制。");
+                            }
+                          }}
+                        >
+                          <CanvasIcon name={commandCopied ? "check" : "copy"} size={14} />
+                          {commandCopied && <span role="status">已复制</span>}
+                        </button>
+                      </div>
                     </>
                   )}
                 </>
@@ -375,7 +403,7 @@ export function AgentPicker({
                     setChecking(true);
                     setCheckError("");
                     try {
-                      await onRefresh();
+                      await onRefresh(setupSpec.id);
                     } catch {
                       setCheckError("检查失败，请确认本地服务正在运行。");
                     } finally {
@@ -420,6 +448,7 @@ export function AgentPicker({
                       if (ready(item)) chooseHarness(item.id);
                       else {
                         setEditing(null);
+                        setCommandCopied(false);
                         setSetup(item.id);
                       }
                     }}
@@ -439,7 +468,7 @@ export function AgentPicker({
                         aria-expanded={editing === item.id}
                         onClick={() => edit(item.id)}
                       >
-                        编辑
+                        Edit
                       </button>
                     )}
                 </div>

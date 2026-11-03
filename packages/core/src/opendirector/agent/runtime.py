@@ -2,6 +2,7 @@
 import asyncio
 import json
 from collections.abc import AsyncIterator
+from contextlib import aclosing
 from dataclasses import asdict, dataclass, replace
 from typing import Literal
 
@@ -27,10 +28,10 @@ class RuntimeSpec:
 
 RUNTIMES = {
     'default': RuntimeSpec(id='default', label='Default', group='default', modelSource='settings', modelOverride=False, engine='default'),
-    'opencode': RuntimeSpec(id='opencode', label='OpenCode CLI', group='harness', modelSource='cli', modelOverride=True, engine='opencode'),
+    'opencode': RuntimeSpec(id='opencode', label='OpenCode', group='harness', modelSource='cli', modelOverride=True, engine='opencode'),
+    'jiuwenswarm': RuntimeSpec(id='jiuwenswarm', label='JiuwenSwarm', group='harness', modelSource='cli', modelOverride=True, engine='jiuwenswarm'),
     'codex': RuntimeSpec(id='codex', label='Codex', group='harness', modelSource='cli', modelOverride=True, engine='codex'),
     'claude': RuntimeSpec(id='claude', label='Claude Code', group='harness', modelSource='cli', modelOverride=True, engine='claude'),
-    'jiuwenswarm': RuntimeSpec(id='jiuwenswarm', label='JiuwenSwarm', group='harness', modelSource='cli', modelOverride=True, engine='jiuwenswarm'),
 }
 
 
@@ -107,7 +108,8 @@ class AgentRuntimes:
         gateway = ToolGateway(self.business, run)
         try:
             adapter = self.jiuwenswarm if run.runtime == 'jiuwenswarm' else self.adapter
-            async for event in adapter.stream(run, gateway):
-                yield event
+            async with aclosing(adapter.stream(run, gateway)) as stream:
+                async for event in stream:
+                    yield event
         finally:
             await gateway.close()

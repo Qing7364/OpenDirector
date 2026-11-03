@@ -15,6 +15,7 @@ export interface RuntimeInfo {
   modelOverride: boolean;
   available: boolean;
   status:
+    | "checking"
     | "ready"
     | "not_installed"
     | "needs_login"
@@ -124,8 +125,23 @@ export const activateConversation = (
       (create ? "/conversations" : `/conversations/${id}/activate`),
     create ? json("POST", { id }) : json("POST", {}),
   );
-export const chatRuntimes = (id: string) =>
-  request<RuntimeInfo[]>(path(id) + "/runtimes");
+export const chatRuntimeStatus = (id: string, runtime: AgentRuntime) =>
+  request<RuntimeInfo>(path(id) + `/runtimes/${runtime}/status`);
+
+export async function chatRuntimes(id: string, onUpdate?: (items: RuntimeInfo[]) => void) {
+  const rows = await request<RuntimeInfo[]>(path(id) + "/runtimes?probe=false");
+  onUpdate?.([...rows]);
+  await Promise.all(rows.map(async (item, index) => {
+    if (item.status !== "checking") return;
+    try {
+      rows[index] = await chatRuntimeStatus(id, item.id);
+    } catch {
+      rows[index] = {...item, status: "unknown"};
+    }
+    onUpdate?.([...rows]);
+  }));
+  return rows;
+}
 export const conversation = (id: string) => request<Conversation>(path(id));
 export const saveChatDraft = (id: string, draft: ChatDraft) =>
   request(path(id) + "/draft", json("PUT", draft));
