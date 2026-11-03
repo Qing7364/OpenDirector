@@ -23,6 +23,11 @@ def _adapter_rules(config):
         # Video depth estimation service (Video Depth Anything), never a generator.
         rules.update(profile='vllm-omni-depth', allowedKinds=[], maxImages=0, videoModes=[])
         return rules
+    if config.get('protocol') == 'vllm_omni_score':
+        # SheetSage2 transcription service: it turns a reference recording into
+        # a score for music generation and never generates audio itself.
+        rules.update(profile='vllm-omni-score', allowedKinds=[], maxImages=0)
+        return rules
     adapter = config.get('videoAdapter', 'auto')
     name = model.rsplit('/', 1)[-1].lower()
     if adapter == 'auto':
@@ -71,6 +76,9 @@ def _adapter_rules(config):
         # TTS but read a style caption and lyrics, so the protocol names the role.
         music = config.get('protocol') == 'vllm_omni_music'
         rules.update(profile='vllm-omni-music' if music else 'tts', allowedKinds=[], maxImages=0)
+        if music and name.startswith('yue2'):
+            # YuE2 can follow one reference recording, transcribed into a score first.
+            rules.update(allowedKinds=['audio'], maxAudios=1)
     return rules
 
 

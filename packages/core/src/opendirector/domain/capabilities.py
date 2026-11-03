@@ -12,7 +12,7 @@ from opendirector.domain.projects import ProjectError
 
 Capability = Literal[
     'text.chat', 'image.generate', 'image.edit', 'image.cutout', 'video.generate', 'video.first_frame', 'video.edit',
-    'audio.speech', 'audio.music', 'image.segment', 'video.matting', 'video.motion_capture',
+    'audio.speech', 'audio.music', 'audio.score', 'image.segment', 'video.matting', 'video.motion_capture',
     # Declared so operations can name what they lack; no current adapter offers it.
     'audio.separate',
 ]
@@ -26,6 +26,7 @@ LABELS: dict[str, str] = {
     'video.first_frame': '首帧生视频',
     'audio.speech': '语音合成',
     'audio.music': '音乐生成',
+    'audio.score': '音乐扒谱',
     'image.segment': '图像分割',
     'video.edit': '视频局部重绘',
     'video.matting': '视频抠像',
@@ -141,12 +142,28 @@ class SpeechRequest:
     voice: str | None = None
 
 
+ScoreMode = Literal['melody', 'full']
+
+
 @dataclass(frozen=True)
 class MusicRequest:
-    """A song or score from a style description; empty lyrics ask for an instrumental piece."""
+    """A song or score from a style description; empty lyrics ask for an instrumental piece.
+
+    With an ABC score the piece follows it: its melody only, or melody and chords.
+    """
     style: str
     lyrics: str = ''
     max_seconds: float = 30
+    score: str = ''
+    score_mode: ScoreMode = 'melody'
+
+
+@dataclass(frozen=True)
+class ScoreRequest:
+    """Transcribe a recording into an ABC score, keeping chords unless asked for the melody only."""
+    audio: bytes
+    filename: str
+    melody_only: bool = True
 
 
 @dataclass(frozen=True)

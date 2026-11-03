@@ -32,10 +32,13 @@ from opendirector.infrastructure.creation_projects import directory
 from opendirector.infrastructure.local_projects import child
 from opendirector.integrations.http_settings import MODEL_JOB_CONTEXT
 from opendirector.integrations.fasth3 import video_parameters
+from opendirector.integrations.model_adapters import capabilities_of
 from opendirector.integrations.providers import GenerationProviders
 from opendirector.media.filenames import with_extension
 
 _INPUTS = ContextVar('creation_generation_inputs', default=None)
+# Connection facts a job freezes for a helper model; credentials stay in the model settings.
+SNAPSHOT_KEYS = ('kind', 'modelId', 'url', 'protocol', 'connectionType')
 
 
 def version(kind, obj):
@@ -68,6 +71,13 @@ class ProviderMedia:
 
     def generation_task(self, project_id, job_id):
         return self.runtime.task(self.runtime.get_job(project_id, job_id))
+
+    def frozen_model(self, frozen):
+        """Credentials for a helper model an accepted job froze, while its connection is unchanged."""
+        config = self.runtime.configs.resolve(frozen['id'], frozen['kind'])
+        if any(config.get(key) != frozen.get(key) for key in SNAPSHOT_KEYS):
+            raise ProjectError('已接受任务的扒谱模型配置已变化，请新建尝试。', 409)
+        return config
 
 
 class CreationGeneration(GenerationRuntime):
@@ -128,6 +138,12 @@ class CreationGeneration(GenerationRuntime):
             # The adapter snapshot fixes what is sent: style (prompt), lyrics and length cap.
             params = {'creation_type': 'music', 'lyrics': intent.get('lyrics', ''),
                       'duration': intent.get('durationSeconds') or DEFAULT_MUSIC_SECONDS}
+            if node['referenceIds']:
+                # The reference recording is transcribed into a score first, by
+                # the transcription model chosen now, not one configured later.
+                score = self._score_model()
+                params.update(score_mode=intent.get('scoreMode', 'melody'),
+                              score_model={'id': score['id'], **{key: score.get(key) for key in SNAPSHOT_KEYS}})
         elif spec.kind == 'audio' and intent.get('voice'):
             params['voice' if config['protocol'] == 'openai' else 'speaker'] = intent['voice']
         if spec.kind == 'video':
@@ -178,7 +194,8 @@ class CreationGeneration(GenerationRuntime):
                 responseFormat='b64_json' if profile in {'vllm-omni-image', 'vllm-omni-qwen-image'} else 'url' if config['protocol'] == 'volcengine' else None,
                 outputFormat='png', watermark=parameters.get('watermark'))
         if kind == 'audio' and parameters.get('creation_type') == 'music':
-            return dict(kind=kind, creationType='music', format='mp3', maxDurationSeconds=parameters['duration'])
+            return dict(kind=kind, creationType='music', format='mp3', maxDurationSeconds=parameters['duration'],
+                        scoreMode=parameters.get('score_mode'))
         if kind == 'audio':
             return dict(kind=kind, voice=parameters.get('voice') or ('default' if config['connectionType'] == 'self_hosted' else 'alloy') if config['protocol'] == 'openai' else None,
                 speaker=parameters.get('speaker') if config['protocol'] != 'openai' else None,
@@ -187,6 +204,13 @@ class CreationGeneration(GenerationRuntime):
             'numFrames': 'num_frames', 'numInferenceSteps': 'num_inference_steps', 'guidanceScale': 'guidance_scale',
             'seed': 'seed', 'watermark': 'watermark', 'generateAudio': 'generate_audio'}
         return dict(kind=kind, **{key: parameters[source] for key, source in mapping.items() if source in parameters})
+
+    def _score_model(self):
+        """The first configured transcription model, in settings order."""
+        config = next((item for item in self.configs.list() if 'audio.score' in capabilities_of(item)), None)
+        if config is None:
+            raise ProjectError('参照音乐需要先把参照扒成乐谱，请在“模型接入”中添加扒谱模型（vLLM-Omni 扒谱接口）。', 409)
+        return config
 
     async def _run(self, task, pinned, config, mode='submit'):
         # A durable job can be discovered by more than one API process. OS locks

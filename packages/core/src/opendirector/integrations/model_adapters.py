@@ -15,7 +15,8 @@ import httpx
 
 from opendirector.domain.assets import MAX_ASSET_BYTES
 from opendirector.domain.capabilities import (ChatRequest, CutoutRequest, DepthRequest, EditMask, ImageRequest, MediaResult, MusicRequest,
-                                          Segment, SegmentRequest, SpeechRequest, TrackRequest, Tracks, VideoEditRequest, VideoRequest)
+                                          ScoreRequest, Segment, SegmentRequest, SpeechRequest, TrackRequest, Tracks, VideoEditRequest,
+                                          VideoRequest)
 from opendirector.domain.input_rules import input_rules
 from opendirector.domain.projects import ProjectError
 from opendirector.integrations.generation_errors import checked, protocol_failure, provider_failure, transport_failure
@@ -66,6 +67,9 @@ class ModelAdapter:
 
     async def music(self, config, request: MusicRequest) -> MediaResult:
         raise ProjectError('所选模型不支持音乐生成。', 409)
+
+    async def score(self, config, request: ScoreRequest) -> str:
+        raise ProjectError('所选模型不支持音乐扒谱。', 409)
 
     async def chat(self, config, request: ChatRequest) -> str:
         raise ProjectError('所选模型不支持对话。', 409)
@@ -331,6 +335,9 @@ class VllmOmniMusic(ModelAdapter):
         payload = {'model': config['modelId'], 'input': request.lyrics.strip() or self.INSTRUMENTAL,
                    'instructions': request.style, 'response_format': 'mp3',
                    'max_new_tokens': round(request.max_seconds * self.FRAMES_PER_SECOND)}
+        if request.score:
+            # YuE2 renders the supplied score: cot=melody follows its melody, cot=full also its chords.
+            payload['extra_params'] = {'cot': request.score_mode, 'abc': request.score}
 
         async def work():
             # A full song is delivered only once the whole piece is rendered.
@@ -339,6 +346,32 @@ class VllmOmniMusic(ModelAdapter):
                                          json=payload) as response:
                     return await bounded(response, stage='submit', secrets=(config.get('apiKey', ''),))
         return MediaResult(await _call('submit', work), 'mp3')
+
+
+class VllmOmniScore(ModelAdapter):
+    """SheetSage2 transcription (vLLM-Omni tools/sheetsage2_serve.py) on /audio/transcriptions.
+
+    The recording goes up as a multipart file and ``text`` comes back as an ABC
+    score; ``melody_only`` drops the chords.
+    """
+
+    capabilities = frozenset({'audio.score'})
+
+    async def score(self, config, request: ScoreRequest) -> str:
+        fields = {'model': config['modelId'], 'response_format': 'json', 'melody_only': 'true' if request.melody_only else 'false'}
+
+        async def work():
+            # A four-minute song takes about 10 s on one H200, but the service runs one request at a time.
+            async with _client(self, config, timeout=1800) as client:
+                async with client.stream('POST', endpoint(config['url'], '/audio/transcriptions'), headers=auth_headers(config),
+                                         data=fields, files={'file': (request.filename, request.audio)},
+                                         extensions={'model_parameters': {'fields': fields, 'file_count': 1}}) as response:
+                    value = json.loads(await bounded(response, stage='submit', secrets=(config.get('apiKey', ''),)))
+            score = value['text']
+            if not isinstance(score, str) or not score.strip():
+                raise ValueError('empty score')
+            return score
+        return await _call('submit', work)
 
 
 class OpenAIChat(ModelAdapter):
@@ -444,6 +477,8 @@ def adapter_for(config, transport=None, poll_interval=3) -> ModelAdapter | None:
         return VllmOmniSegmentation(transport, poll_interval)
     if profile == 'vllm-omni-depth':
         return VllmOmniDepth(transport, poll_interval)
+    if profile == 'vllm-omni-score':
+        return VllmOmniScore(transport, poll_interval)
     if kind == 'agent':
         return OpenAIChat(transport, poll_interval)
     if kind == 'image' and profile == 'vllm-omni-image':

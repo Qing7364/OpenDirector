@@ -16,8 +16,8 @@ from opendirector.integrations.volcengine import VolcengineGeneration, bounded, 
 from opendirector.integrations.generation_errors import checked, protocol_failure, provider_failure, transport_failure
 from opendirector.integrations.vllm_omni import VllmOmniGeneration
 from opendirector.integrations.vllm_omni_image import VllmOmniImageGeneration
-from opendirector.integrations.model_adapters import OpenAISpeech, VllmOmniMusic
-from opendirector.domain.capabilities import MusicRequest, SpeechRequest
+from opendirector.integrations.model_adapters import OpenAISpeech, VllmOmniMusic, VllmOmniScore
+from opendirector.domain.capabilities import MusicRequest, ScoreRequest, SpeechRequest
 from opendirector.media.probe import require_ffprobe
 
 
@@ -45,6 +45,8 @@ class GenerationProviders(VolcengineGeneration):
             raise ProjectError('视觉分割模型仅用于选区、分割和抠像，请选择生成模型。')
         if input_rules(config)['profile'] == 'vllm-omni-depth':
             raise ProjectError('视频深度模型仅用于深度动作捕捉，请选择生成模型。')
+        if input_rules(config)['profile'] == 'vllm-omni-score':
+            raise ProjectError('扒谱模型仅用于参照音乐生成，请选择音乐生成模型。')
         adapter = self._profile_adapter(config)
         if adapter:
             return adapter.validate(kind, config)
@@ -138,7 +140,12 @@ class GenerationProviders(VolcengineGeneration):
                         await asyncio.sleep(self.poll_interval)
                 if kind == 'audio' and task['parameters'].get('creation_type') == 'music':
                     params = task['parameters']
-                    result = await VllmOmniMusic(self.transport).music(config, MusicRequest(task['prompt'], params.get('lyrics', ''), params['duration']))
+                    score = ''
+                    if params.get('score_model'):
+                        score = await self._score(task, params)
+                    result = await VllmOmniMusic(self.transport).music(config, MusicRequest(
+                        task['prompt'], params.get('lyrics', ''), params['duration'], score=score,
+                        score_mode=params.get('score_mode', 'melody')))
                     return result.suffix, result.data
                 if kind == 'audio':
                     result = await OpenAISpeech(self.transport).speech(config, SpeechRequest(task['prompt'], task['parameters'].get('voice')))
@@ -176,6 +183,14 @@ class GenerationProviders(VolcengineGeneration):
             raise transport_failure(stage) from None
         except (ValueError, KeyError, TypeError, IndexError, AttributeError):
             raise protocol_failure(stage) from None
+
+    async def _score(self, task, params):
+        """Transcribe the job's one reference recording with the transcription model it froze."""
+        config = await asyncio.to_thread(self.store.frozen_model, params['score_model'])
+        loaded = await asyncio.to_thread(lambda: list(references(self.store, task['projectId'], task['referenceIds'])))
+        data, meta = next((data, meta) for data, meta, source_kind in loaded if source_kind == 'audio')
+        return await VllmOmniScore(self.transport).score(config, ScoreRequest(
+            data, meta['name'], melody_only=params['score_mode'] == 'melody'))
 
     async def cancel(self, config, external_id):
         adapter = self._profile_adapter(config)

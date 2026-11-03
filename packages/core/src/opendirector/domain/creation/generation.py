@@ -50,6 +50,10 @@ class AudioParameters(Contract):
     lyrics: str = Field(default='', max_length=5000, exclude_if=lambda value: value == '')
     durationSeconds: Annotated[float, Field(strict=True, ge=MUSIC_SECONDS[0], le=MUSIC_SECONDS[1])] | None = Field(
         default=None, exclude_if=lambda value: value is None)
+    # Music with a reference recording: follow its melody only, or its melody and chords.
+    scoreMode: Literal['melody', 'full'] = Field(
+        default='melody', exclude_if=lambda value: value == 'melody',
+        description='Music with one audio reference: follow its transcribed melody, or melody and chords')
 
 
 class PromptText(Contract):
@@ -218,6 +222,8 @@ class AudioExecution(Contract):
     # A music model may end the piece earlier than this cap.
     maxDurationSeconds: Annotated[float, Field(strict=True, ge=MUSIC_SECONDS[0], le=MUSIC_SECONDS[1])] | None = Field(
         default=None, exclude_if=lambda value: value is None)
+    # Set when the piece follows a reference recording's transcribed score.
+    scoreMode: Literal['melody', 'full'] | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class TextExecution(TextParameters):
@@ -307,6 +313,8 @@ def validate_generation(spec: GenerationSpec, model: ModelConfigPublic, referenc
         raise ValueError('视觉分割模型仅用于选区、分割和抠像，请选择生成模型。')
     if model.inputRules.profile == 'vllm-omni-depth':
         raise ValueError('视频深度模型仅用于深度动作捕捉，请选择生成模型。')
+    if model.inputRules.profile == 'vllm-omni-score':
+        raise ValueError('扒谱模型仅用于参照音乐生成，请选择音乐生成模型。')
     if (spec.promptContent is not None and not any(isinstance(part, PromptReference) or part.text.strip() for part in spec.promptContent)) or (spec.promptContent is None and not spec.prompt.strip()):
         raise ValueError('Generation prompt is empty')
     rules = model.inputRules
@@ -323,6 +331,14 @@ def validate_generation(spec: GenerationSpec, model: ModelConfigPublic, referenc
         if ref.metadata.size > limit:
             raise ValueError('Reference file exceeds the model byte limit')
     kinds = [ref.asset.kind for ref in references if ref.transmission != 'context_only']
+    if spec.kind == 'audio' and rules.profile == 'vllm-omni-music':
+        # Count connected recordings even where the policy would leave them
+        # unsent: a music piece silently ignoring its reference would mislead.
+        recordings = sum(ref.asset.kind == 'audio' for ref in references)
+        if recordings and 'audio' not in rules.allowedKinds:
+            raise ValueError('所选音乐模型不支持参照音乐，请换用 YuE2 或断开参照。')
+        if recordings > rules.maxAudios:
+            raise ValueError('参照音乐最多连接 1 个音频节点。')
     if any(kind not in rules.allowedKinds for kind in kinds):
         raise ValueError('Model does not accept this reference kind')
     for kind, limit in [('image', rules.maxImages), ('video', rules.maxVideos), ('audio', rules.maxAudios)] if spec.kind != 'text' else []:

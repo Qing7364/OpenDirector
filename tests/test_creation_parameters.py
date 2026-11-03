@@ -223,9 +223,119 @@ async def test_music_style_lyrics_and_length_reach_vllm_omni_music(project,lyric
     finally: await runner.close()
 
 
+SCORE = 'X:1\nM:4/4\nL:1/16\nK:A\nV: Vocal\nA4A2F2A4A2F2|\n'
+
+
+def recording(seconds=3):
+    return subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i',f'sine=frequency=330:sample_rate=48000','-t',str(seconds),'-ac','2','-threads','1','-f','mp3','pipe:1'],capture_output=True,check=True).stdout
+
+
+def follow_recording(project, target, spec_id, data, name='reference.mp3'):
+    """Connect an imported recording to the music node, as a canvas edge does."""
+    store, pid, session = project
+    record = CreationToolAssets(store).import_file(pid, uuid4(), name, data, session)
+    asset = CreationToolAssets(store).assets.get(pid, record['id'])
+    item_id = uuid4()
+    assert send(store, pid, 'canvas.show', session=session, item=dict(id=item_id, projectId=pid, kind='audio', binding=dict(role='material', objectRef=asset_ref(asset)))).status == 'applied'
+    current = store.snapshot(pid)
+    spec = next(s for s in current.generationSpecs if s.id == spec_id)
+    target = next(item for item in current.canvasItems if item.id == target.id)
+    added = send(store, pid, 'reference.add', session=session, versions=[ver('generation_spec', spec), ver('canvas_item', target)],
+                 reference=dict(id=uuid4(), projectId=pid, targetSpecId=spec_id, order=0, binding='follow_current', source=dict(id=item_id)))
+    assert added.status == 'applied', added
+    return target, asset
+
+
+def score_model(project, url='http://score.invalid/v1'):
+    return ModelConfigs(project[0].local.repository).save('audio', url, 'm-a-p/SheetSage2', '', connection_type='self_hosted',
+                                                          protocol='vllm_omni_score', auth_mode='none')
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize('mode', ['melody', 'full'])
+async def test_music_follows_a_reference_recording_through_its_transcribed_score(project,mode):
+    store,pid,_=project
+    calls=[]
+    reference=recording()
+    def handler(request):
+        if request.url.path=='/v1/audio/transcriptions':
+            assert request.url.host=='score.invalid'
+            calls.append(('score',)+form(request))
+            return httpx.Response(200,json={'text':SCORE})
+        assert request.url.path=='/v1/audio/speech'
+        calls.append(('music',json.loads(request.content)))
+        return httpx.Response(200,content=recording(0.3))
+    parameters=dict(creationType='music',lyrics='[verse]\n雨落在窗前',durationSeconds=60)
+    if mode=='full': parameters['scoreMode']='full'
+    runner,target,spec_id=setup(project,'audio',parameters,handler,protocol='vllm_omni_music',model='m-a-p/YuE2-3B')
+    score=score_model(project)
+    try:
+        target,asset=follow_recording(project,target,spec_id,reference)
+        _,receipt=await submit(project,runner,target,spec_id)
+        assert receipt.status=='accepted',receipt
+        await done(runner)
+        job=store.snapshot(pid).jobs[-1]
+        assert job.status=='succeeded',job.errorDetails
+        # The recording is transcribed first; YuE2 then renders that score with the lyrics and style.
+        (_,fields,files),(_,payload)=calls
+        assert fields=={'model':'m-a-p/SheetSage2','response_format':'json','melody_only':'true' if mode=='melody' else 'false'}
+        assert files==[('file',reference)]
+        assert payload=={'model':'m-a-p/YuE2-3B','input':'[verse]\n雨落在窗前','instructions':'Make an output','response_format':'mp3',
+                         'max_new_tokens':1500,'extra_params':{'cot':mode,'abc':SCORE}}
+        assert job.execution.scoreMode==job.adapterParameters['score_mode']==mode
+        assert job.adapterParameters['score_model']=={'id':score['id'],'kind':'audio','modelId':'m-a-p/SheetSage2',
+                                                      'url':'http://score.invalid/v1','protocol':'vllm_omni_score','connectionType':'self_hosted'}
+        assert [ref.asset.assetId for ref in job.inputSnapshot.references]==[asset.id]
+    finally: await runner.close()
+
+
+@pytest.mark.anyio
+async def test_reference_music_requires_a_transcription_model_and_a_model_that_follows_scores(project):
+    calls=[]
+    runner,target,spec_id=setup(project,'audio',dict(creationType='music'),lambda request:calls.append(request),protocol='vllm_omni_music',model='m-a-p/YuE2-3B')
+    try:
+        target,_=follow_recording(project,target,spec_id,recording())
+        _,receipt=await submit(project,runner,target,spec_id)
+        assert receipt.status=='rejected' and '扒谱模型' in receipt.issues[0].message,receipt
+    finally: await runner.close()
+    runner,target,spec_id=setup(project,'audio',dict(creationType='music'),lambda request:calls.append(request),protocol='vllm_omni_music',model='MiniMaxAI/MiniMax-Music3')
+    score_model(project)
+    try:
+        target,_=follow_recording(project,target,spec_id,recording())
+        _,receipt=await submit(project,runner,target,spec_id)
+        assert receipt.status=='rejected' and '不支持参照音乐' in receipt.issues[0].message,receipt
+        assert not project[0].snapshot(project[1]).jobs and not calls
+    finally: await runner.close()
+
+
+@pytest.mark.anyio
+async def test_reference_music_fails_when_its_transcription_model_changed_after_acceptance(project):
+    store,pid,_=project
+    calls=[]
+    runner,target,spec_id=setup(project,'audio',dict(creationType='music'),lambda request:calls.append(request),protocol='vllm_omni_music',model='m-a-p/YuE2-3B')
+    score=score_model(project)
+    try:
+        target,_=follow_recording(project,target,spec_id,recording())
+        original=runner.recover
+        async def later(*args,**kwargs): return None
+        runner.recover=later  # Accept without running, then edit the transcription model.
+        _,receipt=await submit(project,runner,target,spec_id)
+        assert receipt.status=='accepted',receipt
+        ModelConfigs(store.local.repository).save('audio','http://moved.invalid/v1','m-a-p/SheetSage2','',score['id'],
+                                                  connection_type='self_hosted',protocol='vllm_omni_score',auth_mode='none')
+        runner.recover=original
+        await runner.recover(str(pid),str(store.snapshot(pid).jobs[-1].id))
+        await done(runner)
+        job=store.snapshot(pid).jobs[-1]
+        assert job.status=='failed' and '扒谱模型配置已变化' in job.errorDetails.message,job.errorDetails
+        assert not calls
+    finally: await runner.close()
+
+
 @pytest.mark.anyio
 @pytest.mark.parametrize('kind,parameters,protocol', [
     ('audio',dict(creationType='audio'), 'vllm_omni_music'),
+    ('audio',dict(creationType='music'), 'vllm_omni_score'),
     ('image',dict(aspectRatio='16:9'), 'openai'),
     ('image',dict(size='4096x4096'), 'openai'),
     ('image',dict(preset='product-views'), 'openai'),

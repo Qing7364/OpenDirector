@@ -92,6 +92,7 @@ def test_adapters_declare_capabilities_from_profiles_not_operations():
     assert capabilities_of(config(*TTS)) == {'audio.speech'}
     # Music models share /audio/speech with TTS; the protocol, not the model name, selects the role.
     assert capabilities_of(config('audio', 'http://gpu:8240/v1', 'm-a-p/YuE2-3B', 'vllm_omni_music')) == {'audio.music'}
+    assert capabilities_of(config('audio', 'http://gpu:8260/v1', 'm-a-p/SheetSage2', 'vllm_omni_score')) == {'audio.score'}
     assert capabilities_of(config(*CHAT)) == {'text.chat'}
     assert capabilities_of(config(*SAM3, protocol='vllm_omni')) == {'image.segment', 'video.matting'}
     assert capabilities_of(config(*VDA, protocol='vllm_omni_depth')) == {'video.motion_capture'}

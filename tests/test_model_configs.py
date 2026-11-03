@@ -180,6 +180,26 @@ def test_depth_protocol_serves_depth_capture_without_generation(api):
     assert ModelConfigs(store.repository).list() == [saved]
 
 
+def test_score_protocol_transcribes_for_music_without_generating(api):
+    from opendirector.integrations.model_adapters import capabilities_of
+    from opendirector.integrations.providers import GenerationProviders
+    client, store = api
+    response = client.post('/api/model-configs', json=payload('audio', protocol='vllm_omni_score', modelId='m-a-p/SheetSage2'))
+    assert response.status_code == 200, response.text
+    saved = response.json()
+    assert saved['inputRules']['profile'] == 'vllm-omni-score' and saved['inputRules']['allowedKinds'] == []
+    private = ModelConfigs(store.repository).resolve(saved['id'], 'audio')
+    assert capabilities_of(private) == {'audio.score'}
+    with pytest.raises(ProjectError, match='扒谱模型'):
+        GenerationProviders(store).validate('audio', private)
+    for kind in ('agent', 'image', 'video'):
+        assert client.post('/api/model-configs', json=payload(kind, protocol='vllm_omni_score')).status_code == 400
+    # Only YuE2 follows a score, so only it accepts one reference recording.
+    music = [client.post('/api/model-configs', json=payload('audio', protocol='vllm_omni_music', modelId=model)).json()['inputRules']
+             for model in ('m-a-p/YuE2-3B', 'MiniMaxAI/MiniMax-Music3')]
+    assert [(rules['allowedKinds'], rules['maxAudios']) for rules in music] == [(['audio'], 1), ([], 0)]
+
+
 @pytest.mark.parametrize('kind', ['image', 'video'])
 def test_generation_boundary_rejects_sam_before_creating_a_task(tmp_path, kind):
     from generation_helpers import new_project, prepared

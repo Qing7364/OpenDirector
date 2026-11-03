@@ -42,6 +42,7 @@ const PROTOCOLS: Record<
     ["openai", "OpenAI 兼容语音合成（含 vLLM-Omni TTS）"],
     ["volcengine", "火山引擎语音 / Agent Plan"],
     ["vllm_omni_music", "vLLM-Omni 音乐生成（MiniMax Music 3、YuE2）"],
+    ["vllm_omni_score", "vLLM-Omni 扒谱接口（SheetSage2）"],
   ],
 };
 
@@ -55,6 +56,10 @@ const PLACEHOLDERS: Record<ModelKind, [string, string]> = {
 const MUSIC_PLACEHOLDERS: [string, string] = [
   "http://127.0.0.1:8240/v1",
   "m-a-p/YuE2-3B",
+];
+const SCORE_PLACEHOLDERS: [string, string] = [
+  "http://127.0.0.1:8260/v1",
+  "m-a-p/SheetSage2",
 ];
 const DEPTH_PLACEHOLDERS: [string, string] = [
   "http://127.0.0.1:8250/v1",
@@ -118,12 +123,15 @@ export function ModelServiceForm({
   const locked = busy || discovering || testing;
   const segmentation = value.protocol === "vllm_omni_segmentation";
   const depth = value.protocol === "vllm_omni_depth";
+  const score = value.protocol === "vllm_omni_score";
   const placeholders =
     value.protocol === "vllm_omni_music"
       ? MUSIC_PLACEHOLDERS
-      : depth
-        ? DEPTH_PLACEHOLDERS
-        : PLACEHOLDERS[segmentation ? "vision" : kind];
+      : score
+        ? SCORE_PLACEHOLDERS
+        : depth
+          ? DEPTH_PLACEHOLDERS
+          : PLACEHOLDERS[segmentation ? "vision" : kind];
   const hasSavedKey = Boolean(
     existing &&
     existing.authMode === "bearer" &&
@@ -411,6 +419,11 @@ export function ModelServiceForm({
         {depth && (
           <p className="cw-model-note">
             深度模型用于深度动作捕捉，不参与视频生成。
+          </p>
+        )}
+        {score && (
+          <p className="cw-model-note">
+            扒谱模型把参照音乐转成乐谱，供 YuE2 参照生成，本身不生成音频。
           </p>
         )}
         {kind === "video" && !segmentation && !depth && (

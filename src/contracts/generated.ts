@@ -100,6 +100,7 @@ export interface AudioExecutionInput extends ContractInput {
   readonly creationType?: "audio" | "music";
   readonly instrumental?: boolean;
   readonly maxDurationSeconds?: number | null;
+  readonly scoreMode?: "melody" | "full" | null;
 }
 
 export interface AudioGenerationSpecInput extends GenerationSpecBaseInput {
@@ -114,6 +115,7 @@ export interface AudioParametersInput extends ContractInput {
   readonly instrumental?: boolean;
   readonly lyrics?: string;
   readonly durationSeconds?: number | null;
+  readonly scoreMode?: "melody" | "full";
 }
 
 export interface BatchCommandInput extends CommandBaseInput {
@@ -757,7 +759,7 @@ export interface ModelConnectionInput extends ContractInput {
   readonly url: string;
   readonly modelId: string;
   readonly connectionType: "api" | "self_hosted";
-  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth";
+  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth" | "vllm_omni_score";
   readonly authMode: "none" | "bearer";
   readonly inputModalities?: ReadonlyArray<"text" | "image"> | null;
   readonly videoAdapter?: "auto" | "fasth3" | "minimax_h3" | "standard";
@@ -769,7 +771,7 @@ export interface ModelSnapshotInput extends ContractInput {
   readonly kind: "agent" | "image" | "video" | "audio" | "vision";
   readonly modelId: string;
   readonly url: string;
-  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth";
+  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth" | "vllm_omni_score";
   readonly connectionType: "api" | "self_hosted";
   readonly inputModalities?: ReadonlyArray<"text" | "image"> | null;
   readonly videoAdapter?: "auto" | "fasth3" | "minimax_h3" | "standard";
@@ -1474,6 +1476,7 @@ export interface AudioExecution extends Contract {
   readonly creationType?: "audio" | "music";
   readonly instrumental?: boolean;
   readonly maxDurationSeconds?: number | null;
+  readonly scoreMode?: "melody" | "full" | null;
 }
 
 export interface AudioGenerationSpec extends GenerationSpecBase {
@@ -1488,6 +1491,7 @@ export interface AudioParameters extends Contract {
   readonly instrumental?: boolean;
   readonly lyrics?: string;
   readonly durationSeconds?: number | null;
+  readonly scoreMode?: "melody" | "full";
 }
 
 export interface BatchCommand extends CommandBase {
@@ -2130,7 +2134,7 @@ export interface ModelConnection extends Contract {
   readonly url: string;
   readonly modelId: string;
   readonly connectionType: "api" | "self_hosted";
-  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth";
+  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth" | "vllm_omni_score";
   readonly authMode: "none" | "bearer";
   readonly inputModalities: ReadonlyArray<"text" | "image"> | null;
   readonly videoAdapter: "auto" | "fasth3" | "minimax_h3" | "standard";
@@ -2142,7 +2146,7 @@ export interface ModelSnapshot extends Contract {
   readonly kind: "agent" | "image" | "video" | "audio" | "vision";
   readonly modelId: string;
   readonly url: string;
-  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth";
+  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth" | "vllm_omni_score";
   readonly connectionType: "api" | "self_hosted";
   readonly inputModalities?: ReadonlyArray<"text" | "image"> | null;
   readonly videoAdapter: "auto" | "fasth3" | "minimax_h3" | "standard";

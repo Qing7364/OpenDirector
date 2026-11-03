@@ -122,7 +122,9 @@ def reference_policy(spec, values, rules=None, *, selected_frame=False):
     output = []
     for value in values:
         kind = value.asset.kind
-        ignored = spec.kind == 'audio'
+        # Speech reads its own text; only a music model that follows a recording takes one.
+        ignored = spec.kind == 'audio' and not (kind == 'audio' and spec.parameters.creationType == 'music'
+                                                and rules is not None and 'audio' in rules.allowedKinds)
         if spec.kind == 'video' and spec.parameters.videoMode == 'first_frame':
             ignored = kind not in {'text', 'image'} or kind == 'image' and (value.subjectRole is not None or not selected_frame or value.role != 'first_frame')
         if value.subjectRole is not None and rules is not None:

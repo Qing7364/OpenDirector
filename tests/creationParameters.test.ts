@@ -10,10 +10,13 @@ import {
   backendAspectRatios,
   backendBlocker,
   backendResolutions,
+  hasMusicReference,
+  isGenerationModel,
   serviceGenerationSettings,
   type ModelConfig,
 } from "../src/backend/rules.ts";
 import { generationDefaults } from "../src/canvas/generationCatalog.ts";
+import { createNode } from "../src/canvas/model.ts";
 import type {
   ProjectSnapshot,
   GenerationSpec,
@@ -282,4 +285,74 @@ test("an audio node composes with a music model and reads aloud with a speech mo
   );
   assert.equal(back.audioCreationType, "audio");
   assert.equal(backendBlocker(back, [], [speech]), null);
+});
+
+test("a music node follows a connected recording only through YuE2 and a transcription model", () => {
+  const audioConfig = (
+    protocol: ModelConfig["protocol"],
+    modelId: string,
+    allowedKinds: string[],
+  ): ModelConfig => ({
+    id: crypto.randomUUID(),
+    kind: "audio",
+    url: "http://127.0.0.1:8240/v1",
+    modelId,
+    connectionType: "self_hosted",
+    protocol,
+    authMode: "none",
+    inputRules: {
+      profile:
+        protocol === "vllm_omni_music" ? "vllm-omni-music" : "vllm-omni-score",
+      allowedKinds,
+      maxImages: 0,
+      maxVideos: 0,
+      maxAudios: allowedKinds.length,
+      videoModes: [],
+    } as unknown as ModelConfig["inputRules"],
+  });
+  const yue2 = audioConfig("vllm_omni_music", "m-a-p/YuE2-3B", ["audio"]);
+  const minimax = audioConfig("vllm_omni_music", "MiniMax-Music3", []);
+  const score = audioConfig("vllm_omni_score", "m-a-p/SheetSage2", []);
+  const recording = createNode(
+    "audio",
+    { x: 0, y: 0 },
+    { src: "data:audio/mpeg;base64,AA==", assetState: "ready" },
+  );
+  const settings = serviceGenerationSettings(
+    {
+      ...generationDefaults("audio"),
+      modelConfigId: yue2.id,
+      prompt: "爵士翻唱",
+    },
+    yue2,
+    [],
+    true,
+  );
+  assert.equal(isGenerationModel(score), false);
+  assert.equal(hasMusicReference(settings, [], yue2), false);
+  assert.equal(hasMusicReference(settings, [recording], yue2), true);
+  // Without a reference the node composes from text alone, as before.
+  assert.equal(backendBlocker(settings, [], [yue2]), null);
+  assert.match(backendBlocker(settings, [recording], [yue2])!, /扒谱模型/);
+  assert.equal(backendBlocker(settings, [recording], [yue2, score]), null);
+  assert.equal(
+    backendBlocker(
+      { ...settings, scoreMode: "full" },
+      [recording],
+      [yue2, score],
+    ),
+    null,
+  );
+  assert.match(
+    backendBlocker(
+      { ...settings, modelConfigId: minimax.id },
+      [recording],
+      [minimax, score],
+    )!,
+    /不支持参照音乐/,
+  );
+  assert.match(
+    backendBlocker({ ...settings, modelConfigId: score.id }, [], [score])!,
+    /扒谱模型仅用于/,
+  );
 });

@@ -901,6 +901,22 @@
             ],
             "default": null,
             "title": "Maxdurationseconds"
+          },
+          "scoreMode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "melody",
+                  "full"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Scoremode"
           }
         },
         "required": [
@@ -1074,6 +1090,16 @@
             ],
             "default": null,
             "title": "Durationseconds"
+          },
+          "scoreMode": {
+            "default": "melody",
+            "description": "Music with one audio reference: follow its transcribed melody, or melody and chords",
+            "enum": [
+              "melody",
+              "full"
+            ],
+            "title": "Scoremode",
+            "type": "string"
           }
         },
         "title": "AudioParameters",
@@ -6613,7 +6639,8 @@
               "vllm_omni",
               "vllm_omni_segmentation",
               "vllm_omni_music",
-              "vllm_omni_depth"
+              "vllm_omni_depth",
+              "vllm_omni_score"
             ],
             "title": "Protocol",
             "type": "string"
@@ -6744,7 +6771,8 @@
               "vllm_omni",
               "vllm_omni_segmentation",
               "vllm_omni_music",
-              "vllm_omni_depth"
+              "vllm_omni_depth",
+              "vllm_omni_score"
             ],
             "title": "Protocol",
             "type": "string"
@@ -6866,7 +6894,8 @@
               "vllm_omni",
               "vllm_omni_segmentation",
               "vllm_omni_music",
-              "vllm_omni_depth"
+              "vllm_omni_depth",
+              "vllm_omni_score"
             ],
             "title": "Protocol",
             "type": "string"
@@ -6970,7 +6999,8 @@
               "vllm_omni",
               "vllm_omni_segmentation",
               "vllm_omni_music",
-              "vllm_omni_depth"
+              "vllm_omni_depth",
+              "vllm_omni_score"
             ],
             "title": "Protocol",
             "type": "string"
@@ -12981,6 +13011,22 @@
             ],
             "default": null,
             "title": "Maxdurationseconds"
+          },
+          "scoreMode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "melody",
+                  "full"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Scoremode"
           }
         },
         "required": [
@@ -13164,6 +13210,16 @@
             ],
             "default": null,
             "title": "Durationseconds"
+          },
+          "scoreMode": {
+            "default": "melody",
+            "description": "Music with one audio reference: follow its transcribed melody, or melody and chords",
+            "enum": [
+              "melody",
+              "full"
+            ],
+            "title": "Scoremode",
+            "type": "string"
           }
         },
         "required": [
@@ -18963,7 +19019,8 @@
               "vllm_omni",
               "vllm_omni_segmentation",
               "vllm_omni_music",
-              "vllm_omni_depth"
+              "vllm_omni_depth",
+              "vllm_omni_score"
             ],
             "title": "Protocol",
             "type": "string"
@@ -19084,7 +19141,8 @@
               "vllm_omni",
               "vllm_omni_segmentation",
               "vllm_omni_music",
-              "vllm_omni_depth"
+              "vllm_omni_depth",
+              "vllm_omni_score"
             ],
             "title": "Protocol",
             "type": "string"
@@ -19210,7 +19268,8 @@
               "vllm_omni",
               "vllm_omni_segmentation",
               "vllm_omni_music",
-              "vllm_omni_depth"
+              "vllm_omni_depth",
+              "vllm_omni_score"
             ],
             "title": "Protocol",
             "type": "string"
@@ -19317,7 +19376,8 @@
               "vllm_omni",
               "vllm_omni_segmentation",
               "vllm_omni_music",
-              "vllm_omni_depth"
+              "vllm_omni_depth",
+              "vllm_omni_score"
             ],
             "title": "Protocol",
             "type": "string"

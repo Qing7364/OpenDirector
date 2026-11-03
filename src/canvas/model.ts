@@ -62,6 +62,8 @@ export interface GenerationSettings {
   voiceName?: string;
   /** Music models: words to sing; empty asks for an instrumental piece. */
   lyrics?: string;
+  /** Music with a reference recording: follow its melody, or its melody and chords. */
+  scoreMode?: "melody" | "full";
   imagePreset?: "none" | "product-views";
   /** A model configured in the local API; catalog models leave it unset. */
   modelConfigId?: string;

@@ -27,6 +27,7 @@ import {
   modelLabel,
   isGenerationModel,
   isMusicModel,
+  hasMusicReference,
   MUSIC_SECONDS,
   serviceAudioSettings,
   type ModelConfig,
@@ -184,6 +185,12 @@ export function NodeComposer({
       : settings.audioCreationType === "music");
   const reading =
     mode === "audio" && !music && (backend || settings.audioMode === "tts");
+  // YuE2-style music models can follow one connected recording.
+  const musicReferences =
+    music && Boolean(config?.inputRules.allowedKinds.includes("audio"));
+  const followsReference = Boolean(
+    config && hasMusicReference(settings, incomingNodes, config),
+  );
   const frameCandidates = incomingNodes.filter(
     (node) => node.data.kind === "image",
   );
@@ -397,7 +404,7 @@ export function NodeComposer({
         )}
         {!firstLast &&
           !reading &&
-          !music &&
+          (!music || musicReferences) &&
           (mode === "video" || incomingNodes.length > 0) && (
             <div className="cw-reference-strip">
               <TooltipButton
@@ -464,7 +471,9 @@ export function NodeComposer({
             disabled={running}
             spellCheck={false}
             placeholder={
-              "歌词（可选，留空生成纯音乐）。段落标签单独成一行，例如：\n[verse]\n雨落在窗前\n[chorus]\n说不出的话，让旋律回答"
+              followsReference
+                ? "歌词（可选，留空生成纯音乐）。按参照音乐的段落和乐句填写，段落标签单独成一行，例如：\n[verse]\n雨落在窗前\n[chorus]\n说不出的话，让旋律回答"
+                : "歌词（可选，留空生成纯音乐）。段落标签单独成一行，例如：\n[verse]\n雨落在窗前\n[chorus]\n说不出的话，让旋律回答"
             }
             onChange={(event) => updateSettings({ lyrics: event.target.value })}
           />
@@ -581,6 +590,22 @@ export function NodeComposer({
                 ))}
               </select>
             )}
+            {followsReference && (
+              <select
+                aria-label="参照方式"
+                value={settings.scoreMode ?? "melody"}
+                disabled={running}
+                onChange={(event) =>
+                  updateSettings({
+                    scoreMode: event.target
+                      .value as ComposerSettings["scoreMode"],
+                  })
+                }
+              >
+                <option value="melody">跟随参照旋律</option>
+                <option value="full">跟随旋律与和弦</option>
+              </select>
+            )}
             {mode === "audio" && !backend && (
               <>
                 <select
@@ -643,17 +668,20 @@ export function NodeComposer({
               </button>
             )}
           </div>
-          {!firstLast && !reading && !music && incomingNodes.length === 0 && (
-            <TooltipButton
-              type="button"
-              className="cw-reference-trigger"
-              aria-label="添加参考素材"
-              label="添加参考素材"
-              onClick={() => mentions.current?.openUpload()}
-            >
-              <CanvasIcon name="plus" size={16} />
-            </TooltipButton>
-          )}
+          {!firstLast &&
+            !reading &&
+            (!music || musicReferences) &&
+            incomingNodes.length === 0 && (
+              <TooltipButton
+                type="button"
+                className="cw-reference-trigger"
+                aria-label={musicReferences ? "添加参照音乐" : "添加参考素材"}
+                label={musicReferences ? "添加参照音乐" : "添加参考素材"}
+                onClick={() => mentions.current?.openUpload()}
+              >
+                <CanvasIcon name="plus" size={16} />
+              </TooltipButton>
+            )}
           {mode === "video" && (
             <button
               type="button"
