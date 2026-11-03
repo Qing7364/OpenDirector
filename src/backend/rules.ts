@@ -99,10 +99,6 @@ export function serviceAudioSettings(
     ...(music && !(seconds >= MUSIC_SECONDS.min && seconds <= MUSIC_SECONDS.max)
       ? { durationSeconds: MUSIC_SECONDS.initial }
       : {}),
-    // New music nodes start instrumental, the common case for a soundtrack.
-    ...(music && settings.musicInstrumental === undefined
-      ? { musicInstrumental: true }
-      : {}),
   };
 }
 
@@ -445,8 +441,6 @@ export function backendBlocker(
       )
     )
       return `音乐最长时长需在 ${MUSIC_SECONDS.min}–${MUSIC_SECONDS.max} 秒之间。`;
-    if (!settings.musicInstrumental && !(settings.lyrics ?? "").trim())
-      return "请填写歌词，或改为纯音乐。";
     if ((settings.lyrics ?? "").length > 5000) return "歌词最多 5000 字。";
   } else if (
     settings.mode === "audio" &&

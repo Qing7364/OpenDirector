@@ -475,6 +475,7 @@ def test_music_fields_leave_speech_fingerprints_unchanged():
         'kind': 'audio', 'voice': None, 'speaker': None, 'format': 'mp3', 'sampleRate': None}
     music = AudioParameters(creationType='music', lyrics='[verse]\n雨', durationSeconds=45)
     assert music.model_dump(mode='json')['lyrics'] == '[verse]\n雨' and music.model_dump()['durationSeconds'] == 45
-    # Songs saved before the vocals choice keep their identity; instrumental pieces record it.
-    assert 'instrumental' not in music.model_dump()
-    assert AudioParameters(creationType='music', instrumental=True).model_dump()['instrumental'] is True
+    # Projects saved while music had an explicit instrumental choice keep loading unchanged.
+    legacy = {'creationType': 'music', 'mode': 'tts', 'voice': None, 'instrumental': True, 'durationSeconds': 30}
+    assert AudioParameters.model_validate(legacy).model_dump(mode='json') == legacy
+    assert AudioExecution.model_validate({'kind': 'audio', 'format': 'mp3', 'creationType': 'music', 'instrumental': True}).instrumental
