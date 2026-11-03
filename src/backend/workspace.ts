@@ -180,7 +180,13 @@ export function openExampleWorkspaceProject(
       }
       return document;
     };
-    if (existing) return remember(await openWorkspaceProject(existing));
+    if (existing) {
+      const saved = await request<ProjectSnapshot>(creationPath(existing.id));
+      if (existing.name === name && saved.canvasItems.length === 0) {
+        return remember(await importWorkspaceDocument(await createExample()));
+      }
+      return remember(await openWorkspaceProject(existing));
+    }
     const blocked = unreadable.find((project) => project.id === preferred);
     if (blocked) throw new Error(blocked.reason);
     const example = await createExample();

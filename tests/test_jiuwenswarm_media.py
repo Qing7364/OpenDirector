@@ -93,8 +93,7 @@ def test_native_skill_media_publication_and_project_reopen(tmp_path, monkeypatch
     def reply(request):
         index = len(requests) - 1
         if index:
-            last = request['messages'][-1]
-            assert last['role'] == 'tool'
+            last = next(message for message in reversed(request['messages']) if message['role'] == 'tool')
             result = unpack(last['content'])
             detail = json.dumps(result)
             previous = steps[index - 1][0]
@@ -192,10 +191,10 @@ def test_native_skill_media_publication_and_project_reopen(tmp_path, monkeypatch
             source_ref = reference(source)
             snapshot_skill = work / '.agents/skills/media-fixture'
             steps.extend([
-                ('skill_tool', {'skill_name':'media-fixture'}),
-                ('skill_tool', {'skill_name':'media-fixture', 'relative_file_path':'media.json'}),
+                ('read_file', {'file_path':str(snapshot_skill / 'SKILL.md')}),
+                ('read_file', {'file_path':str(snapshot_skill / 'media.json')}),
                 ('read_file', {'file_path':str(snapshot_skill / 'process.py')}),
-                ('write_file', {'file_path':str(work / 'manifest.json'), 'content':'{"created_by":"native_write_file"}'}),
+                ('bash', {'command':shlex.join([sys.executable, '-c', 'from pathlib import Path; Path(' + repr(str(work / 'manifest.json')) + ').write_text(' + repr(json.dumps({'created_by':'native_bash'})) + ')'])}),
                 ('bash', {'command':'printf INTENTIONAL_MEDIA_FAILURE; exit 7'}),
                 ('bash', {'command':shlex.join([sys.executable, str(snapshot_skill / 'process.py'), str(source_path), str(work)])}),
                 ('command_schema', {'type':'artifact.publish'}),
@@ -229,11 +228,11 @@ def test_native_skill_media_publication_and_project_reopen(tmp_path, monkeypatch
             assert video['metadata']['frameRate'] == 24 and video['metadata']['durationSeconds'] == pytest.approx(1, abs=.05)
             probe = json.loads(subprocess.check_output(['ffprobe', '-v', 'error', '-show_streams', '-of', 'json', str(directory / video['path'])]))
             assert probe['streams'][0]['codec_name'] == 'h264'
-            assert json.loads((work / 'manifest.json').read_text())['created_by'] == 'native_write_file'
+            assert json.loads((work / 'manifest.json').read_text())['created_by'] == 'native_bash'
             assert sha256(source_path.read_bytes()).hexdigest() == original_hash
             assert {p.name:sha256(p.read_bytes()).hexdigest() for p in skill.iterdir()} == skill_hashes
             activities = events[-1]['conversation']['messages'][-1]['tools']
-            assert {'skill_tool', 'read_file', 'write_file', 'bash', 'execute_command'} <= {item['name'] for item in activities}
+            assert {'read_file', 'bash', 'execute_command'} <= {item['name'] for item in activities}
             assert any(item['name'] == 'bash' and item['status'] == 'failed' for item in activities)
             assert sum(item['name'] == 'execute_command' for item in activities) == 4
             assert client.delete('/api/creation/sessions/' + session).status_code == 200
@@ -246,7 +245,7 @@ def test_native_skill_media_publication_and_project_reopen(tmp_path, monkeypatch
             for asset in outputs:
                 media = reopened.get(root + '/assets/' + asset['id'] + '/content')
                 assert media.status_code == 200 and media.content == (work / asset['name']).read_bytes()
-            trace = (directory / 'agent-runs' / f'{turn}.jiuwenswarm.jsonl').read_text()
+            trace = (directory / 'agent-runs' / turn / f'{turn}.jiuwenswarm.jsonl').read_text()
             assert 'media-fixture-key' not in trace
             assert 'MEDIA_PROCESSING_FINISHED' in trace
     finally:

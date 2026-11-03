@@ -88,6 +88,8 @@ function fixture(t: TestContext) {
       return Response.json({ ok: true });
     }
     const id = path.split("/")[4]!;
+    if (method === "GET" && path === `/api/creation/projects/${id}` && documents.has(id))
+      return Response.json({canvasItems: documents.get(id)?.nodes ?? []});
     if (path.endsWith("/commands")) {
       if (offline) throw new TypeError("offline");
       if (
@@ -344,8 +346,11 @@ test("an unreadable existing example fails without creating a replacement", asyn
   const prepare = async () => createDocument(EXAMPLE_PROJECT_TITLE);
   await openExampleWorkspaceProject(EXAMPLE_PROJECT_TITLE, prepare);
   f.calls.length = 0;
-  CreationProjection.prototype.open = async () => {
-    throw new Error("示例无法读取");
+  const fetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (String(url).startsWith("/api/creation/projects/") && !options?.method)
+      return Response.json({detail: "示例无法读取"}, {status: 503});
+    return fetch(url, options);
   };
   await assert.rejects(
     openExampleWorkspaceProject(EXAMPLE_PROJECT_TITLE, prepare),
@@ -369,4 +374,20 @@ test("unknown example creation is not retried with another project identity", as
     1,
   );
   assert.equal(f.projects.size, 0);
+});
+
+
+test("an empty saved example creates a separate usable example without overwriting it", async (t) => {
+  const f = fixture(t);
+  const old = await createWorkspaceProject(EXAMPLE_PROJECT_TITLE, crypto.randomUUID());
+  const original = structuredClone(f.documents.get(old.id));
+  const reopened = await openExampleWorkspaceProject(EXAMPLE_PROJECT_TITLE, async () => ({
+    ...createDocument(EXAMPLE_PROJECT_TITLE),
+    nodes: [createNode("text", undefined, {text: "示例内容"})],
+  }));
+  assert.notEqual(reopened.id, old.id);
+  assert.equal(reopened.nodes.length, 1);
+  assert.equal(reopened.title, EXAMPLE_PROJECT_TITLE + " (2)");
+  assert.deepEqual(f.documents.get(old.id), original);
+  assert.equal(f.projects.size, 2);
 });
