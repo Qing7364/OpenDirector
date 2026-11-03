@@ -8,6 +8,7 @@ import {
   creationClient,
   creationPath,
   objectVersion,
+  visibleItems,
 } from "./creationClient.ts";
 import { CreationProjection } from "./creationProjection.ts";
 import {
@@ -182,7 +183,7 @@ export function openExampleWorkspaceProject(
     };
     if (existing) {
       const saved = await request<ProjectSnapshot>(creationPath(existing.id));
-      if (existing.name === name && saved.canvasItems.length === 0) {
+      if (visibleItems(saved).size === 0) {
         return remember(await importWorkspaceDocument(await createExample()));
       }
       return remember(await openWorkspaceProject(existing));

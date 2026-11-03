@@ -89,7 +89,10 @@ function fixture(t: TestContext) {
     }
     const id = path.split("/")[4]!;
     if (method === "GET" && path === `/api/creation/projects/${id}` && documents.has(id))
-      return Response.json({canvasItems: documents.get(id)?.nodes ?? []});
+      return Response.json({canvasItems: [
+        ...(documents.get(id)?.nodes ?? []).map(node => ({...node, visible: true})),
+        ...(documents.get(id)?.hiddenNodes ?? []).map(node => ({...node, visible: false})),
+      ]});
     if (path.endsWith("/commands")) {
       if (offline) throw new TypeError("offline");
       if (
@@ -287,7 +290,8 @@ test("existing default example is opened without a stored hint or saving over it
 
 test("renamed examples reopen by project identity and deleted examples are recreated", async (t) => {
   const f = fixture(t);
-  const prepare = async () => createDocument(EXAMPLE_PROJECT_TITLE);
+  const prepare = async () => ({...createDocument(EXAMPLE_PROJECT_TITLE),
+    nodes: [createNode("text", undefined, {text: "保留的示例"})]});
   const initial = await openExampleWorkspaceProject(
     EXAMPLE_PROJECT_TITLE,
     prepare,
@@ -390,4 +394,20 @@ test("an empty saved example creates a separate usable example without overwriti
   assert.equal(reopened.title, EXAMPLE_PROJECT_TITLE + " (2)");
   assert.deepEqual(f.documents.get(old.id), original);
   assert.equal(f.projects.size, 2);
+});
+
+
+test("a numbered example with only hidden nodes creates a fresh example and preserves hidden content", async (t) => {
+  const f = fixture(t);
+  const prepare = async () => ({...createDocument(EXAMPLE_PROJECT_TITLE),
+    nodes: [createNode("text", undefined, {text: "示例"})]});
+  const initial = await openExampleWorkspaceProject(EXAMPLE_PROJECT_TITLE, prepare);
+  const name = EXAMPLE_PROJECT_TITLE + " (9)";
+  f.projects.set(initial.id, {...f.projects.get(initial.id)!, name});
+  const hidden = {...initial, title: name, nodes: [], hiddenNodes: initial.nodes};
+  f.documents.set(initial.id, hidden);
+  const reopened = await openExampleWorkspaceProject(EXAMPLE_PROJECT_TITLE, prepare);
+  assert.notEqual(reopened.id, initial.id);
+  assert.equal(reopened.nodes.length, 1);
+  assert.deepEqual(f.documents.get(initial.id), hidden);
 });
