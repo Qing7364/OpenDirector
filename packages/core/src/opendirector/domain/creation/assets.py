@@ -9,22 +9,22 @@ from .models import ModelSnapshot
 
 
 class AssetRef(Contract):
-    assetId: UUID
-    revision: Revision
-    fingerprint: Fingerprint
-    kind: MediaKind
+    assetId: UUID = Field(description='Asset ID.')
+    revision: Revision = Field(description='Referenced immutable asset revision.')
+    fingerprint: Fingerprint = Field(description='Immutable content fingerprint.')
+    kind: MediaKind = Field(description='Business object or media type.')
 
 
 class MediaMetadata(Contract):
-    mimeType: str = Field(min_length=1, max_length=255)
-    size: int = Field(ge=0, strict=True)
-    width: PositiveInt | None = None
-    height: PositiveInt | None = None
-    durationSeconds: Positive | None = None
-    frameRate: Positive | None = None
-    hasAudio: bool | None = None
-    sampleRate: PositiveInt | None = None
-    channels: PositiveInt | None = None
+    mimeType: str = Field(min_length=1, max_length=255, description='Verified media MIME type.')
+    size: int = Field(ge=0, strict=True, description='Content size in bytes.')
+    width: PositiveInt | None = Field(default=None, description='Width in pixels.')
+    height: PositiveInt | None = Field(default=None, description='Height in pixels.')
+    durationSeconds: Positive | None = Field(default=None, description='Duration in seconds.')
+    frameRate: Positive | None = Field(default=None, description='Video frames per second.')
+    hasAudio: bool | None = Field(default=None, description='Whether the media contains an audio stream.')
+    sampleRate: PositiveInt | None = Field(default=None, description='Audio samples per second.')
+    channels: PositiveInt | None = Field(default=None, description='Audio channel count.')
 
     @model_validator(mode='after')
     def dimensions(self):
@@ -34,14 +34,14 @@ class MediaMetadata(Contract):
 
 
 class UploadInfo(Contract):
-    id: UUID
-    projectId: UUID
-    name: str
-    status: Literal['uploading', 'ready', 'registered', 'cancelled']
-    kind: MediaKind | None = None
-    fingerprint: Fingerprint | None = None
-    metadata: MediaMetadata | None = None
-    assetId: UUID | None = None
+    id: UUID = Field(description='Stable object ID.')
+    projectId: UUID = Field(description='Owning project ID.')
+    name: str = Field(description='User-visible name.')
+    status: Literal['uploading', 'ready', 'registered', 'cancelled'] = Field(description='Current operation lifecycle state.')
+    kind: MediaKind | None = Field(default=None, description='Business object or media type.')
+    fingerprint: Fingerprint | None = Field(default=None, description='Immutable content fingerprint.')
+    metadata: MediaMetadata | None = Field(default=None, description='Verified media properties.')
+    assetId: UUID | None = Field(default=None, description='Asset ID.')
 
     @model_validator(mode='after')
     def complete(self):
@@ -53,18 +53,18 @@ class UploadInfo(Contract):
 
 
 class AssetProvenance(Contract):
-    source: Literal['upload', 'manual', 'agent_written', 'generated', 'edited', 'rendered']
-    jobId: UUID | None = None
-    toolTaskId: UUID | None = None
-    sourceItemId: UUID | None = None
-    editorDocumentId: UUID | None = None
-    editorRevision: Revision | None = None
-    sources: tuple[AssetRef, ...] = ()
-    inputFingerprint: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$')
-    agentRunId: UUID | None = None
-    agentRuntime: Literal['opencode', 'codex', 'claude', 'jiuwenswarm', 'deepseek'] | None = None
-    modelSnapshot: ModelSnapshot | None = None
-    prompt: str | None = Field(default=None, max_length=20000)
+    source: Literal['upload', 'manual', 'agent_written', 'generated', 'edited', 'rendered'] = Field(description='Input source or recorded provenance.')
+    jobId: UUID | None = Field(default=None, description='Generation job ID.')
+    toolTaskId: UUID | None = Field(default=None, description='Tool execution ID.')
+    sourceItemId: UUID | None = Field(default=None, description='Source canvas item ID.')
+    editorDocumentId: UUID | None = Field(default=None, description='Editable document ID.')
+    editorRevision: Revision | None = Field(default=None, description='Expected editable document revision.')
+    sources: tuple[AssetRef, ...] = Field(default=(), description='Ordered source asset versions.')
+    inputFingerprint: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$', description='Fingerprint of the fixed execution input.')
+    agentRunId: UUID | None = Field(default=None, description='Agent turn ID.')
+    agentRuntime: Literal['opencode', 'codex', 'claude', 'jiuwenswarm', 'deepseek'] | None = Field(default=None, description='Native Agent runtime that produced this asset.')
+    modelSnapshot: ModelSnapshot | None = Field(default=None, description='Fixed model connection recorded for provenance.')
+    prompt: str | None = Field(default=None, max_length=20000, description='Generation prompt text.')
 
     @model_validator(mode='after')
     def evidence(self):
@@ -81,12 +81,12 @@ class AssetProvenance(Contract):
 
 
 class Asset(ProjectEntity):
-    kind: MediaKind
-    name: str = Field(min_length=1, max_length=255)
-    fingerprint: Fingerprint
-    path: str
-    metadata: MediaMetadata
-    provenance: AssetProvenance
+    kind: MediaKind = Field(description='Business object or media type.')
+    name: str = Field(min_length=1, max_length=255, description='User-visible name.')
+    fingerprint: Fingerprint = Field(description='Immutable content fingerprint.')
+    path: str = Field(description='Immutable asset path relative to the project directory.')
+    metadata: MediaMetadata = Field(description='Verified media properties.')
+    provenance: AssetProvenance = Field(description='Recorded origin and execution context.')
 
     @model_validator(mode='after')
     def content_identity(self):

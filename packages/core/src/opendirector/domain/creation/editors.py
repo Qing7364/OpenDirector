@@ -13,9 +13,9 @@ Unit = Annotated[float, Field(strict=True, ge=0, le=1)]
 
 
 class TimelineResource(Contract):
-    asset: AssetRef
-    title: str = Field(max_length=255)
-    durationSeconds: Positive | None = None
+    asset: AssetRef = Field(description='Immutable asset version.')
+    title: str = Field(max_length=255, description='Display title of the imported asset.')
+    durationSeconds: Positive | None = Field(default=None, description='Duration in seconds.')
 
     @model_validator(mode='after')
     def media(self):
@@ -25,14 +25,14 @@ class TimelineResource(Contract):
 
 
 class TimelineClip(Contract):
-    id: Identifier
-    resource: TimelineResource
-    start: NonNegative | None = None
-    inPoint: NonNegative
-    outPoint: Positive
-    speed: Positive = 1
-    volume: Unit = 1
-    muted: bool = False
+    id: Identifier = Field(description='Stable object ID.')
+    resource: TimelineResource = Field(description='Clip source from the imported asset collection.')
+    start: NonNegative | None = Field(default=None, description='Start time in seconds.')
+    inPoint: NonNegative = Field(description='Source trim start in seconds.')
+    outPoint: Positive = Field(description='Source trim end in seconds.')
+    speed: Positive = Field(default=1, description='Playback or motion speed multiplier.')
+    volume: Unit = Field(default=1, description='Linear audio gain.')
+    muted: bool = Field(default=False, description='Whether audio output is muted.')
 
     @model_validator(mode='after')
     def source_interval(self):
@@ -47,11 +47,11 @@ class TimelineClip(Contract):
 
 
 class TimelineTrack(Contract):
-    id: Identifier
-    kind: Literal['visual', 'audio']
-    title: str = Field(max_length=255)
-    muted: bool = False
-    clips: tuple[TimelineClip, ...] = ()
+    id: Identifier = Field(description='Stable object ID.')
+    kind: Literal['visual', 'audio'] = Field(description='Business object or media type.')
+    title: str = Field(max_length=255, description='User-visible title.')
+    muted: bool = Field(default=False, description='Whether audio output is muted.')
+    clips: tuple[TimelineClip, ...] = Field(default=(), description='Ordered clips on this track.')
 
     @model_validator(mode='after')
     def placement(self):
@@ -74,11 +74,11 @@ class TimelineTrack(Contract):
 
 
 class TimelineData(Contract):
-    fps: PositiveInt
-    width: PositiveInt
-    height: PositiveInt
-    tracks: tuple[TimelineTrack, ...] = Field(min_length=1)
-    importedAssets: tuple[TimelineResource, ...] = ()
+    fps: PositiveInt = Field(description='Frames per second.')
+    width: PositiveInt = Field(description='Width in pixels.')
+    height: PositiveInt = Field(description='Height in pixels.')
+    tracks: tuple[TimelineTrack, ...] = Field(min_length=1, description='Ordered timeline tracks.')
+    importedAssets: tuple[TimelineResource, ...] = Field(default=(), description='Source assets available to timeline clips.')
 
     @model_validator(mode='after')
     def tracks_and_clips(self):
@@ -91,19 +91,19 @@ class TimelineData(Contract):
 
 class SubjectLibrarySource(Contract):
     """Frozen import provenance; subsequent editing never follows the library."""
-    itemId: UUID
-    revision: int = Field(ge=1, strict=True)
-    importId: UUID
+    itemId: UUID = Field(description='Canvas item ID.')
+    revision: int = Field(ge=1, strict=True, description='Captured library item revision.')
+    importId: UUID = Field(description='Library import ID.')
 
 
 class SubjectData(Contract):
     description: str = Field(default='', max_length=20000,
         description='User-facing annotation only; not subject media or a generation reference')
-    category: str = Field(default='', max_length=100)
-    main: AssetRef | None = None
-    auxiliaries: tuple[AssetRef, ...] = Field(default=(), max_length=3)
-    voice: AssetRef | None = None
-    librarySource: SubjectLibrarySource | None = None
+    category: str = Field(default='', max_length=100, description='Subject category.')
+    main: AssetRef | None = Field(default=None, description='Primary subject media.')
+    auxiliaries: tuple[AssetRef, ...] = Field(default=(), max_length=3, description='Ordered auxiliary subject media.')
+    voice: AssetRef | None = Field(default=None, description='Subject voice asset version.')
+    librarySource: SubjectLibrarySource | None = Field(default=None, description='Immutable source library version.')
 
     @model_validator(mode='after')
     def source_roles(self):
@@ -120,8 +120,8 @@ class SubjectData(Contract):
 
 
 class StackData(Contract):
-    nodeIds: tuple[UUID, ...] = ()
-    activeIndex: int = Field(default=0, strict=True, ge=0)
+    nodeIds: tuple[UUID, ...] = Field(default=(), description='Ordered member canvas item IDs.')
+    activeIndex: int = Field(default=0, strict=True, ge=0, description='Index of the active member.')
 
     @model_validator(mode='after')
     def selection(self):
@@ -132,18 +132,18 @@ class StackData(Contract):
 
 
 class ToolField(Contract):
-    name: str = Field(min_length=1, max_length=200)
-    values: tuple[str, ...]
+    name: str = Field(min_length=1, max_length=200, description='User-visible name.')
+    values: tuple[str, ...] = Field(description='Ordered tool field values.')
 
 
 class PaletteProvenance(Contract):
-    paletteId: Identifier
-    version: PositiveInt
+    paletteId: Identifier = Field(description='Palette ID.')
+    version: PositiveInt = Field(description='Version of the referenced record.')
 
 
 class PaletteData(Contract):
-    name: str | None = Field(default=None, max_length=255)
-    sourceImage: AssetRef | None = None
+    name: str | None = Field(default=None, max_length=255, description='User-visible name.')
+    sourceImage: AssetRef | None = Field(default=None, description='Source image used to extract palette colors.')
 
     @model_validator(mode='after')
     def image(self):
@@ -153,21 +153,21 @@ class PaletteData(Contract):
 
 
 class ToolData(Contract):
-    kind: Literal['camera', 'style', 'palette', 'camera_motion']
-    fields: tuple[ToolField, ...] = ()
-    provenance: PaletteProvenance | None = None
-    palette: PaletteData | None = None
+    kind: Literal['camera', 'style', 'palette', 'camera_motion'] = Field(description='Business object or media type.')
+    fields: tuple[ToolField, ...] = Field(default=(), description='Named tool-specific parameter fields.')
+    provenance: PaletteProvenance | None = Field(default=None, description='Recorded origin and execution context.')
+    palette: PaletteData | None = Field(default=None, description='Reusable palette data.')
 
 
 class MaskStroke(Contract):
-    mode: Literal['erase', 'restore']
-    size: Annotated[float, Field(strict=True, ge=1, le=4096)]
-    points: tuple[Point, ...] = Field(min_length=1, max_length=200000)
+    mode: Literal['erase', 'restore'] = Field(description='Operation mode within this contract variant.')
+    size: Annotated[float, Field(strict=True, ge=1, le=4096)] = Field(description='Mask brush diameter in pixels.')
+    points: tuple[Point, ...] = Field(min_length=1, max_length=200000, description='Ordered mask stroke coordinates.')
 
 
 class LayerContentBase(Contract):
-    width: Annotated[int, Field(strict=True, ge=1, le=8192)]
-    height: Annotated[int, Field(strict=True, ge=1, le=8192)]
+    width: Annotated[int, Field(strict=True, ge=1, le=8192)] = Field(description='Width in pixels.')
+    height: Annotated[int, Field(strict=True, ge=1, le=8192)] = Field(description='Height in pixels.')
 
     @model_validator(mode='after')
     def pixel_limit(self):
@@ -177,8 +177,8 @@ class LayerContentBase(Contract):
 
 
 class ImageLayerContent(LayerContentBase):
-    kind: Literal['image']
-    asset: AssetRef
+    kind: Literal['image'] = Field(description='Business object or media type.')
+    asset: AssetRef = Field(description='Immutable asset version.')
 
     @model_validator(mode='after')
     def image(self):
@@ -188,40 +188,40 @@ class ImageLayerContent(LayerContentBase):
 
 
 class TextLayerContent(LayerContentBase):
-    kind: Literal['text']
-    text: str = Field(max_length=10000)
-    color: Color
-    fontSize: Annotated[float, Field(strict=True, ge=4, le=1000)]
+    kind: Literal['text'] = Field(description='Business object or media type.')
+    text: str = Field(max_length=10000, description='UTF-8 text content or search query.')
+    color: Color = Field(description='Serialized display color.')
+    fontSize: Annotated[float, Field(strict=True, ge=4, le=1000)] = Field(description='Text size in pixels.')
 
 
 class RectangleLayerContent(LayerContentBase):
-    kind: Literal['rectangle']
-    color: Color
+    kind: Literal['rectangle'] = Field(description='Business object or media type.')
+    color: Color = Field(description='Serialized display color.')
 
 
 LayerContent = Annotated[ImageLayerContent | TextLayerContent | RectangleLayerContent, Field(discriminator='kind')]
 
 
 class ImageLayer(Contract):
-    id: Identifier
-    name: str = Field(max_length=200)
-    visible: bool = True
-    locked: bool = False
-    opacity: Unit = 1
-    x: Number = 0
-    y: Number = 0
-    width: Annotated[float, Field(strict=True, gt=0, le=8192)]
-    height: Annotated[float, Field(strict=True, gt=0, le=8192)]
-    rotation: Number = 0
-    flipX: bool = False
-    flipY: bool = False
-    content: LayerContent
-    mask: tuple[MaskStroke, ...] = Field(default=(), max_length=2000)
+    id: Identifier = Field(description='Stable object ID.')
+    name: str = Field(max_length=200, description='User-visible name.')
+    visible: bool = Field(default=True, description='Whether this object is displayed.')
+    locked: bool = Field(default=False, description='Whether edits to this object are blocked.')
+    opacity: Unit = Field(default=1, description='Layer opacity from zero to one.')
+    x: Number = Field(default=0, description='Horizontal coordinate.')
+    y: Number = Field(default=0, description='Vertical coordinate.')
+    width: Annotated[float, Field(strict=True, gt=0, le=8192)] = Field(description='Width in pixels.')
+    height: Annotated[float, Field(strict=True, gt=0, le=8192)] = Field(description='Height in pixels.')
+    rotation: Number = Field(default=0, description='Layer rotation in degrees.')
+    flipX: bool = Field(default=False, description='Whether the image is mirrored horizontally.')
+    flipY: bool = Field(default=False, description='Whether the image is mirrored vertically.')
+    content: LayerContent = Field(description='Editable layer content.')
+    mask: tuple[MaskStroke, ...] = Field(default=(), max_length=2000, description='Ordered strokes or encoded selection mask.')
 
 
 class LayerData(LayerContentBase):
-    background: str = Field(default='transparent', pattern=r'^(transparent|#[0-9a-fA-F]{6})$')
-    layers: tuple[ImageLayer, ...] = Field(default=(), max_length=40)
+    background: str = Field(default='transparent', pattern=r'^(transparent|#[0-9a-fA-F]{6})$', description='Composition background color.')
+    layers: tuple[ImageLayer, ...] = Field(default=(), max_length=40, description='Ordered editable image layers.')
 
     @model_validator(mode='after')
     def limits(self):
@@ -234,15 +234,15 @@ class LayerData(LayerContentBase):
 
 
 class Vector3(Contract):
-    x: Number
-    y: Number
-    z: Number
+    x: Number = Field(description='X component in stage coordinates.')
+    y: Number = Field(description='Y component in stage coordinates.')
+    z: Number = Field(description='Z component in stage coordinates.')
 
 
 class StageTransform(Contract):
-    position: Vector3
-    rotation: Vector3
-    scale: Vector3
+    position: Vector3 = Field(description='Position in the owning canvas or stage.')
+    rotation: Vector3 = Field(description='Rotation in radians around each stage axis.')
+    scale: Vector3 = Field(description='Positive scale along each stage axis.')
 
     @model_validator(mode='after')
     def positive_scale(self):
@@ -252,37 +252,37 @@ class StageTransform(Contract):
 
 
 class TransformFrame(Contract):
-    id: Identifier
-    time: NonNegative
-    value: StageTransform
+    id: Identifier = Field(description='Stable object ID.')
+    time: NonNegative = Field(description='Keyframe time in seconds.')
+    value: StageTransform = Field(description='Keyframed transform or camera pose.')
 
 
 class StageMotion(Contract):
-    preset: Literal['idle', 'walk', 'run', 'wave']
-    speed: Positive
-    amount: Unit
+    preset: Literal['idle', 'walk', 'run', 'wave'] = Field(description='Selected generation or motion preset.')
+    speed: Positive = Field(description='Playback or motion speed multiplier.')
+    amount: Unit = Field(description='Magnitude of the procedural motion.')
 
 
 class MotionClip(Contract):
-    id: Identifier
-    start: NonNegative
-    duration: Positive
-    motion: StageMotion
+    id: Identifier = Field(description='Stable object ID.')
+    start: NonNegative = Field(description='Start time in seconds.')
+    duration: Positive = Field(description='Interval duration in seconds.')
+    motion: StageMotion = Field(description='Procedural motion settings.')
 
 
 class StageObject(StageTransform):
-    id: Identifier
-    kind: Literal['person', 'box', 'sphere']
-    name: str = Field(max_length=255)
-    color: Color
-    keyframes: tuple[TransformFrame, ...] = ()
-    motionClips: tuple[MotionClip, ...] = ()
+    id: Identifier = Field(description='Stable object ID.')
+    kind: Literal['person', 'box', 'sphere'] = Field(description='Business object or media type.')
+    name: str = Field(max_length=255, description='User-visible name.')
+    color: Color = Field(description='Serialized display color.')
+    keyframes: tuple[TransformFrame, ...] = Field(default=(), description='Ordered animation keyframes.')
+    motionClips: tuple[MotionClip, ...] = Field(default=(), description='Ordered procedural motion intervals.')
 
 
 class StageCamera(Contract):
-    position: Vector3
-    target: Vector3
-    fov: Annotated[float, Field(strict=True, gt=0, lt=180)]
+    position: Vector3 = Field(description='Position in the owning canvas or stage.')
+    target: Vector3 = Field(description='Camera look-at position.')
+    fov: Annotated[float, Field(strict=True, gt=0, lt=180)] = Field(description='Camera vertical field of view in degrees.')
 
     @model_validator(mode='after')
     def direction(self):
@@ -292,23 +292,23 @@ class StageCamera(Contract):
 
 
 class CameraFrame(Contract):
-    id: Identifier
-    time: NonNegative
-    value: StageCamera
+    id: Identifier = Field(description='Stable object ID.')
+    time: NonNegative = Field(description='Keyframe time in seconds.')
+    value: StageCamera = Field(description='Keyframed transform or camera pose.')
 
 
 class CameraRig(Contract):
-    id: Identifier
-    name: str = Field(max_length=255)
-    pose: StageCamera
-    keyframes: tuple[CameraFrame, ...] = ()
+    id: Identifier = Field(description='Stable object ID.')
+    name: str = Field(max_length=255, description='User-visible name.')
+    pose: StageCamera = Field(description='Camera position and look-at target.')
+    keyframes: tuple[CameraFrame, ...] = Field(default=(), description='Ordered animation keyframes.')
 
 
 class StageShot(Contract):
-    id: Identifier
-    cameraId: Identifier
-    start: NonNegative
-    duration: Positive
+    id: Identifier = Field(description='Stable object ID.')
+    cameraId: Identifier = Field(description='Stage camera ID.')
+    start: NonNegative = Field(description='Start time in seconds.')
+    duration: Positive = Field(description='Interval duration in seconds.')
 
 
 def check_frames(frames, duration):
@@ -328,15 +328,15 @@ def check_intervals(items, duration):
 
 
 class DirectorData(Contract):
-    background: Color
-    grid: bool = True
-    duration: Positive
-    aspectRatio: Literal['16:9', '9:16', '1:1', '4:3', '3:4'] = '16:9'
-    cameras: tuple[CameraRig, ...] = Field(min_length=1)
-    activeCameraId: Identifier
-    cameraSource: Literal['camera', 'storyboard'] = 'camera'
-    shots: tuple[StageShot, ...] = ()
-    objects: tuple[StageObject, ...] = ()
+    background: Color = Field(description='Composition background color.')
+    grid: bool = Field(default=True, description='Whether to display the stage grid.')
+    duration: Positive = Field(description='Interval duration in seconds.')
+    aspectRatio: Literal['16:9', '9:16', '1:1', '4:3', '3:4'] = Field(default='16:9', description='Output width-to-height ratio.')
+    cameras: tuple[CameraRig, ...] = Field(min_length=1, description='Editable stage cameras.')
+    activeCameraId: Identifier = Field(description='Active stage camera ID.')
+    cameraSource: Literal['camera', 'storyboard'] = Field(default='camera', description='Camera selection strategy.')
+    shots: tuple[StageShot, ...] = Field(default=(), description='Ordered camera shot intervals.')
+    objects: tuple[StageObject, ...] = Field(default=(), description='Editable stage objects.')
 
     @model_validator(mode='after')
     def stage_relations(self):
@@ -357,11 +357,11 @@ class DirectorData(Contract):
 
 
 class ToolSelection(Contract):
-    source: AssetRef
-    width: PositiveInt
-    height: PositiveInt
-    mask: AssetRef | None = None
-    boxes: tuple['SelectionBox', ...] = ()
+    source: AssetRef = Field(description='Input source or recorded provenance.')
+    width: PositiveInt = Field(description='Width in pixels.')
+    height: PositiveInt = Field(description='Height in pixels.')
+    mask: AssetRef | None = Field(default=None, description='Ordered strokes or encoded selection mask.')
+    boxes: tuple['SelectionBox', ...] = Field(default=(), description='Selection rectangles in source image pixels.')
 
     @model_validator(mode='after')
     def mask_image(self):
@@ -371,10 +371,10 @@ class ToolSelection(Contract):
 
 
 class SelectionBox(Contract):
-    x: Number
-    y: Number
-    width: Positive
-    height: Positive
+    x: Number = Field(description='Horizontal coordinate.')
+    y: Number = Field(description='Vertical coordinate.')
+    width: Positive = Field(description='Width in pixels.')
+    height: Positive = Field(description='Height in pixels.')
 
 
 ToolId = Literal['layers', 'crop', 'smart-edit', 'outpaint', 'cutout', 'inpainting-remove', 'image-hd',
@@ -386,19 +386,19 @@ ToolId = Literal['layers', 'crop', 'smart-edit', 'outpaint', 'cutout', 'inpainti
 
 
 class ToolDraftBinding(Contract):
-    editorId: UUID
-    editorRevision: PositiveInt
-    itemId: UUID
-    itemRevision: PositiveInt
+    editorId: UUID = Field(description='Editable document ID.')
+    editorRevision: PositiveInt = Field(description='Expected editable document revision.')
+    itemId: UUID = Field(description='Canvas item ID.')
+    itemRevision: PositiveInt = Field(description='Expected canvas item revision.')
 
 
 class MediaEditData(Contract):
-    tool: ToolId
-    sources: tuple[AssetRef, ...] = ()
-    sourceItems: tuple[UUID, ...] = ()
+    tool: ToolId = Field(description='Registered editing tool name.')
+    sources: tuple[AssetRef, ...] = Field(default=(), description='Ordered source asset versions.')
+    sourceItems: tuple[UUID, ...] = Field(default=(), description='Source canvas item IDs.')
     parameters: dict[Annotated[str, Field(min_length=1, max_length=100)],
-                     Annotated[StrictStr, Field(max_length=100000)] | StrictBool | StrictInt | StrictFloat] = Field(default_factory=dict, max_length=100)
-    selection: ToolSelection | None = None
+                     Annotated[StrictStr, Field(max_length=100000)] | StrictBool | StrictInt | StrictFloat] = Field(default_factory=dict, max_length=100, description='Typed generation or editing parameters.')
+    selection: ToolSelection | None = Field(default=None, description='Saved source selection for this edit.')
 
     @model_validator(mode='after')
     def source_bindings(self):
@@ -416,15 +416,15 @@ class MediaEditData(Contract):
 
 class EditorInputConnection(Contract):
     """Assembly provenance binds a retained slot, never a generation spec."""
-    id: UUID
-    sourceId: UUID
-    slotId: Identifier
-    asset: AssetRef
+    id: UUID = Field(description='Stable object ID.')
+    sourceId: UUID = Field(description='Source canvas item ID.')
+    slotId: Identifier = Field(description='Destination editor input slot.')
+    asset: AssetRef = Field(description='Immutable asset version.')
 
 
 class EditorDocumentBase(ProjectEntity):
-    schemaVersion: Literal[1] = 1
-    inputConnections: tuple[EditorInputConnection, ...] = ()
+    schemaVersion: Literal[1] = Field(default=1, description='Record schema version.')
+    inputConnections: tuple[EditorInputConnection, ...] = Field(default=(), description='Persisted connections to source assets.')
 
     @model_validator(mode='after')
     def assembly_connections(self):
@@ -450,33 +450,33 @@ class EditorDocumentBase(ProjectEntity):
 
 
 class TimelineDocument(EditorDocumentBase):
-    kind: Literal['timeline']
-    data: TimelineData
+    kind: Literal['timeline'] = Field(description='Business object or media type.')
+    data: TimelineData = Field(description='Typed editable document contents.')
 
 
 class SubjectDocument(EditorDocumentBase):
-    kind: Literal['subject']
-    data: SubjectData
+    kind: Literal['subject'] = Field(description='Business object or media type.')
+    data: SubjectData = Field(description='Typed editable document contents.')
 
 
 class LayerDocument(EditorDocumentBase):
-    kind: Literal['layers']
-    data: LayerData
+    kind: Literal['layers'] = Field(description='Business object or media type.')
+    data: LayerData = Field(description='Typed editable document contents.')
 
 
 class ImageCropOptions(Contract):
-    rotation: Literal[0, 90, 180, 270] = 0
-    flipX: bool = False
-    flipY: bool = False
-    aspect: Literal['free', 'original', '1:1', '4:3', '3:4', '16:9', '9:16'] = 'original'
-    zoom: Annotated[float, Field(strict=True, ge=100, le=400)] = 100
-    freeWidth: Annotated[float, Field(strict=True, ge=1, le=100)] = 100
-    freeHeight: Annotated[float, Field(strict=True, ge=1, le=100)] = 100
-    x: Annotated[float, Field(strict=True, ge=0, le=100)] = 50
-    y: Annotated[float, Field(strict=True, ge=0, le=100)] = 50
-    brightness: Annotated[float, Field(strict=True, ge=0, le=200)] = 100
-    contrast: Annotated[float, Field(strict=True, ge=0, le=200)] = 100
-    saturation: Annotated[float, Field(strict=True, ge=0, le=200)] = 100
+    rotation: Literal[0, 90, 180, 270] = Field(default=0, description='Crop rotation in degrees.')
+    flipX: bool = Field(default=False, description='Whether the image is mirrored horizontally.')
+    flipY: bool = Field(default=False, description='Whether the image is mirrored vertically.')
+    aspect: Literal['free', 'original', '1:1', '4:3', '3:4', '16:9', '9:16'] = Field(default='original', description='Crop aspect ratio or free crop mode.')
+    zoom: Annotated[float, Field(strict=True, ge=100, le=400)] = Field(default=100, description='Crop zoom percentage.')
+    freeWidth: Annotated[float, Field(strict=True, ge=1, le=100)] = Field(default=100, description='Free crop width as a percentage.')
+    freeHeight: Annotated[float, Field(strict=True, ge=1, le=100)] = Field(default=100, description='Free crop height as a percentage.')
+    x: Annotated[float, Field(strict=True, ge=0, le=100)] = Field(default=50, description='Horizontal crop position percentage.')
+    y: Annotated[float, Field(strict=True, ge=0, le=100)] = Field(default=50, description='Vertical crop position percentage.')
+    brightness: Annotated[float, Field(strict=True, ge=0, le=200)] = Field(default=100, description='Brightness percentage.')
+    contrast: Annotated[float, Field(strict=True, ge=0, le=200)] = Field(default=100, description='Contrast percentage.')
+    saturation: Annotated[float, Field(strict=True, ge=0, le=200)] = Field(default=100, description='Saturation percentage.')
 
     def output_size(self, width, height):
         if self.rotation % 180:
@@ -492,10 +492,10 @@ class ImageCropOptions(Contract):
 
 
 class ImageCropData(Contract):
-    source: AssetRef
-    options: ImageCropOptions
-    width: PositiveInt
-    height: PositiveInt
+    source: AssetRef = Field(description='Input source or recorded provenance.')
+    options: ImageCropOptions = Field(description='Non-destructive image crop and color settings.')
+    width: PositiveInt = Field(description='Width in pixels.')
+    height: PositiveInt = Field(description='Height in pixels.')
 
     @model_validator(mode='after')
     def image_source(self):
@@ -505,28 +505,28 @@ class ImageCropData(Contract):
 
 
 class ImageCropDocument(EditorDocumentBase):
-    kind: Literal['image_crop']
-    data: ImageCropData
+    kind: Literal['image_crop'] = Field(description='Business object or media type.')
+    data: ImageCropData = Field(description='Typed editable document contents.')
 
 
 class StackDocument(EditorDocumentBase):
-    kind: Literal['stack']
-    data: StackData
+    kind: Literal['stack'] = Field(description='Business object or media type.')
+    data: StackData = Field(description='Typed editable document contents.')
 
 
 class ToolDocument(EditorDocumentBase):
-    kind: Literal['tool']
-    data: ToolData
+    kind: Literal['tool'] = Field(description='Business object or media type.')
+    data: ToolData = Field(description='Typed editable document contents.')
 
 
 class DirectorDocument(EditorDocumentBase):
-    kind: Literal['director']
-    data: DirectorData
+    kind: Literal['director'] = Field(description='Business object or media type.')
+    data: DirectorData = Field(description='Typed editable document contents.')
 
 
 class MediaEditDocument(EditorDocumentBase):
-    kind: Literal['media_edit']
-    data: MediaEditData
+    kind: Literal['media_edit'] = Field(description='Business object or media type.')
+    data: MediaEditData = Field(description='Typed editable document contents.')
 
 
 EditorDocument = Annotated[TimelineDocument | SubjectDocument | LayerDocument | ImageCropDocument | StackDocument |

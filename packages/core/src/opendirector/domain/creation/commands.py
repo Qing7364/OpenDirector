@@ -12,7 +12,7 @@ from .generation import GenerationSpec, Job, PromptPart, Reference
 
 
 class ProjectCreate(Contract):
-    name: str = Field(min_length=1, max_length=100, pattern=r'\S')
+    name: str = Field(min_length=1, max_length=100, pattern=r'\S', description='User-visible name.')
 
 
 class ProjectRename(ProjectCreate):
@@ -20,34 +20,34 @@ class ProjectRename(ProjectCreate):
 
 
 class AssetImport(Contract):
-    uploadHandle: UUID  # File bytes are transferred separately; no arbitrary path.
-    name: str = Field(min_length=1, max_length=255)
-    expectedKind: MediaKind
+    uploadHandle: UUID = Field(description='Server-issued staged upload ID.')  # File bytes are transferred separately; no arbitrary path.
+    name: str = Field(min_length=1, max_length=255, description='User-visible name.')
+    expectedKind: MediaKind = Field(description='Required media kind, when specified.')
 
 
 class ArtifactPublish(Contract):
     """Publish a file from a server-owned execution context without generating media."""
-    path: str = Field(min_length=1, max_length=4096)
-    name: str = Field(min_length=1, max_length=255)
-    expectedKind: MediaKind | None = None
-    sources: tuple[AssetRef, ...] = Field(default=(), max_length=100)
+    path: str = Field(min_length=1, max_length=4096, description='Artifact path relative to the server-owned execution directory.')
+    name: str = Field(min_length=1, max_length=255, description='User-visible name.')
+    expectedKind: MediaKind | None = Field(default=None, description='Required media kind, when specified.')
+    sources: tuple[AssetRef, ...] = Field(default=(), max_length=100, description='Ordered source asset versions.')
 
 
 class AssetWriteText(Contract):
-    name: str = Field(min_length=1, max_length=255)
-    text: str = Field(max_length=1024 * 1024)
-    previousAsset: AssetRef | None = None
+    name: str = Field(min_length=1, max_length=255, description='User-visible name.')
+    text: str = Field(max_length=1024 * 1024, description='UTF-8 text content or search query.')
+    previousAsset: AssetRef | None = Field(default=None, description='Previous immutable version for a new text asset version.')
     # Manual/Agent provenance is supplied by the trusted application context.
 
 
 class AssetMetadataUpdate(Contract):
-    assetId: UUID
-    name: str = Field(min_length=1, max_length=255)
+    assetId: UUID = Field(description='Asset ID.')
+    name: str = Field(min_length=1, max_length=255, description='User-visible name.')
 
 
 class AssetDelete(Contract):
-    assetIds: tuple[UUID, ...] = Field(min_length=1, max_length=100)
-    clearHistory: bool = False
+    assetIds: tuple[UUID, ...] = Field(min_length=1, max_length=100, description='Target asset IDs.')
+    clearHistory: bool = Field(default=False, description='Whether the confirmed deletion also clears dependent history.')
 
     @model_validator(mode='after')
     def assets(self):
@@ -56,13 +56,13 @@ class AssetDelete(Contract):
 
 
 class CanvasShow(Contract):
-    item: CanvasItem
+    item: CanvasItem = Field(description='Canvas display item to create or restore.')
 
 
 class CanvasCreateGeneration(Contract):
     spec: GenerationSpec = Field(description='New configuration with purpose=generation.')
     item: CanvasItem = Field(description='Visible item bound to spec.id with role=generation.')
-    references: tuple[Reference, ...] = ()
+    references: tuple[Reference, ...] = Field(default=(), description='Ordered generation reference bindings.')
 
     @model_validator(mode='after')
     def bindings(self):
@@ -80,12 +80,12 @@ class CanvasCreateGeneration(Contract):
 
 
 class CanvasMoveItem(Contract):
-    itemId: UUID
-    position: Point
+    itemId: UUID = Field(description='Canvas item ID.')
+    position: Point = Field(description='Position in the owning canvas or stage.')
 
 
 class CanvasMove(Contract):
-    items: tuple[CanvasMoveItem, ...] = Field(min_length=1, max_length=500)
+    items: tuple[CanvasMoveItem, ...] = Field(min_length=1, max_length=500, description='Ordered entries in this collection.')
 
     @model_validator(mode='after')
     def items_unique(self):
@@ -94,57 +94,57 @@ class CanvasMove(Contract):
 
 
 class CanvasPresentationUpdate(Contract):
-    itemId: UUID
-    title: str | None = Field(default=None, max_length=255)
-    width: Positive | None = None
-    height: Positive | None = None
-    zIndex: int | None = Field(default=None, strict=True)
-    locked: bool | None = None
-    parentId: UUID | None = None
+    itemId: UUID = Field(description='Canvas item ID.')
+    title: str | None = Field(default=None, max_length=255, description='User-visible title.')
+    width: Positive | None = Field(default=None, description='Width in pixels.')
+    height: Positive | None = Field(default=None, description='Height in pixels.')
+    zIndex: int | None = Field(default=None, strict=True, description='Canvas stacking order.')
+    locked: bool | None = Field(default=None, description='Whether edits to this object are blocked.')
+    parentId: UUID | None = Field(default=None, description='Parent canvas group ID, or null for the root.')
     # Presence of parentId distinguishes retaining a group from ungrouping.
 
 
 class CanvasHide(Contract):
-    itemId: UUID
+    itemId: UUID = Field(description='Canvas item ID.')
 
 
 class CanvasMaterialize(Contract):
-    itemId: UUID
-    asset: AssetRef
-    discardGenerationDraft: bool = False
+    itemId: UUID = Field(description='Canvas item ID.')
+    asset: AssetRef = Field(description='Immutable asset version.')
+    discardGenerationDraft: bool = Field(default=False, description='Whether material replacement discards the generation draft.')
 
 
 class CanvasApplyEdit(Contract):
-    itemId: UUID
-    source: AssetRef
-    asset: AssetRef
-    editorId: UUID
+    itemId: UUID = Field(description='Canvas item ID.')
+    source: AssetRef = Field(description='Input source or recorded provenance.')
+    asset: AssetRef = Field(description='Immutable asset version.')
+    editorId: UUID = Field(description='Editable document ID.')
 
 
 class TimelinePublishRender(Contract):
-    itemId: UUID
-    editorId: UUID
-    asset: AssetRef
-    outputId: UUID
-    title: str = Field(default='合成视频', max_length=255)
-    position: Point = Field(default_factory=Point)
+    itemId: UUID = Field(description='Canvas item ID.')
+    editorId: UUID = Field(description='Editable document ID.')
+    asset: AssetRef = Field(description='Immutable asset version.')
+    outputId: UUID = Field(description='Published canvas output ID.')
+    title: str = Field(default='合成视频', max_length=255, description='User-visible title.')
+    position: Point = Field(default_factory=Point, description='Position in the owning canvas or stage.')
 
 
 class MediaPublicationOutput(Contract):
-    itemId: UUID
-    asset: AssetRef
-    title: str = Field(min_length=1, max_length=255)
-    position: Point = Field(default_factory=Point)
-    width: float = Field(default=352, gt=0, le=10000)
-    height: float = Field(default=198, gt=0, le=10000)
+    itemId: UUID = Field(description='Canvas item ID.')
+    asset: AssetRef = Field(description='Immutable asset version.')
+    title: str = Field(min_length=1, max_length=255, description='User-visible title.')
+    position: Point = Field(default_factory=Point, description='Position in the owning canvas or stage.')
+    width: float = Field(default=352, gt=0, le=10000, description='Width in pixels.')
+    height: float = Field(default=198, gt=0, le=10000, description='Height in pixels.')
 
 
 class CanvasPublishMedia(Contract):
-    itemId: UUID
-    source: AssetRef | None = None
-    sourceEditorId: UUID | None = None
-    document: EditorDocument
-    outputs: tuple[MediaPublicationOutput, ...] = Field(min_length=1, max_length=50)
+    itemId: UUID = Field(description='Canvas item ID.')
+    source: AssetRef | None = Field(default=None, description='Input source or recorded provenance.')
+    sourceEditorId: UUID | None = Field(default=None, description='Source editable document ID.')
+    document: EditorDocument = Field(description='Editable document owned by this operation.')
+    outputs: tuple[MediaPublicationOutput, ...] = Field(min_length=1, max_length=50, description='Ordered published media outputs.')
 
     @model_validator(mode='after')
     def distinct_outputs(self):
@@ -156,45 +156,45 @@ class CanvasPublishMedia(Contract):
 
 
 class CanvasConfigure(Contract):
-    itemId: UUID
-    specId: UUID
+    itemId: UUID = Field(description='Canvas item ID.')
+    specId: UUID = Field(description='Generation configuration ID.')
     # Explicit conversion keeps the immutable handwritten asset in the catalog.
-    preserveMaterial: bool = False
+    preserveMaterial: bool = Field(default=False, description='Whether configuring generation retains current material.')
 
 
 class CanvasEditorAttach(Contract):
-    itemId: UUID
-    editorId: UUID
+    itemId: UUID = Field(description='Canvas item ID.')
+    editorId: UUID = Field(description='Editable document ID.')
 
 
 class SpecRestore(Contract):
-    specId: UUID
-    commandId: UUID
-    referencePolicy: Literal['follow_current', 'pinned'] = 'follow_current'
+    specId: UUID = Field(description='Generation configuration ID.')
+    commandId: UUID = Field(description='Historical command providing the settings to restore.')
+    referencePolicy: Literal['follow_current', 'pinned'] = Field(default='follow_current', description='Policy for restoring associated reference bindings.')
 
 
 class NodeVersionApply(Contract):
-    itemId: UUID
-    asset: AssetRef
-    referencePolicy: Literal['follow_current', 'pinned'] = 'follow_current'
+    itemId: UUID = Field(description='Canvas item ID.')
+    asset: AssetRef = Field(description='Immutable asset version.')
+    referencePolicy: Literal['follow_current', 'pinned'] = Field(default='follow_current', description='Policy for restoring associated reference bindings.')
 
 
 class SpecPromptWrite(Contract):
-    specId: UUID
-    prompt: str = Field(max_length=20000)
-    promptContent: tuple[PromptPart, ...] | None = None
+    specId: UUID = Field(description='Generation configuration ID.')
+    prompt: str = Field(max_length=20000, description='Generation prompt text.')
+    promptContent: tuple[PromptPart, ...] | None = Field(default=None, description='Structured prompt text and reference tokens.')
 
 
 class SpecWrite(Contract):
-    spec: GenerationSpec
+    spec: GenerationSpec = Field(description='Generation configuration for this operation.')
 
 
 class ReferenceWrite(Contract):
-    reference: Reference
+    reference: Reference = Field(description='Generation reference to create or update.')
 
 
 class ReferenceRemove(Contract):
-    referenceId: UUID
+    referenceId: UUID = Field(description='Generation reference ID.')
 
 
 class GenerationSubmit(Contract):
@@ -204,10 +204,10 @@ class GenerationSubmit(Contract):
     originItemId: UUID | None = Field(default=None,
         description='When set, include its current canvas_item revision in expectedVersions.',
         json_schema_extra={'x-version-object-type': 'canvas_item'})
-    previousJobId: UUID | None = None
-    adoptionPolicy: Literal['if_current', 'candidate_only'] = 'if_current'
-    batchId: UUID | None = None
-    showAdditionalResult: bool = False
+    previousJobId: UUID | None = Field(default=None, description='Previous generation attempt ID.')
+    adoptionPolicy: Literal['if_current', 'candidate_only'] = Field(default='if_current', description='Policy for adopting the completed result.')
+    batchId: UUID | None = Field(default=None, description='Generation batch ID.')
+    showAdditionalResult: bool = Field(default=False, description='Whether to display an additional result item.')
 
     @model_validator(mode='after')
     def presentation(self):
@@ -217,24 +217,24 @@ class GenerationSubmit(Contract):
 
 
 class JobControl(Contract):
-    jobId: UUID
+    jobId: UUID = Field(description='Generation job ID.')
 
 
 class JobCheckpoint(Contract):
-    job: Job
+    job: Job = Field(description='Generation execution record.')
 
 
 class ResultSelect(Contract):
-    specId: UUID
-    resultId: UUID
+    specId: UUID = Field(description='Generation configuration ID.')
+    resultId: UUID = Field(description='Generation result ID.')
 
 
 class EditorWrite(Contract):
-    document: EditorDocument
+    document: EditorDocument = Field(description='Editable document owned by this operation.')
 
 
 class HistoryReplay(Contract):
-    targetCommandId: UUID
+    targetCommandId: UUID = Field(description='Historical command to undo or redo.')
 
 
 class EmptyPayload(Contract):
@@ -242,11 +242,11 @@ class EmptyPayload(Contract):
 
 
 class CommandBase(Contract):
-    commandId: UUID
-    projectId: UUID
-    type: str
+    commandId: UUID = Field(description='Stable command ID for idempotent replay.')
+    projectId: UUID = Field(description='Owning project ID.')
+    type: str = Field(description='Operation or variant discriminator.')
     expectedVersions: tuple[ObjectVersion, ...] = Field(default=(), description='Current versions of mutated existing objects; payload revision fields do not replace these.')
-    expectedPreview: Digest | None = None
+    expectedPreview: Digest | None = Field(default=None, description='Fingerprint of the confirmed impact preview.')
 
     @model_validator(mode='after')
     def scope_and_versions(self):
@@ -346,7 +346,8 @@ _COMMANDS = (
 )
 COMMAND_MODELS = {}
 for _name, _type, _payload, _description in _COMMANDS:
-    _model = create_model(_name, __base__=CommandBase, __doc__=_description, type=(Literal[_type], ...), payload=(_payload, ...))
+    _model = create_model(_name, __base__=CommandBase, __doc__=_description, type=(Literal[_type], Field(description='Command discriminator.')),
+        payload=(_payload, Field(description=_description)))
     COMMAND_MODELS[_type] = _model
     globals()[_name] = _model
 
@@ -354,18 +355,20 @@ _BATCH_TYPES = {'canvas.show', 'canvas.move', 'canvas.update', 'canvas.hide', 'c
                 'canvas.configure', 'canvas.attachEditor', 'canvas.detachEditor', 'generationSpec.create', 'generationSpec.update',
                 'reference.add', 'reference.update', 'reference.restore', 'reference.remove', 'editor.create', 'editor.save', 'result.select', 'generationSpec.setPrompt'}
 _OPERATIONS = tuple(create_model(name + 'Operation', __base__=Contract,
-                    __doc__=description, type=(Literal[kind], ...), payload=(payload, ...))
+                    __doc__=description, type=(Literal[kind], Field(description='Operation discriminator.')),
+                    payload=(payload, Field(description=description)))
                     for name, kind, payload, description in _COMMANDS if kind in _BATCH_TYPES)
 Operation = Annotated[Union[_OPERATIONS], Field(discriminator='type')]
 
 
 class BatchPayload(Contract):
-    operations: tuple[Operation, ...] = Field(min_length=1, max_length=500)
+    operations: tuple[Operation, ...] = Field(min_length=1, max_length=500, description='Ordered operations committed as one atomic transaction.')
 
 
 BatchCommand = create_model('BatchCommand', __base__=CommandBase,
                             __doc__='Apply multiple operations atomically; all succeed or none are committed.',
-                            type=(Literal['creation.batch'], ...), payload=(BatchPayload, ...))
+                            type=(Literal['creation.batch'], Field(description='Batch command discriminator.')),
+                            payload=(BatchPayload, Field(description='Ordered operations committed atomically.')))
 COMMAND_MODELS['creation.batch'] = BatchCommand
 Command = Annotated[Union[tuple(COMMAND_MODELS.values())], Field(discriminator='type')]
 COMMAND_ADAPTER = TypeAdapter(Command)
@@ -382,21 +385,21 @@ def command_fingerprint(command: Command) -> str:
 
 class ContractIssue(Contract):
     code: Literal['invalid_input', 'revision_conflict', 'role_restricted', 'missing_object', 'reference_invalid',
-                  'capability_unsupported', 'preview_expired', 'storage_unavailable', 'submission_unknown', 'provider_error']
-    message: str = Field(min_length=1, max_length=500)
-    objectId: UUID | None = None
-    field: str | None = Field(default=None, max_length=200)
+                  'capability_unsupported', 'preview_expired', 'storage_unavailable', 'submission_unknown', 'provider_error'] = Field(description='Stable error or issue code.')
+    message: str = Field(min_length=1, max_length=500, description='Human-readable issue description.')
+    objectId: UUID | None = Field(default=None, description='Target business object ID.')
+    field: str | None = Field(default=None, max_length=200, description='Path of the field responsible for this issue.')
 
 
 class CommandReceipt(Contract):
-    commandId: UUID
-    projectId: UUID
-    inputFingerprint: Digest
-    status: Literal['applied', 'accepted', 'noop', 'rejected']
-    changed: tuple[ObjectVersion, ...] = ()
-    jobIds: tuple[UUID, ...] = ()
-    issues: tuple[ContractIssue, ...] = ()
-    eventCursor: int | None = Field(default=None, strict=True, ge=0)
+    commandId: UUID = Field(description='Stable command ID for idempotent replay.')
+    projectId: UUID = Field(description='Owning project ID.')
+    inputFingerprint: Digest = Field(description='Fingerprint of the fixed execution input.')
+    status: Literal['applied', 'accepted', 'noop', 'rejected'] = Field(description='Current operation lifecycle state.')
+    changed: tuple[ObjectVersion, ...] = Field(default=(), description='Business objects changed by the operation.')
+    jobIds: tuple[UUID, ...] = Field(default=(), description='Generation jobs associated with this operation.')
+    issues: tuple[ContractIssue, ...] = Field(default=(), description='Validation or execution issues.')
+    eventCursor: int | None = Field(default=None, strict=True, ge=0, description='Latest committed project event cursor.')
 
     @model_validator(mode='after')
     def outcome(self):
@@ -420,14 +423,14 @@ class AssetPreviewQuery(Contract):
 
 
 class Query(Contract):
-    queryId: UUID
-    projectId: UUID
-    type: Literal['project.get', 'object.get', 'asset.search', 'asset.usage', 'generationSpec.versions', 'canvas.versions', 'job.get']
-    objectId: UUID | None = None
-    revision: Revision | None = None
-    text: str = Field(default='', max_length=1000)
-    offset: int = Field(default=0, strict=True, ge=0)
-    limit: int = Field(default=50, strict=True, ge=1, le=200)
+    queryId: UUID = Field(description='Caller-supplied query ID.')
+    projectId: UUID = Field(description='Owning project ID.')
+    type: Literal['project.get', 'object.get', 'asset.search', 'asset.usage', 'generationSpec.versions', 'canvas.versions', 'job.get'] = Field(description='Operation or variant discriminator.')
+    objectId: UUID | None = Field(default=None, description='Target business object ID.')
+    revision: Revision | None = Field(default=None, description='Historical revision to read, when specified.')
+    text: str = Field(default='', max_length=1000, description='UTF-8 text content or search query.')
+    offset: int = Field(default=0, strict=True, ge=0, description='Number of matching records to skip.')
+    limit: int = Field(default=50, strict=True, ge=1, le=200, description='Maximum number of records to return.')
 
     @model_validator(mode='after')
     def target(self):
@@ -437,15 +440,15 @@ class Query(Contract):
 
 
 class ChangedObject(Contract):
-    version: ObjectVersion
-    change: Literal['created', 'updated', 'hidden', 'deleted']
+    version: ObjectVersion = Field(description='Version of the referenced record.')
+    change: Literal['created', 'updated', 'hidden', 'deleted'] = Field(description='Kind of business object change.')
 
 
 class ProjectEvent(Contract):
-    schemaVersion: Literal[1] = 1
-    projectId: UUID
-    cursor: int = Field(strict=True, ge=1)
-    commandId: UUID | None = None
-    source: Literal['ui', 'agent', 'background', 'external']
-    changed: tuple[ChangedObject, ...] = ()
-    jobIds: tuple[UUID, ...] = ()
+    schemaVersion: Literal[1] = Field(default=1, description='Record schema version.')
+    projectId: UUID = Field(description='Owning project ID.')
+    cursor: int = Field(strict=True, ge=1, description='Monotonically increasing project event cursor.')
+    commandId: UUID | None = Field(default=None, description='Stable command ID for idempotent replay.')
+    source: Literal['ui', 'agent', 'background', 'external'] = Field(description='Input source or recorded provenance.')
+    changed: tuple[ChangedObject, ...] = Field(default=(), description='Business objects changed by the operation.')
+    jobIds: tuple[UUID, ...] = Field(default=(), description='Generation jobs associated with this operation.')

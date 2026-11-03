@@ -12,9 +12,9 @@ from .generation import FollowingReference, GenerationSpec, Job, PromptReference
 
 
 class Project(Contract):
-    id: UUID
-    revision: Revision = 1
-    name: str = Field(min_length=1, max_length=100, pattern=r'\S')
+    id: UUID = Field(description='Stable object ID.')
+    revision: Revision = Field(default=1, description='Current object revision for optimistic concurrency.')
+    name: str = Field(min_length=1, max_length=100, pattern=r'\S', description='User-visible name.')
 
 
 def asset_references(value):
@@ -48,18 +48,18 @@ def acyclic(edges, label):
 
 
 class ProjectSnapshot(Contract):
-    format: Literal['opendirector-project'] = 'opendirector-project'
-    formatVersion: Literal[2] = 2
-    project: Project
-    assets: tuple[Asset, ...] = ()
-    generationSpecs: tuple[GenerationSpec, ...] = ()
-    references: tuple[Reference, ...] = ()
-    canvasItems: tuple[CanvasItem, ...] = ()
-    editorDocuments: tuple[EditorDocument, ...] = ()
-    jobs: tuple[Job, ...] = ()
-    results: tuple[ResultVersion, ...] = ()
-    eventCursor: int = Field(default=0, strict=True, ge=0)
-    undoClearedThrough: int = Field(default=0, strict=True, ge=0)
+    format: Literal['opendirector-project'] = Field(default='opendirector-project', description='Serialized format identifier.')
+    formatVersion: Literal[2] = Field(default=2, description='Project format version.')
+    project: Project = Field(description='Project identity and current revision.')
+    assets: tuple[Asset, ...] = Field(default=(), description='Registered immutable assets.')
+    generationSpecs: tuple[GenerationSpec, ...] = Field(default=(), description='Editable generation configurations.')
+    references: tuple[Reference, ...] = Field(default=(), description='Ordered generation reference bindings.')
+    canvasItems: tuple[CanvasItem, ...] = Field(default=(), description='Canvas display items, including hidden items.')
+    editorDocuments: tuple[EditorDocument, ...] = Field(default=(), description='Persisted editable documents.')
+    jobs: tuple[Job, ...] = Field(default=(), description='Immutable generation execution records.')
+    results: tuple[ResultVersion, ...] = Field(default=(), description='Generated result candidates and adoption history.')
+    eventCursor: int = Field(default=0, strict=True, ge=0, description='Latest committed project event cursor.')
+    undoClearedThrough: int = Field(default=0, strict=True, ge=0, description='Event cursor through which undo history was cleared.')
 
     @model_validator(mode='after')
     def project_relations(self):
@@ -208,19 +208,19 @@ class ProjectSnapshot(Contract):
 
 
 class Viewport(Point):
-    zoom: float = Field(default=1, strict=True, ge=0.08, le=8)
+    zoom: float = Field(default=1, strict=True, ge=0.08, le=8, description='Canvas viewport zoom factor.')
 
 
 class Playhead(Contract):
-    editorDocumentId: UUID
-    seconds: NonNegative = 0
+    editorDocumentId: UUID = Field(description='Editable document ID.')
+    seconds: NonNegative = Field(default=0, description='Playhead position in seconds.')
 
 
 class ViewState(Contract):
-    projectId: UUID
-    clientId: UUID
-    viewport: Viewport = Field(default_factory=Viewport)
-    selectedItemIds: tuple[UUID, ...] = ()
-    activeEditorId: UUID | None = None
-    playheads: tuple[Playhead, ...] = ()
-    generationCounts: dict[UUID, Annotated[int, Field(strict=True, ge=1, le=8)]] = Field(default_factory=dict)
+    projectId: UUID = Field(description='Owning project ID.')
+    clientId: UUID = Field(description='Client identity for independent view state.')
+    viewport: Viewport = Field(default_factory=Viewport, description='Canvas pan and zoom state.')
+    selectedItemIds: tuple[UUID, ...] = Field(default=(), description='Currently selected canvas item IDs.')
+    activeEditorId: UUID | None = Field(default=None, description='Currently active editable document ID.')
+    playheads: tuple[Playhead, ...] = Field(default=(), description='Playback positions keyed by editor identity.')
+    generationCounts: dict[UUID, Annotated[int, Field(strict=True, ge=1, le=8)]] = Field(default_factory=dict, description='Requested generation counts keyed by canvas item ID.')

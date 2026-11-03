@@ -24,24 +24,24 @@ class VideoCapabilities(ExistingVideoCapabilities):
 
 
 class ImageOutput(Contract):
-    aspectRatio: str = Field(pattern=r'^(?:auto|[1-9]\d?:[1-9]\d?)$')
-    size: str = Field(pattern=r'^(?:2K|[1-9]\d{2,3}x[1-9]\d{2,3})$')
+    aspectRatio: str = Field(pattern=r'^(?:auto|[1-9]\d?:[1-9]\d?)$', description='Output width-to-height ratio.')
+    size: str = Field(pattern=r'^(?:2K|[1-9]\d{2,3}x[1-9]\d{2,3})$', description='Supported image dimensions or size preset.')
 
 
 class InputRules(Contract):
-    profile: str = Field(min_length=1, max_length=100)
-    allowedKinds: tuple[Literal['text', 'image', 'video', 'audio'], ...]
-    maxImages: Count
-    maxVideos: Count
-    maxAudios: Count
-    imageBytes: Count
-    videoBytes: Count
-    requestBytes: Count
-    videoModes: tuple[VideoMode, ...]
-    imageOutputs: tuple[ImageOutput, ...] = ()
-    outputResolutions: tuple[str, ...] = ()
-    referenceImageResolutions: tuple[str, ...] | None = None
-    videoCapabilities: VideoCapabilities | None = None
+    profile: str = Field(min_length=1, max_length=100, description='Model capability profile.')
+    allowedKinds: tuple[Literal['text', 'image', 'video', 'audio'], ...] = Field(description='Accepted reference media kinds.')
+    maxImages: Count = Field(description='Maximum reference image count.')
+    maxVideos: Count = Field(description='Maximum reference video count.')
+    maxAudios: Count = Field(description='Maximum reference audio count.')
+    imageBytes: Count = Field(description='Maximum bytes per reference image.')
+    videoBytes: Count = Field(description='Maximum bytes per reference video.')
+    requestBytes: Count = Field(description='Maximum aggregate reference bytes per request.')
+    videoModes: tuple[VideoMode, ...] = Field(description='Supported video generation modes.')
+    imageOutputs: tuple[ImageOutput, ...] = Field(default=(), description='Supported image aspect ratios and sizes.')
+    outputResolutions: tuple[str, ...] = Field(default=(), description='Supported output resolution values.')
+    referenceImageResolutions: tuple[str, ...] | None = Field(default=None, description='Supported reference image resolution values.')
+    videoCapabilities: VideoCapabilities | None = Field(default=None, description='Supported video generation capabilities.')
 
     @model_validator(mode='after')
     def consistent(self):
@@ -58,15 +58,15 @@ class InputRules(Contract):
 
 
 class ModelConnection(Contract):
-    kind: ModelKind
-    url: str = Field(min_length=1, max_length=2048)
-    modelId: str = Field(min_length=1, max_length=200)
-    connectionType: Literal['api', 'self_hosted']
-    protocol: Protocol
-    authMode: Literal['none', 'bearer']
-    inputModalities: tuple[Literal['text', 'image'], ...] | None = None
-    videoAdapter: VideoAdapter = 'auto'
-    videoCapabilities: VideoCapabilities | None = None
+    kind: ModelKind = Field(description='Business object or media type.')
+    url: str = Field(min_length=1, max_length=2048, description='Provider API base URL.')
+    modelId: str = Field(min_length=1, max_length=200, description='Provider-native model identifier.')
+    connectionType: Literal['api', 'self_hosted'] = Field(description='Hosted or local model connection type.')
+    protocol: Protocol = Field(description='Provider wire protocol.')
+    authMode: Literal['none', 'bearer'] = Field(description='Authentication mode for the provider connection.')
+    inputModalities: tuple[Literal['text', 'image'], ...] | None = Field(default=None, description='Supported model input media kinds.')
+    videoAdapter: VideoAdapter = Field(default='auto', description='Provider-specific video adapter.')
+    videoCapabilities: VideoCapabilities | None = Field(default=None, description='Supported video generation capabilities.')
 
     @field_validator('url')
     @classmethod
@@ -108,14 +108,14 @@ class ModelConnection(Contract):
 
 class ModelConfigPublic(ModelConnection):
     """Application-level, never embedded in an editable project's credential data."""
-    id: UUID
-    providerId: UUID | None = Field(default=None, exclude=True)
-    inputRules: InputRules
+    id: UUID = Field(description='Stable object ID.')
+    providerId: UUID | None = Field(default=None, exclude=True, description='Shared provider connection ID.')
+    inputRules: InputRules = Field(description='Verified model input limits and output choices.')
 
 
 class ModelConfigWrite(ModelConnection):
     """Only the model-settings write boundary accepts a credential."""
-    apiKey: SecretStr | None = Field(default=None, max_length=8192)
+    apiKey: SecretStr | None = Field(default=None, max_length=8192, description='Provider credential; omitted from public model records.')
 
     @field_validator('apiKey')
     @classmethod
@@ -126,15 +126,15 @@ class ModelConfigWrite(ModelConnection):
 
 
 class ModelSnapshot(Contract):
-    modelConfigId: UUID
-    kind: ModelKind
-    modelId: str = Field(min_length=1, max_length=200)
-    url: str = Field(min_length=1, max_length=2048)
-    protocol: Protocol
-    connectionType: Literal['api', 'self_hosted']
-    inputModalities: tuple[Literal['text', 'image'], ...] | None = Field(default=None, exclude_if=lambda value: value is None)
-    videoAdapter: VideoAdapter = 'auto'
-    inputRules: InputRules | None = None
+    modelConfigId: UUID = Field(description='Selected model configuration ID.')
+    kind: ModelKind = Field(description='Business object or media type.')
+    modelId: str = Field(min_length=1, max_length=200, description='Provider-native model identifier.')
+    url: str = Field(min_length=1, max_length=2048, description='Provider API base URL.')
+    protocol: Protocol = Field(description='Provider wire protocol.')
+    connectionType: Literal['api', 'self_hosted'] = Field(description='Hosted or local model connection type.')
+    inputModalities: tuple[Literal['text', 'image'], ...] | None = Field(default=None, exclude_if=lambda value: value is None, description='Supported model input media kinds.')
+    videoAdapter: VideoAdapter = Field(default='auto', description='Provider-specific video adapter.')
+    inputRules: InputRules | None = Field(default=None, description='Verified model input limits and output choices.')
 
     @field_validator('url')
     @classmethod

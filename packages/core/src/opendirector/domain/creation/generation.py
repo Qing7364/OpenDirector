@@ -13,24 +13,24 @@ from .models import ModelConfigPublic, ModelSnapshot, VideoMode
 
 
 class TextParameters(Contract):
-    thinking: Literal['auto', 'low', 'medium', 'high'] = 'auto'
-    maxTokens: Annotated[int, Field(strict=True, ge=1, le=32768)] = 8192
+    thinking: Literal['auto', 'low', 'medium', 'high'] = Field(default='auto', description='Requested reasoning effort.')
+    maxTokens: Annotated[int, Field(strict=True, ge=1, le=32768)] = Field(default=8192, description='Maximum generated text tokens.')
 
 
 class ImageParameters(Contract):
-    size: str = Field(default='auto', pattern=r'^(?:auto|2K|[1-9]\d{2,3}x[1-9]\d{2,3})$')
-    aspectRatio: str | None = Field(default=None, pattern=r'^[1-9]\d?:[1-9]\d?$')
-    preset: Literal['none', 'product-views'] = 'none'
-    responseFormat: Literal['url'] = 'url'
-    outputFormat: Literal['png'] = 'png'
+    size: str = Field(default='auto', pattern=r'^(?:auto|2K|[1-9]\d{2,3}x[1-9]\d{2,3})$', description='Requested image dimensions or size preset.')
+    aspectRatio: str | None = Field(default=None, pattern=r'^[1-9]\d?:[1-9]\d?$', description='Output width-to-height ratio.')
+    preset: Literal['none', 'product-views'] = Field(default='none', description='Selected generation or motion preset.')
+    responseFormat: Literal['url'] = Field(default='url', description='Provider response representation.')
+    outputFormat: Literal['png'] = Field(default='png', description='Generated image encoding.')
 
 
 class VideoParameters(Contract):
-    generateAudio: bool = True
-    videoMode: VideoMode = 'first_frame'
-    durationSeconds: Annotated[float, Field(strict=True, ge=1, le=60)] | None = None
-    aspectRatio: str | None = Field(default=None, pattern=r'^[1-9]\d?:[1-9]\d?$')
-    resolution: str = Field(default='auto', pattern=r'^(?:auto|[A-Z0-9][A-Z0-9_.-]{0,23})$')
+    generateAudio: bool = Field(default=True, description='Whether video generation includes audio.')
+    videoMode: VideoMode = Field(default='first_frame', description='Video generation input mode.')
+    durationSeconds: Annotated[float, Field(strict=True, ge=1, le=60)] | None = Field(default=None, description='Duration in seconds.')
+    aspectRatio: str | None = Field(default=None, pattern=r'^[1-9]\d?:[1-9]\d?$', description='Output width-to-height ratio.')
+    resolution: str = Field(default='auto', pattern=r'^(?:auto|[A-Z0-9][A-Z0-9_.-]{0,23})$', description='Requested output resolution.')
 
 
 # Music models count audio frames at 25 per second, between 200 and 9000 frames.
@@ -47,18 +47,18 @@ def reference_music_seconds(reference_seconds):
 
 
 class AudioParameters(Contract):
-    creationType: Literal['audio', 'music'] = 'audio'
-    mode: Literal['tts', 'unified'] = 'tts'
-    voice: str | None = Field(default=None, pattern=r'^[\w.-]{1,64}$')
+    creationType: Literal['audio', 'music'] = Field(default='audio', description='Speech or music creation mode.')
+    mode: Literal['tts', 'unified'] = Field(default='tts', description='Operation mode within this contract variant.')
+    voice: str | None = Field(default=None, pattern=r'^[\w.-]{1,64}$', description='Provider voice identifier or name.')
     # Legacy: a release stored an explicit instrumental choice. It stays readable
     # so those specs and job fingerprints still load; generation ignores it.
-    instrumental: bool = Field(default=False, exclude_if=lambda value: value is False)
+    instrumental: bool = Field(default=False, exclude_if=lambda value: value is False, description='Legacy explicit instrumental choice retained for stored records.')
     # Music only: the prompt is the style description; empty lyrics ask for an instrumental piece.
     # Unset music fields stay out of the dump, so specs and job fingerprints
     # recorded before music support keep their identity.
-    lyrics: str = Field(default='', max_length=5000, exclude_if=lambda value: value == '')
+    lyrics: str = Field(default='', max_length=5000, exclude_if=lambda value: value == '', description='Song lyrics; empty lyrics request instrumental music.')
     durationSeconds: Annotated[float, Field(strict=True, ge=MUSIC_SECONDS[0], le=MUSIC_SECONDS[1])] | None = Field(
-        default=None, exclude_if=lambda value: value is None)
+        default=None, exclude_if=lambda value: value is None, description='Maximum music duration in seconds.')
     # Music with a reference recording: follow its melody only, or its melody and chords.
     scoreMode: Literal['melody', 'full'] = Field(
         default='melody', exclude_if=lambda value: value == 'melody',
@@ -70,44 +70,44 @@ class AudioParameters(Contract):
 
 
 class PromptText(Contract):
-    type: Literal['text']
-    text: str = Field(max_length=20000)
+    type: Literal['text'] = Field(description='Operation or variant discriminator.')
+    text: str = Field(max_length=20000, description='UTF-8 text content or search query.')
 
 
 class PromptReference(Contract):
-    type: Literal['reference']
-    referenceId: UUID
+    type: Literal['reference'] = Field(description='Operation or variant discriminator.')
+    referenceId: UUID = Field(description='Generation reference ID.')
 
 
 PromptPart = Annotated[PromptText | PromptReference, Field(discriminator='type')]
 
 
 class GenerationSpecBase(ProjectEntity):
-    purpose: Literal['draft', 'generation'] = 'draft'
-    modelConfigId: UUID | None = None  # Drafts can exist before choosing a model.
-    prompt: str = Field(default='', max_length=20000)
-    promptContent: tuple[PromptPart, ...] | None = None
-    currentResultId: UUID | None = None
+    purpose: Literal['draft', 'generation'] = Field(default='draft', description='Draft settings or executable generation configuration.')
+    modelConfigId: UUID | None = Field(default=None, description='Selected model configuration ID.')  # Drafts can exist before choosing a model.
+    prompt: str = Field(default='', max_length=20000, description='Generation prompt text.')
+    promptContent: tuple[PromptPart, ...] | None = Field(default=None, description='Structured prompt text and reference tokens.')
+    currentResultId: UUID | None = Field(default=None, description='Currently adopted result ID.')
 
 
 class TextGenerationSpec(GenerationSpecBase):
-    kind: Literal['text']
-    parameters: TextParameters = Field(default_factory=TextParameters)
+    kind: Literal['text'] = Field(description='Business object or media type.')
+    parameters: TextParameters = Field(default_factory=TextParameters, description='Typed generation or editing parameters.')
 
 
 class ImageGenerationSpec(GenerationSpecBase):
-    kind: Literal['image']
-    parameters: ImageParameters = Field(default_factory=ImageParameters)
+    kind: Literal['image'] = Field(description='Business object or media type.')
+    parameters: ImageParameters = Field(default_factory=ImageParameters, description='Typed generation or editing parameters.')
 
 
 class VideoGenerationSpec(GenerationSpecBase):
-    kind: Literal['video']
-    parameters: VideoParameters = Field(default_factory=VideoParameters)
+    kind: Literal['video'] = Field(description='Business object or media type.')
+    parameters: VideoParameters = Field(default_factory=VideoParameters, description='Typed generation or editing parameters.')
 
 
 class AudioGenerationSpec(GenerationSpecBase):
-    kind: Literal['audio']
-    parameters: AudioParameters = Field(default_factory=AudioParameters)
+    kind: Literal['audio'] = Field(description='Business object or media type.')
+    parameters: AudioParameters = Field(default_factory=AudioParameters, description='Typed generation or editing parameters.')
 
 
 GenerationSpec = Annotated[TextGenerationSpec | ImageGenerationSpec | VideoGenerationSpec | AudioGenerationSpec,
@@ -115,23 +115,23 @@ GenerationSpec = Annotated[TextGenerationSpec | ImageGenerationSpec | VideoGener
 
 
 class FollowingSource(Contract):
-    objectType: Literal['canvas_item'] = 'canvas_item'
-    id: UUID
+    objectType: Literal['canvas_item'] = Field(default='canvas_item', description='Referenced business object type.')
+    id: UUID = Field(description='Source canvas item ID.')
 
 
 class ReferenceBase(ProjectEntity):
-    targetSpecId: UUID
-    role: Literal['reference', 'first_frame', 'continuation'] = 'reference'
-    order: int = Field(default=0, ge=0, strict=True)
-    active: bool = True  # Retained tombstone prevents revision ABA on undo.
+    targetSpecId: UUID = Field(description='Target generation configuration ID.')
+    role: Literal['reference', 'first_frame', 'continuation'] = Field(default='reference', description='Business role of this binding or reference.')
+    order: int = Field(default=0, ge=0, strict=True, description='Reference ordering within the target configuration.')
+    active: bool = Field(default=True, description='Whether this reference participates in generation.')  # Retained tombstone prevents revision ABA on undo.
 
 
 class PinnedReference(ReferenceBase):
-    binding: Literal['pinned']
-    source: AssetRef
+    binding: Literal['pinned'] = Field(description='Business object displayed by this canvas item.')
+    source: AssetRef = Field(description='Input source or recorded provenance.')
     # Historical provenance only; execution always uses the pinned asset.
-    sourceVersion: ObjectVersion | None = Field(default=None, exclude_if=lambda value: value is None)
-    subjectRole: Literal['main', 'auxiliary', 'voice'] | None = Field(default=None, exclude_if=lambda value: value is None)
+    sourceVersion: ObjectVersion | None = Field(default=None, exclude_if=lambda value: value is None, description='Captured source object version.')
+    subjectRole: Literal['main', 'auxiliary', 'voice'] | None = Field(default=None, exclude_if=lambda value: value is None, description='Subject media slot used by this reference.')
 
     @model_validator(mode='after')
     def source_identity(self):
@@ -143,31 +143,31 @@ class PinnedReference(ReferenceBase):
 class FollowingReference(ReferenceBase):
     # A stable logical source item survives hiding; its current Asset/Spec
     # binding may change. It never points to a transient React Flow instance.
-    binding: Literal['follow_current']
-    source: FollowingSource
+    binding: Literal['follow_current'] = Field(description='Business object displayed by this canvas item.')
+    source: FollowingSource = Field(description='Input source or recorded provenance.')
 
 
 Reference = Annotated[PinnedReference | FollowingReference, Field(discriminator='binding')]
 
 
 class ResolvedReference(Contract):
-    referenceId: UUID
-    role: Literal['reference', 'first_frame', 'continuation']
-    asset: AssetRef
-    metadata: MediaMetadata
-    sourceVersion: ObjectVersion | None = None
-    documentVersion: ObjectVersion | None = None
-    subjectRole: Literal['main', 'auxiliary', 'voice'] | None = None
-    name: str = Field(default='', max_length=255)
-    sourceTitle: str = Field(default='', max_length=255)
-    transmission: Literal['content', 'metadata', 'context_only', 'latent'] = 'content'
+    referenceId: UUID = Field(description='Generation reference ID.')
+    role: Literal['reference', 'first_frame', 'continuation'] = Field(description='Business role of this binding or reference.')
+    asset: AssetRef = Field(description='Immutable asset version.')
+    metadata: MediaMetadata = Field(description='Verified media properties.')
+    sourceVersion: ObjectVersion | None = Field(default=None, description='Captured source object version.')
+    documentVersion: ObjectVersion | None = Field(default=None, description='Version of the source editable document.')
+    subjectRole: Literal['main', 'auxiliary', 'voice'] | None = Field(default=None, description='Subject media slot used by this reference.')
+    name: str = Field(default='', max_length=255, description='User-visible name.')
+    sourceTitle: str = Field(default='', max_length=255, description='Source canvas title captured for this reference.')
+    transmission: Literal['content', 'metadata', 'context_only', 'latent'] = Field(default='content', description='How reference content is sent to the provider.')
 
 
 class InputSnapshot(Contract):
     """Only creative inputs; layout, selection and credentials are excluded."""
-    spec: GenerationSpec
-    model: ModelSnapshot
-    references: tuple[ResolvedReference, ...] = ()
+    spec: GenerationSpec = Field(description='Generation configuration for this operation.')
+    model: ModelSnapshot = Field(description='Fixed model configuration for this execution.')
+    references: tuple[ResolvedReference, ...] = Field(default=(), description='Ordered generation reference bindings.')
 
     @model_validator(mode='after')
     def identity(self):
@@ -202,75 +202,75 @@ class InputSnapshot(Contract):
 
 class VideoExecution(Contract):
     """Resolved adapter parameters, distinct from user intent and source layout."""
-    kind: Literal['video']
-    durationSeconds: Annotated[float, Field(strict=True, ge=1, le=60)] | None = None
-    size: str | None = Field(default=None, pattern=r'^\d+x\d+$')
-    resolution: str | None = None
-    fps: PositiveInt | None = None
-    numFrames: PositiveInt | None = None
-    numInferenceSteps: PositiveInt | None = None
-    guidanceScale: NonNegative | None = None
-    seed: int | None = Field(default=None, strict=True)
-    watermark: bool | None = None
-    generateAudio: bool | None = None
+    kind: Literal['video'] = Field(description='Business object or media type.')
+    durationSeconds: Annotated[float, Field(strict=True, ge=1, le=60)] | None = Field(default=None, description='Duration in seconds.')
+    size: str | None = Field(default=None, pattern=r'^\d+x\d+$', description='Effective video dimensions sent to the provider.')
+    resolution: str | None = Field(default=None, description='Requested output resolution.')
+    fps: PositiveInt | None = Field(default=None, description='Frames per second.')
+    numFrames: PositiveInt | None = Field(default=None, description='Requested video frame count.')
+    numInferenceSteps: PositiveInt | None = Field(default=None, description='Diffusion sampling step count.')
+    guidanceScale: NonNegative | None = Field(default=None, description='Diffusion guidance scale.')
+    seed: int | None = Field(default=None, strict=True, description='Random seed, when specified.')
+    watermark: bool | None = Field(default=None, description='Whether provider watermarking is enabled.')
+    generateAudio: bool | None = Field(default=None, description='Whether video generation includes audio.')
 
 
 class ImageExecution(Contract):
-    kind: Literal['image']
-    size: str
-    responseFormat: Literal['url', 'b64_json'] | None = None
-    outputFormat: Literal['png'] = 'png'
-    watermark: bool | None = None
+    kind: Literal['image'] = Field(description='Business object or media type.')
+    size: str = Field(description='Effective image dimensions sent to the provider.')
+    responseFormat: Literal['url', 'b64_json'] | None = Field(default=None, description='Provider response representation.')
+    outputFormat: Literal['png'] = Field(default='png', description='Generated image encoding.')
+    watermark: bool | None = Field(default=None, description='Whether provider watermarking is enabled.')
 
 
 class AudioExecution(Contract):
-    kind: Literal['audio']
-    voice: str | None = None
-    speaker: str | None = None
-    format: Literal['mp3', 'wav']
-    sampleRate: PositiveInt | None = None
-    creationType: Literal['audio', 'music'] = Field(default='audio', exclude_if=lambda value: value == 'audio')
+    kind: Literal['audio'] = Field(description='Business object or media type.')
+    voice: str | None = Field(default=None, description='Provider voice identifier or name.')
+    speaker: str | None = Field(default=None, description='Provider speaker identifier.')
+    format: Literal['mp3', 'wav'] = Field(description='Audio container or codec format.')
+    sampleRate: PositiveInt | None = Field(default=None, description='Audio samples per second.')
+    creationType: Literal['audio', 'music'] = Field(default='audio', exclude_if=lambda value: value == 'audio', description='Speech or music creation mode.')
     # Legacy, see AudioParameters.instrumental.
-    instrumental: bool = Field(default=False, exclude_if=lambda value: value is False)
+    instrumental: bool = Field(default=False, exclude_if=lambda value: value is False, description='Legacy explicit instrumental choice retained for stored records.')
     # A music model may end the piece earlier than this cap.
     maxDurationSeconds: Annotated[float, Field(strict=True, ge=MUSIC_SECONDS[0], le=MUSIC_SECONDS[1])] | None = Field(
-        default=None, exclude_if=lambda value: value is None)
+        default=None, exclude_if=lambda value: value is None, description='Maximum generated audio duration in seconds.')
     # Set when the piece follows a reference recording's transcribed score.
-    scoreMode: Literal['melody', 'full'] | None = Field(default=None, exclude_if=lambda value: value is None)
+    scoreMode: Literal['melody', 'full'] | None = Field(default=None, exclude_if=lambda value: value is None, description='Whether reference music supplies melody or full accompaniment.')
 
 
 class TextExecution(TextParameters):
-    kind: Literal['text']
+    kind: Literal['text'] = Field(description='Business object or media type.')
 
 
 ExecutionParameters = Annotated[TextExecution | ImageExecution | VideoExecution | AudioExecution, Field(discriminator='kind')]
 
 
 class Job(ProjectEntity):
-    schemaVersion: Literal[1] = 1
-    createdAt: datetime | None = None
-    inputSnapshot: InputSnapshot
-    inputFingerprint: Digest
-    execution: ExecutionParameters
-    status: Literal['queued', 'running', 'succeeded', 'failed', 'cancelled', 'interrupted'] = 'queued'
-    phase: Literal['queued', 'prepare', 'submit', 'poll', 'download', 'check', 'save', 'adopt', 'complete'] = 'queued'
-    externalTaskId: str | None = Field(default=None, min_length=1, max_length=200)
-    asset: AssetRef | None = None
-    errorDetails: GenerationFailure | None = None
-    recovery: Literal['submit', 'remote', 'download', 'local', 'review', 'retry', 'done'] = 'submit'
-    resumeAllowed: bool = False
-    cancelRequested: bool = False
-    remoteCancellation: Literal['not_requested', 'requested', 'confirmed', 'unknown'] = 'not_requested'
-    originItemId: UUID | None = None  # Optional display provenance, not execution ownership.
-    previousJobId: UUID | None = None
-    technicalCheck: ResultCheck | None = None
-    adoptionPolicy: Literal['if_current', 'candidate_only'] = 'if_current'
-    batchId: UUID | None = None
-    showAdditionalResult: bool = False
-    adoptionResultId: UUID | None = None
-    adoptionMaterial: AssetRef | None = None
-    adopted: bool = False
-    adapterParameters: dict[str, JsonValue] = Field(default_factory=dict)
+    schemaVersion: Literal[1] = Field(default=1, description='Record schema version.')
+    createdAt: datetime | None = Field(default=None, description='Execution acceptance timestamp.')
+    inputSnapshot: InputSnapshot = Field(description='Fixed generation inputs accepted for this execution.')
+    inputFingerprint: Digest = Field(description='Fingerprint of the fixed execution input.')
+    execution: ExecutionParameters = Field(description='Fixed effective parameters submitted to the provider.')
+    status: Literal['queued', 'running', 'succeeded', 'failed', 'cancelled', 'interrupted'] = Field(default='queued', description='Current operation lifecycle state.')
+    phase: Literal['queued', 'prepare', 'submit', 'poll', 'download', 'check', 'save', 'adopt', 'complete'] = Field(default='queued', description='Current execution phase.')
+    externalTaskId: str | None = Field(default=None, min_length=1, max_length=200, description='Provider task ID for polling or recovery.')
+    asset: AssetRef | None = Field(default=None, description='Immutable asset version.')
+    errorDetails: GenerationFailure | None = Field(default=None, description='Structured execution failure, if any.')
+    recovery: Literal['submit', 'remote', 'download', 'local', 'review', 'retry', 'done'] = Field(default='submit', description='Available recovery strategy for this execution.')
+    resumeAllowed: bool = Field(default=False, description='Whether the existing execution can be resumed.')
+    cancelRequested: bool = Field(default=False, description='Whether cancellation was requested locally.')
+    remoteCancellation: Literal['not_requested', 'requested', 'confirmed', 'unknown'] = Field(default='not_requested', description='Provider cancellation confirmation state.')
+    originItemId: UUID | None = Field(default=None, description='Originating canvas item ID.')  # Optional display provenance, not execution ownership.
+    previousJobId: UUID | None = Field(default=None, description='Previous generation attempt ID.')
+    technicalCheck: ResultCheck | None = Field(default=None, description='Technical validation outcome for the generated asset.')
+    adoptionPolicy: Literal['if_current', 'candidate_only'] = Field(default='if_current', description='Policy for adopting the completed result.')
+    batchId: UUID | None = Field(default=None, description='Generation batch ID.')
+    showAdditionalResult: bool = Field(default=False, description='Whether to display an additional result item.')
+    adoptionResultId: UUID | None = Field(default=None, description='Result ID reserved for adoption.')
+    adoptionMaterial: AssetRef | None = Field(default=None, description='Material version reserved for adoption.')
+    adopted: bool = Field(default=False, description='Whether the generated result was adopted.')
+    adapterParameters: dict[str, JsonValue] = Field(default_factory=dict, description='Fixed provider-specific execution parameters.')
 
     @model_validator(mode='after')
     def execution_identity(self):
@@ -299,10 +299,10 @@ class Job(ProjectEntity):
 
 
 class ResultVersion(ProjectEntity):
-    specId: UUID
-    jobId: UUID
-    asset: AssetRef
-    inputFingerprint: Digest
+    specId: UUID = Field(description='Generation configuration ID.')
+    jobId: UUID = Field(description='Generation job ID.')
+    asset: AssetRef = Field(description='Immutable asset version.')
+    inputFingerprint: Digest = Field(description='Fingerprint of the fixed execution input.')
 
 
 def execution_spec(spec, references, rules):

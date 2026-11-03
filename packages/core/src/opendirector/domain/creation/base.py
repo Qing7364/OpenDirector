@@ -22,22 +22,30 @@ class Contract(BaseModel):
     model_config = ConfigDict(extra='forbid', frozen=True, allow_inf_nan=False,
                              json_schema_serialization_defaults_required=True)
 
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: object) -> None:
+        super().__pydantic_init_subclass__(**kwargs)
+        missing = [name for name, field in cls.model_fields.items()
+                   if not field.description or not field.description.strip()]
+        if missing:
+            raise TypeError(f'Missing field metadata: {cls.__name__}.{", ".join(missing)}')
+
 
 class ProjectEntity(Contract):
-    id: UUID
-    projectId: UUID
-    revision: Revision = 1
+    id: UUID = Field(description='Stable identity of this project-owned object.')
+    projectId: UUID = Field(description='Owning project ID.')
+    revision: Revision = Field(default=1, description='Current object revision for optimistic concurrency.')
 
 
 class ObjectVersion(Contract):
-    objectType: Literal['project', 'asset', 'generation_spec', 'reference', 'canvas_item', 'editor_document', 'job', 'result']
-    id: UUID
-    revision: Revision
+    objectType: Literal['project', 'asset', 'generation_spec', 'reference', 'canvas_item', 'editor_document', 'job', 'result'] = Field(description='Referenced business object type.')
+    id: UUID = Field(description='Stable object ID.')
+    revision: Revision = Field(description='Current object revision for optimistic concurrency.')
 
 
 class Point(Contract):
-    x: Number = 0
-    y: Number = 0
+    x: Number = Field(default=0, description='Horizontal coordinate.')
+    y: Number = Field(default=0, description='Vertical coordinate.')
 
 
 def digest(value: Contract, *, exclude=None) -> str:

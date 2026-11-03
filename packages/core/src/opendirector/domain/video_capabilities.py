@@ -11,10 +11,10 @@ Second = Annotated[StrictInt, Field(ge=1, le=60)]
 
 class VideoOutput(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    resolution: str = Field(pattern=r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,23}$')
-    durations: list[Second] = Field(min_length=1, max_length=60)
-    width: Annotated[StrictInt, Field(ge=64, le=8192)] | None = None
-    height: Annotated[StrictInt, Field(ge=64, le=8192)] | None = None
+    resolution: str = Field(pattern=r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,23}$', description='Requested output resolution.')
+    durations: list[Second] = Field(min_length=1, max_length=60, description='Supported output durations in seconds.')
+    width: Annotated[StrictInt, Field(ge=64, le=8192)] | None = Field(default=None, description='Width in pixels.')
+    height: Annotated[StrictInt, Field(ge=64, le=8192)] | None = Field(default=None, description='Height in pixels.')
 
     @model_validator(mode='after')
     def normalize(self):
@@ -29,10 +29,10 @@ class VideoOutput(BaseModel):
 
 class VideoCapabilities(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    outputs: list[VideoOutput] = Field(min_length=1, max_length=20)
-    defaultResolution: str = 'auto'
-    defaultDuration: Second = 5
-    dimensionStep: Literal[1, 2, 8, 16, 32, 64] = 2
+    outputs: list[VideoOutput] = Field(min_length=1, max_length=20, description='Supported output resolution and duration combinations.')
+    defaultResolution: str = Field(default='auto', description='Default output resolution or auto.')
+    defaultDuration: Second = Field(default=5, description='Default output duration in seconds.')
+    dimensionStep: Literal[1, 2, 8, 16, 32, 64] = Field(default=2, description='Required pixel alignment of output dimensions.')
 
     @model_validator(mode='after')
     def defaults_exist(self):

@@ -14,7 +14,7 @@ import os
 import threading
 import time
 
-from pydantic import ValidationError, model_validator
+from pydantic import Field, ValidationError, model_validator
 
 from opendirector.domain.creation.base import Contract, Digest, ObjectVersion, digest
 from opendirector.domain.creation.commands import Command, CommandReceipt, ProjectEvent, command_fingerprint
@@ -28,20 +28,20 @@ from opendirector.infrastructure.creation_files import AssetFileDelete, AssetFil
 
 
 class Manifest(Contract):
-    format: Literal['opendirector-project'] = 'opendirector-project'
-    formatVersion: Literal[2] = 2
-    id: UUID
-    name: str
-    head: UUID
+    format: Literal['opendirector-project'] = Field(default='opendirector-project', description='Serialized format identifier.')
+    formatVersion: Literal[2] = Field(default=2, description='Project format version.')
+    id: UUID = Field(description='Stable object ID.')
+    name: str = Field(description='User-visible name.')
+    head: UUID = Field(description='Current committed command ID.')
 
 
 class CommitRecord(Contract):
-    schemaVersion: Literal[1] = 1
-    command: Command
-    previousHead: UUID | None
-    snapshot: ProjectSnapshot
-    receipt: CommandReceipt
-    event: ProjectEvent | None
+    schemaVersion: Literal[1] = Field(default=1, description='Record schema version.')
+    command: Command = Field(description='Immutable command recorded in this commit.')
+    previousHead: UUID | None = Field(description='Previous commit ID, or null for project creation.')
+    snapshot: ProjectSnapshot = Field(description='Authoritative project snapshot.')
+    receipt: CommandReceipt = Field(description='Immutable command execution receipt.')
+    event: ProjectEvent | None = Field(description='Project change event, if emitted.')
 
     @model_validator(mode='after')
     def consistent(self):
@@ -63,13 +63,13 @@ class CommitRecord(Contract):
 
 
 class CommitIntent(Contract):
-    schemaVersion: Literal[1] = 1
-    fromName: str | None
-    toName: str
-    beforeFingerprint: Digest | None
-    record: CommitRecord
-    files: tuple[AssetFileWrite, ...] = ()
-    deletes: tuple[AssetFileDelete, ...] = ()
+    schemaVersion: Literal[1] = Field(default=1, description='Record schema version.')
+    fromName: str | None = Field(description='Original project directory name.')
+    toName: str = Field(description='Destination project directory name.')
+    beforeFingerprint: Digest | None = Field(description='Fingerprint of the project before this commit.')
+    record: CommitRecord = Field(description='Immutable commit awaiting publication.')
+    files: tuple[AssetFileWrite, ...] = Field(default=(), description='Staged asset files installed before commit publication.')
+    deletes: tuple[AssetFileDelete, ...] = Field(default=(), description='Asset file removals performed after publication.')
 
     @model_validator(mode='after')
     def consistent(self):

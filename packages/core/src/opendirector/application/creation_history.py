@@ -2,6 +2,8 @@
 from copy import deepcopy
 from uuid import UUID, uuid5
 
+from pydantic import Field
+
 from opendirector.application.creation_canvas import CreationCanvas, current_asset, resolve_reference, visible_item_ids, validate_frame_reference_limit
 from opendirector.domain.creation.base import Contract, digest
 from opendirector.domain.creation.project import ProjectSnapshot, asset_references
@@ -17,9 +19,9 @@ UNDOABLE = {'canvas.createGeneration', 'creation.batch', 'canvas.show', 'canvas.
 
 
 class Preview(Contract):
-    snapshot: ProjectSnapshot
-    assetIds: tuple[UUID, ...]
-    clearHistory: bool
+    snapshot: ProjectSnapshot = Field(description='Authoritative project snapshot.')
+    assetIds: tuple[UUID, ...] = Field(description='Target asset IDs.')
+    clearHistory: bool = Field(description='Whether the confirmed deletion also clears dependent history.')
 
 
 def fields(before, after, *, root=True):

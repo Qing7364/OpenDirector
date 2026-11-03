@@ -18,16 +18,16 @@ MAX_CREATION_TEXT_BYTES = 1024 * 1024
 
 
 class AssetFileWrite(Contract):
-    assetId: UUID
-    uploadHandle: UUID
-    fingerprint: Fingerprint
-    size: int = Field(strict=True, ge=0, le=MAX_CREATION_ASSET_BYTES)
+    assetId: UUID = Field(description='Asset ID.')
+    uploadHandle: UUID = Field(description='Server-issued staged upload ID.')
+    fingerprint: Fingerprint = Field(description='Immutable content fingerprint.')
+    size: int = Field(strict=True, ge=0, le=MAX_CREATION_ASSET_BYTES, description='Content size in bytes.')
 
 
 class AssetFileDelete(Contract):
-    assetId: UUID
-    fingerprint: Fingerprint
-    size: int = Field(strict=True, ge=0, le=MAX_CREATION_ASSET_BYTES)
+    assetId: UUID = Field(description='Asset ID.')
+    fingerprint: Fingerprint = Field(description='Immutable content fingerprint.')
+    size: int = Field(strict=True, ge=0, le=MAX_CREATION_ASSET_BYTES, description='Content size in bytes.')
 
 
 def delete_files(path, deletes):

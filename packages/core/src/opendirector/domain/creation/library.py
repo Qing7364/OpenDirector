@@ -23,10 +23,10 @@ LibraryKind = Literal['asset', 'subject']
 class LibraryOrigin(Contract):
     """Provenance only. Never an owning reference back into a canvas."""
 
-    type: Literal['upload', 'canvas']
-    projectId: UUID | None = None
-    nodeId: UUID | None = None
-    assetId: UUID | None = None
+    type: Literal['upload', 'canvas'] = Field(description='Operation or variant discriminator.')
+    projectId: UUID | None = Field(default=None, description='Owning project ID.')
+    nodeId: UUID | None = Field(default=None, description='Originating canvas item ID.')
+    assetId: UUID | None = Field(default=None, description='Asset ID.')
 
     @model_validator(mode='after')
     def canvas_origin_identifies_its_project(self):
@@ -38,11 +38,11 @@ class LibraryOrigin(Contract):
 
 
 class LibraryMediaMetadata(Contract):
-    mimeType: str = Field(min_length=1, max_length=255)
-    size: int = Field(ge=0, strict=True)
-    width: int | None = Field(default=None, ge=1, strict=True)
-    height: int | None = Field(default=None, ge=1, strict=True)
-    durationSeconds: NonNegative | None = None
+    mimeType: str = Field(min_length=1, max_length=255, description='Verified media MIME type.')
+    size: int = Field(ge=0, strict=True, description='Content size in bytes.')
+    width: int | None = Field(default=None, ge=1, strict=True, description='Width in pixels.')
+    height: int | None = Field(default=None, ge=1, strict=True, description='Height in pixels.')
+    durationSeconds: NonNegative | None = Field(default=None, description='Duration in seconds.')
 
     @model_validator(mode='after')
     def dimensions_together(self):
@@ -54,11 +54,11 @@ class LibraryMediaMetadata(Contract):
 class LibrarySubjectSnapshot(Contract):
     """Frozen SubjectData with every referenced media replaced by its blob."""
 
-    description: str = Field(default='', max_length=20000)
-    category: str = Field(default='', max_length=100)
-    main: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$')
-    auxiliaries: tuple[str, ...] = Field(default=(), max_length=3)
-    voice: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$')
+    description: str = Field(default='', max_length=20000, description='User-authored subject description.')
+    category: str = Field(default='', max_length=100, description='Subject category.')
+    main: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$', description='Primary subject media.')
+    auxiliaries: tuple[str, ...] = Field(default=(), max_length=3, description='Ordered auxiliary subject media.')
+    voice: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$', description='Immutable voice blob identity.')
 
     @model_validator(mode='after')
     def auxiliaries_require_main(self):
@@ -68,22 +68,22 @@ class LibrarySubjectSnapshot(Contract):
 
 
 class LibraryItem(Contract):
-    id: UUID
-    kind: LibraryKind
-    state: LibraryState = 'active'
-    name: LibraryName
-    revision: Revision = 1
-    createdAt: str
-    trashedAt: str | None = None
+    id: UUID = Field(description='Stable object ID.')
+    kind: LibraryKind = Field(description='Business object or media type.')
+    state: LibraryState = Field(default='active', description='Current library entry state.')
+    name: LibraryName = Field(description='User-visible name.')
+    revision: Revision = Field(default=1, description='Current object revision for optimistic concurrency.')
+    createdAt: str = Field(description='Creation timestamp.')
+    trashedAt: str | None = Field(default=None, description='Trash timestamp, if removed.')
     # Asset payload.
-    blob: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$')
+    blob: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$', description='Immutable library blob identity.')
     # Subject payload: blobs are referenced through the snapshot.
-    subject: LibrarySubjectSnapshot | None = None
+    subject: LibrarySubjectSnapshot | None = Field(default=None, description='Saved subject content and media slots.')
     # Shared descriptive facts. Subject items also carry a preview blob.
-    mediaKind: LibraryMediaKind | None = None
-    metadata: LibraryMediaMetadata | None = None
-    preview: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$')
-    origin: LibraryOrigin
+    mediaKind: LibraryMediaKind | None = Field(default=None, description='Media kind stored in this library entry.')
+    metadata: LibraryMediaMetadata | None = Field(default=None, description='Verified media properties.')
+    preview: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$', description='Preview blob identity.')
+    origin: LibraryOrigin = Field(description='Original project or imported library provenance.')
 
     @model_validator(mode='after')
     def payload_matches_kind(self):
@@ -122,9 +122,9 @@ class LibraryItem(Contract):
 
 
 class LibraryIndex(Contract):
-    version: Literal[1] = 1
-    revision: Revision = 1
-    items: dict[UUID, LibraryItem] = Field(default_factory=dict, max_length=100000)
+    version: Literal[1] = Field(default=1, description='Version of the referenced record.')
+    revision: Revision = Field(default=1, description='Current object revision for optimistic concurrency.')
+    items: dict[UUID, LibraryItem] = Field(default_factory=dict, max_length=100000, description='Ordered entries in this collection.')
 
     @model_validator(mode='after')
     def keys_match_ids(self):

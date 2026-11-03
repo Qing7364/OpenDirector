@@ -34,56 +34,56 @@ def media_card_size(kind, media_width, media_height, base_width, base_height):
 
 
 class GenerationSpecRef(Contract):
-    objectType: Literal['generation_spec'] = 'generation_spec'
-    id: UUID
+    objectType: Literal['generation_spec'] = Field(default='generation_spec', description='Referenced business object type.')
+    id: UUID = Field(description='Referenced generation configuration ID.')
 
 
 class EditorRef(Contract):
-    objectType: Literal['editor_document'] = 'editor_document'
-    id: UUID
-    kind: Literal['timeline', 'subject', 'stack', 'tool', 'director', 'layers', 'image_crop', 'media_edit']
+    objectType: Literal['editor_document'] = Field(default='editor_document', description='Referenced business object type.')
+    id: UUID = Field(description='Referenced editable document ID.')
+    kind: Literal['timeline', 'subject', 'stack', 'tool', 'director', 'layers', 'image_crop', 'media_edit'] = Field(description='Business object or media type.')
 
 
 class EmptyBinding(Contract):
-    role: Literal['empty']
-    draftSpec: GenerationSpecRef | None = None
-    manualText: str | None = Field(default=None, max_length=1024 * 1024)
+    role: Literal['empty'] = Field(description='Business role of this binding or reference.')
+    draftSpec: GenerationSpecRef | None = Field(default=None, description='Editable generation draft associated with an empty item.')
+    manualText: str | None = Field(default=None, max_length=1024 * 1024, description='Manually entered text for an empty text item.')
 
 
 class MaterialBinding(Contract):
-    role: Literal['material']
-    objectRef: AssetRef
+    role: Literal['material'] = Field(description='Business role of this binding or reference.')
+    objectRef: AssetRef = Field(description='Stable reference to the bound business object.')
 
 
 class GenerationBinding(Contract):
-    role: Literal['generation']
-    objectRef: GenerationSpecRef
-    materialOverride: AssetRef | None = None
+    role: Literal['generation'] = Field(description='Business role of this binding or reference.')
+    objectRef: GenerationSpecRef = Field(description='Stable reference to the bound business object.')
+    materialOverride: AssetRef | None = Field(default=None, description='Adopted material that overrides the current generated result.')
 
 
 MediaBinding = Annotated[EmptyBinding | MaterialBinding | GenerationBinding, Field(discriminator='role')]
 
 
 class EditorBinding(Contract):
-    role: Literal['editor']
-    objectRef: EditorRef
+    role: Literal['editor'] = Field(description='Business role of this binding or reference.')
+    objectRef: EditorRef = Field(description='Stable reference to the bound business object.')
 
 
 class ContainerBinding(Contract):
-    role: Literal['container']
+    role: Literal['container'] = Field(description='Business role of this binding or reference.')
 
 
 class CanvasItemBase(ProjectEntity):
-    kind: CanvasKind
-    title: str = Field(default='', max_length=255)
-    position: Point = Field(default_factory=Point)
-    width: Positive = 352
-    height: Positive = 198
-    zIndex: int = Field(default=0, strict=True)
-    locked: bool = False
-    visible: bool = True
-    parentId: UUID | None = None
-    tags: tuple[Identifier, ...] = ()
+    kind: CanvasKind = Field(description='Business object or media type.')
+    title: str = Field(default='', max_length=255, description='User-visible title.')
+    position: Point = Field(default_factory=Point, description='Position in the owning canvas or stage.')
+    width: Positive = Field(default=352, description='Width in pixels.')
+    height: Positive = Field(default=198, description='Height in pixels.')
+    zIndex: int = Field(default=0, strict=True, description='Canvas stacking order.')
+    locked: bool = Field(default=False, description='Whether edits to this object are blocked.')
+    visible: bool = Field(default=True, description='Whether this object is displayed.')
+    parentId: UUID | None = Field(default=None, description='Parent canvas group ID, or null for the root.')
+    tags: tuple[Identifier, ...] = Field(default=(), description='User-defined search tags.')
 
     @model_validator(mode='after')
     def presentation(self):
@@ -94,8 +94,8 @@ class CanvasItemBase(ProjectEntity):
 
 
 class MediaCanvasItem(CanvasItemBase):
-    binding: MediaBinding
-    editors: tuple[EditorRef, ...] = ()
+    binding: MediaBinding = Field(description='Business object displayed by this canvas item.')
+    editors: tuple[EditorRef, ...] = Field(default=(), description='Attached editable documents.')
 
     @model_validator(mode='after')
     def media_role(self):
@@ -116,27 +116,27 @@ class MediaCanvasItem(CanvasItemBase):
 
 
 class TextCanvasItem(MediaCanvasItem):
-    kind: Literal['text']
+    kind: Literal['text'] = Field(description='Business object or media type.')
 
 
 class ImageCanvasItem(MediaCanvasItem):
-    kind: Literal['image']
+    kind: Literal['image'] = Field(description='Business object or media type.')
 
 
 class VideoCanvasItem(MediaCanvasItem):
-    kind: Literal['video']
+    kind: Literal['video'] = Field(description='Business object or media type.')
 
 
 class AudioCanvasItem(MediaCanvasItem):
-    kind: Literal['audio']
+    kind: Literal['audio'] = Field(description='Business object or media type.')
 
 
 class FileCanvasItem(MediaCanvasItem):
-    kind: Literal['file']
+    kind: Literal['file'] = Field(description='Business object or media type.')
 
 
 class EditorCanvasItem(CanvasItemBase):
-    binding: EditorBinding
+    binding: EditorBinding = Field(description='Business object displayed by this canvas item.')
 
     @model_validator(mode='after')
     def document_kind(self):
@@ -147,28 +147,28 @@ class EditorCanvasItem(CanvasItemBase):
 
 
 class SubjectCanvasItem(EditorCanvasItem):
-    kind: Literal['subject']
+    kind: Literal['subject'] = Field(description='Business object or media type.')
 
 
 class TimelineCanvasItem(EditorCanvasItem):
-    kind: Literal['timeline']
+    kind: Literal['timeline'] = Field(description='Business object or media type.')
 
 
 class StackCanvasItem(EditorCanvasItem):
-    kind: Literal['stack']
+    kind: Literal['stack'] = Field(description='Business object or media type.')
 
 
 class ToolCanvasItem(EditorCanvasItem):
-    kind: Literal['tool']
+    kind: Literal['tool'] = Field(description='Business object or media type.')
 
 
 class DirectorCanvasItem(EditorCanvasItem):
-    kind: Literal['external']
+    kind: Literal['external'] = Field(description='Business object or media type.')
 
 
 class GroupCanvasItem(CanvasItemBase):
-    kind: Literal['group']
-    binding: ContainerBinding = Field(default_factory=lambda: ContainerBinding(role='container'))
+    kind: Literal['group'] = Field(description='Business object or media type.')
+    binding: ContainerBinding = Field(default_factory=lambda: ContainerBinding(role='container'), description='Business object displayed by this canvas item.')
 
 
 CanvasItem = Annotated[TextCanvasItem | ImageCanvasItem | VideoCanvasItem | AudioCanvasItem | FileCanvasItem |
@@ -199,14 +199,14 @@ def role_after(role: MediaRole, action: RoleAction, *, accepted=True) -> MediaRo
 
 
 class NodeCapabilities(Contract):
-    canEdit: bool
-    canConfigureGeneration: bool
-    canGenerate: bool
-    canAcceptReferences: bool
-    canUseAsReference: bool
-    canPlay: bool
-    canExport: bool
-    canReplaceMaterial: bool
+    canEdit: bool = Field(description='Whether the current content can be edited.')
+    canConfigureGeneration: bool = Field(description='Whether generation settings can be configured.')
+    canGenerate: bool = Field(description='Whether generation can be submitted.')
+    canAcceptReferences: bool = Field(description='Whether the item accepts generation references.')
+    canUseAsReference: bool = Field(description='Whether the item can supply a generation reference.')
+    canPlay: bool = Field(description='Whether the current media can be played.')
+    canExport: bool = Field(description='Whether the current content can be exported.')
+    canReplaceMaterial: bool = Field(description='Whether the bound material can be replaced.')
 
 
 def node_capabilities(item: CanvasItem, *, spec: GenerationSpec | None = None,

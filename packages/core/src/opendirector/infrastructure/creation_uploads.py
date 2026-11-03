@@ -8,6 +8,8 @@ from uuid import UUID, uuid5
 from filelock import FileLock
 from PIL import Image, UnidentifiedImageError
 
+from pydantic import Field
+
 from opendirector.domain.creation.assets import MediaMetadata, UploadInfo
 from opendirector.domain.creation.base import Contract, Fingerprint, MediaKind
 from opendirector.domain.projects import ProjectError
@@ -32,18 +34,18 @@ def upload_asset_id(project_id, handle):
 
 
 class UploadOwner(Contract):
-    projectId: UUID
-    id: UUID
-    sessionId: UUID | None
-    name: str
-    expectedKind: MediaKind | None = None
-    cancelled: bool = False
+    projectId: UUID = Field(description='Owning project ID.')
+    id: UUID = Field(description='Stable object ID.')
+    sessionId: UUID | None = Field(description='Owning editing session ID.')
+    name: str = Field(description='User-visible name.')
+    expectedKind: MediaKind | None = Field(default=None, description='Required media kind, when specified.')
+    cancelled: bool = Field(default=False, description='Whether the staged upload was cancelled.')
 
 
 class UploadRecord(Contract):
-    kind: MediaKind
-    fingerprint: Fingerprint
-    metadata: MediaMetadata
+    kind: MediaKind = Field(description='Business object or media type.')
+    fingerprint: Fingerprint = Field(description='Immutable content fingerprint.')
+    metadata: MediaMetadata = Field(description='Verified media properties.')
 
 
 def inspect_file(path: Path, name: str, *, expected_kind=None):
