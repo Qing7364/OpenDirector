@@ -66,6 +66,12 @@ export interface NodeComposerProps {
 export type ComposerSettings = GenerationSettings;
 const ratios = GENERATION_RATIOS;
 type Panel = "parameters" | "duration" | "voices" | null;
+/** 239 s → "3:59", for reference lengths. */
+function clockTime(seconds: number) {
+  const whole = Math.round(seconds);
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+}
+
 const UNCONFIGURED_MODEL = "尚未配置可用的生成模型，请到“设置 → 模型接入”添加。";
 
 /** Shared defaults let the workspace run the same parameters that the controls display. */
@@ -191,6 +197,13 @@ export function NodeComposer({
   const followsReference = Boolean(
     config && hasMusicReference(settings, incomingNodes, config),
   );
+  const referenceSeconds = followsReference
+    ? incomingNodes.find((node) => node.data.kind === "audio")?.data.media
+        ?.durationSeconds
+    : undefined;
+  // New music nodes follow the reference length until the user turns it off.
+  const lengthFromReference =
+    followsReference && (settings.durationFromReference ?? true);
   const frameCandidates = incomingNodes.filter(
     (node) => node.data.kind === "image",
   );
@@ -523,7 +536,9 @@ export function NodeComposer({
             <span>
               {mode === "audio"
                 ? music
-                  ? `${backend ? "最长 " : ""}${settings.durationSeconds} 秒`
+                  ? lengthFromReference
+                    ? `跟随参照时长${referenceSeconds ? ` ${clockTime(referenceSeconds)}` : ""}`
+                    : `${backend ? "最长 " : ""}${settings.durationSeconds} 秒`
                   : reading
                     ? "文本朗读"
                     : "全能配音"
@@ -850,6 +865,27 @@ export function NodeComposer({
           )}
           {music && (
             <div className="cw-parameter-section">
+              {followsReference && (
+                <label className="cw-audio-toggle">
+                  <span>
+                    <CanvasIcon name="audio" size={16} />
+                    跟随参照时长
+                    {referenceSeconds
+                      ? `（${clockTime(referenceSeconds)}）`
+                      : ""}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={lengthFromReference}
+                    disabled={running}
+                    onChange={(event) =>
+                      updateSettings({
+                        durationFromReference: event.target.checked,
+                      })
+                    }
+                  />
+                </label>
+              )}
               <span className="cw-field-label">
                 {backend ? "最长时长（模型可能提前结束）" : "时长"}
               </span>
@@ -857,7 +893,7 @@ export function NodeComposer({
                 <DurationControl
                   values={durationValues}
                   value={settings.durationSeconds}
-                  disabled={running}
+                  disabled={running || lengthFromReference}
                   scale={
                     backend
                       ? { min: 0, max: MUSIC_SECONDS.max, step: 60 }

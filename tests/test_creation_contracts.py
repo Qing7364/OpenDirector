@@ -482,3 +482,7 @@ def test_music_fields_leave_speech_fingerprints_unchanged():
     # Following the melody is the default, so music specs saved earlier keep their dumps too.
     assert 'scoreMode' not in music.model_dump() and 'scoreMode' not in AudioExecution(kind='audio', format='mp3').model_dump()
     assert AudioParameters(creationType='music', scoreMode='full').model_dump()['scoreMode'] == 'full'
+    assert 'durationFromReference' not in music.model_dump()
+    assert AudioParameters(creationType='music', durationFromReference=False).model_dump()['durationFromReference'] is False
+    from opendirector.domain.creation.generation import reference_music_seconds
+    assert [reference_music_seconds(value) for value in (3, 239, 400)] == [8, 263, 360]

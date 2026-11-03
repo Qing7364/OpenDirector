@@ -590,6 +590,8 @@ export class CreationProjection {
                       ? {
                           lyrics: spec.parameters.lyrics,
                           scoreMode: spec.parameters.scoreMode ?? "melody",
+                          durationFromReference:
+                            spec.parameters.durationFromReference ?? undefined,
                           durationSeconds:
                             spec.parameters.durationSeconds ??
                             MUSIC_SECONDS.initial,
@@ -774,6 +776,8 @@ export class CreationProjection {
               ? {
                   lyrics: node.data.settings.lyrics ?? "",
                   scoreMode: node.data.settings.scoreMode ?? "melody",
+                  durationFromReference:
+                    node.data.settings.durationFromReference ?? null,
                   durationSeconds:
                     node.data.settings.durationSeconds ?? MUSIC_SECONDS.initial,
                 }

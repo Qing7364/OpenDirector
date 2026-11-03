@@ -48,6 +48,7 @@ const SETTINGS_KEYS = [
   "voiceName",
   "lyrics",
   "scoreMode",
+  "durationFromReference",
   "imagePreset",
   "modelConfigId",
 ] as const;
@@ -91,6 +92,8 @@ export function isGenerationSettings(
     (value.scoreMode === undefined ||
       value.scoreMode === "melody" ||
       value.scoreMode === "full") &&
+    (value.durationFromReference === undefined ||
+      typeof value.durationFromReference === "boolean") &&
     (value.imagePreset === undefined ||
       value.imagePreset === "none" ||
       value.imagePreset === "product-views") &&

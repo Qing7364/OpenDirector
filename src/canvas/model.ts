@@ -64,6 +64,8 @@ export interface GenerationSettings {
   lyrics?: string;
   /** Music with a reference recording: follow its melody, or its melody and chords. */
   scoreMode?: "melody" | "full";
+  /** Music with a reference recording: cap the length at the recording's own (unset follows it). */
+  durationFromReference?: boolean;
   imagePreset?: "none" | "product-views";
   /** A model configured in the local API; catalog models leave it unset. */
   modelConfigId?: string;

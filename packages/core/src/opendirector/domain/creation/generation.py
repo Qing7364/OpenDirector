@@ -1,4 +1,5 @@
 """Generation intent, references and fixed execution facts, independent of nodes."""
+import math
 from typing import Annotated, Literal
 from datetime import datetime
 from uuid import UUID
@@ -35,6 +36,14 @@ class VideoParameters(Contract):
 # Music models count audio frames at 25 per second, between 200 and 9000 frames.
 MUSIC_SECONDS = (8, 360)
 DEFAULT_MUSIC_SECONDS = 30
+# A cover can run a little longer than its reference (tempo, held endings);
+# the cap leaves this much room so the model ends the piece itself.
+REFERENCE_LENGTH_HEADROOM = 1.1
+
+
+def reference_music_seconds(reference_seconds):
+    """The length cap for a piece that follows a reference recording."""
+    return min(MUSIC_SECONDS[1], max(MUSIC_SECONDS[0], math.ceil(reference_seconds * REFERENCE_LENGTH_HEADROOM)))
 
 
 class AudioParameters(Contract):
@@ -54,6 +63,10 @@ class AudioParameters(Contract):
     scoreMode: Literal['melody', 'full'] = Field(
         default='melody', exclude_if=lambda value: value == 'melody',
         description='Music with one audio reference: follow its transcribed melody, or melody and chords')
+    durationFromReference: bool | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+        description='Music with one audio reference: cap the length at the reference length (unset follows it) '
+                    'instead of durationSeconds')
 
 
 class PromptText(Contract):

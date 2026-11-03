@@ -20,7 +20,8 @@ from opendirector.domain.creation.assets import AssetProvenance
 from opendirector.domain.creation.canvas import TextCanvasItem, ImageCanvasItem, VideoCanvasItem, AudioCanvasItem
 from opendirector.domain.creation.base import ObjectVersion
 from opendirector.domain.creation.commands import parse_command
-from opendirector.domain.creation.generation import DEFAULT_MUSIC_SECONDS, InputSnapshot, Job, ResultVersion, execution_spec, validate_generation
+from opendirector.domain.creation.generation import (DEFAULT_MUSIC_SECONDS, InputSnapshot, Job, ResultVersion, execution_spec,
+                                                     reference_music_seconds, validate_generation)
 from opendirector.domain.creation.models import ModelConfigPublic, ModelSnapshot
 from opendirector.domain.creation.project import ProjectSnapshot
 from opendirector.domain.creation.validation import ContractError
@@ -144,6 +145,9 @@ class CreationGeneration(GenerationRuntime):
                 score = self._score_model()
                 params.update(score_mode=intent.get('scoreMode', 'melody'),
                               score_model={'id': score['id'], **{key: score.get(key) for key in SNAPSHOT_KEYS}})
+                recording = next(records[asset_id] for asset_id in node['referenceIds'] if records[asset_id]['kind'] == 'audio')
+                if intent.get('durationFromReference', True) and recording['durationMs']:
+                    params['duration'] = reference_music_seconds(recording['durationMs'] / 1000)
         elif spec.kind == 'audio' and intent.get('voice'):
             params['voice' if config['protocol'] == 'openai' else 'speaker'] = intent['voice']
         if spec.kind == 'video':

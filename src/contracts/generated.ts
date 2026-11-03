@@ -116,6 +116,7 @@ export interface AudioParametersInput extends ContractInput {
   readonly lyrics?: string;
   readonly durationSeconds?: number | null;
   readonly scoreMode?: "melody" | "full";
+  readonly durationFromReference?: boolean | null;
 }
 
 export interface BatchCommandInput extends CommandBaseInput {
@@ -1492,6 +1493,7 @@ export interface AudioParameters extends Contract {
   readonly lyrics?: string;
   readonly durationSeconds?: number | null;
   readonly scoreMode?: "melody" | "full";
+  readonly durationFromReference?: boolean | null;
 }
 
 export interface BatchCommand extends CommandBase {

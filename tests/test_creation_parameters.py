@@ -5,6 +5,7 @@ from email.parser import BytesParser
 from email.policy import default
 from io import BytesIO
 import json
+import math
 import subprocess
 from uuid import UUID, uuid4
 
@@ -256,7 +257,7 @@ def score_model(project, url='http://score.invalid/v1'):
 async def test_music_follows_a_reference_recording_through_its_transcribed_score(project,mode):
     store,pid,_=project
     calls=[]
-    reference=recording()
+    reference=recording(20)
     def handler(request):
         if request.url.path=='/v1/audio/transcriptions':
             assert request.url.host=='score.invalid'
@@ -266,7 +267,8 @@ async def test_music_follows_a_reference_recording_through_its_transcribed_score
         calls.append(('music',json.loads(request.content)))
         return httpx.Response(200,content=recording(0.3))
     parameters=dict(creationType='music',lyrics='[verse]\n雨落在窗前',durationSeconds=60)
-    if mode=='full': parameters['scoreMode']='full'
+    # By default the length follows the reference; the full-score case keeps the manual cap.
+    if mode=='full': parameters.update(scoreMode='full',durationFromReference=False)
     runner,target,spec_id=setup(project,'audio',parameters,handler,protocol='vllm_omni_music',model='m-a-p/YuE2-3B')
     score=score_model(project)
     try:
@@ -280,8 +282,11 @@ async def test_music_follows_a_reference_recording_through_its_transcribed_score
         (_,fields,files),(_,payload)=calls
         assert fields=={'model':'m-a-p/SheetSage2','response_format':'json','melody_only':'true' if mode=='melody' else 'false'}
         assert files==[('file',reference)]
+        # A 20 s reference caps the piece at its length plus 10% headroom, 25 frames per second.
+        seconds=math.ceil(asset.metadata.durationSeconds*1.1) if mode=='melody' else 60
         assert payload=={'model':'m-a-p/YuE2-3B','input':'[verse]\n雨落在窗前','instructions':'Make an output','response_format':'mp3',
-                         'max_new_tokens':1500,'extra_params':{'cot':mode,'abc':SCORE}}
+                         'max_new_tokens':seconds*25,'extra_params':{'cot':mode,'abc':SCORE}}
+        assert job.execution.maxDurationSeconds==seconds
         assert job.execution.scoreMode==job.adapterParameters['score_mode']==mode
         assert job.adapterParameters['score_model']=={'id':score['id'],'kind':'audio','modelId':'m-a-p/SheetSage2',
                                                       'url':'http://score.invalid/v1','protocol':'vllm_omni_score','connectionType':'self_hosted'}

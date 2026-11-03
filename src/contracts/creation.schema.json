@@ -1100,6 +1100,19 @@
             ],
             "title": "Scoremode",
             "type": "string"
+          },
+          "durationFromReference": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Music with one audio reference: cap the length at the reference length (unset follows it) instead of durationSeconds",
+            "title": "Durationfromreference"
           }
         },
         "title": "AudioParameters",
@@ -13220,6 +13233,19 @@
             ],
             "title": "Scoremode",
             "type": "string"
+          },
+          "durationFromReference": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Music with one audio reference: cap the length at the reference length (unset follows it) instead of durationSeconds",
+            "title": "Durationfromreference"
           }
         },
         "required": [
