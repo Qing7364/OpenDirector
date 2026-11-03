@@ -6,7 +6,8 @@ export type AgentRuntime =
   | "opencode"
   | "codex"
   | "claude"
-  | "jiuwenswarm";
+  | "jiuwenswarm"
+  | "deepseek";
 export interface RuntimeInfo {
   id: AgentRuntime;
   label: string;
@@ -194,5 +195,6 @@ export interface RuntimeModel {
   label: string;
   efforts: string[];
 }
-export const runtimeModels = (projectId: string, runtime: AgentRuntime) =>
-  request<RuntimeModel[]>(path(projectId) + `/runtimes/${runtime}/models`);
+export const runtimeModels = (projectId: string, runtime: AgentRuntime, selected?: string | null) =>
+  request<RuntimeModel[]>(path(projectId) + `/runtimes/${runtime}/models` +
+    (selected ? `?selected=${encodeURIComponent(selected)}` : ""));

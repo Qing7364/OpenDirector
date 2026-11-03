@@ -97,7 +97,9 @@ export function AgentPicker({
         ? (configuredModel(item.id)?.modelId ?? "选择模型")
         : modelLabel(item.id);
   const setupCommand =
-    setup === "jiuwenswarm"
+    setup === "deepseek"
+      ? "dsh --profile acp"
+      : setup === "jiuwenswarm"
       ? "jiuwenswarm-init"
       : setup === "codex"
         ? "codex login"
@@ -105,7 +107,9 @@ export function AgentPicker({
           ? "claude auth login"
           : "opencode";
   const setupLink =
-    setup === "jiuwenswarm"
+    setup === "deepseek"
+      ? "https://github.com/deepseek-ai/deepseek-harness"
+      : setup === "jiuwenswarm"
       ? "https://github.com/openJiuwen-ai/jiuwenswarm"
       : setup === "codex"
         ? "https://developers.openai.com/codex/cli/"
@@ -205,7 +209,7 @@ export function AgentPicker({
     setLoading(true);
     setChoices([]);
     setModelError("");
-    runtimeModels(projectId, editing)
+    runtimeModels(projectId, editing, editing === "deepseek" ? selectedModel(editing) : null)
       .then((items) => {
         if (active) {
           setChoices(items);
@@ -221,7 +225,7 @@ export function AgentPicker({
     return () => {
       active = false;
     };
-  }, [editing, editingSpec?.modelSource, projectId, checking]);
+  }, [editing, editingSpec?.modelSource, projectId, checking, value.harnessModels]);
   useEffect(() => {
     if (!open || disabled) return;
     const outside = (event: Event) => {

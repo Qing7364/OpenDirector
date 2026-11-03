@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import JsonValue
 
-RuntimeId = Literal['default', 'opencode', 'codex', 'claude', 'jiuwenswarm']
+RuntimeId = Literal['default', 'opencode', 'codex', 'claude', 'jiuwenswarm', 'deepseek']
 AgentEvent = dict[str, JsonValue]
 
 

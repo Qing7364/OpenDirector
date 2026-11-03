@@ -63,3 +63,13 @@ test("JiuwenSwarm model selection survives refresh without changing other harnes
   assert.equal(restored.runtimeModel, "local-model#0");
   assert.deepEqual(restored.harnessModels, value.harnessModels);
 });
+
+
+test("DeepSeek Harness selection and native model survive refresh", () => {
+  const local = storage();
+  const value: Conversation = {...draft(), runtime: "deepseek", runtimeModel: "route/model",
+    harnessModels: {deepseek: "route/model", codex: "gpt-model"}};
+  rememberAgentSelection("project", value, local);
+  assert.deepEqual(restoreAgentSelection("project", draft(), local).harnessModels, value.harnessModels);
+  assert.equal(restoreAgentSelection("project", draft(), local).runtime, "deepseek");
+});

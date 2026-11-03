@@ -13,6 +13,7 @@ Harness 指承担模型调用、工具执行和上下文管理的 Agent 执行�
 | Codex | PATH 中的 codex | 原生认证与模型目录；隔离启动前解析所选模型或默认模型 |
 | Claude Code | PATH 中的 claude | 原生认证、环境变量与初始化模型目录 |
 | JiuwenSwarm | PATH 中的 jiuwenswarm-process，通过 stdin/stdout JSONL 直接调用 | 本机 Jiuwen 模型目录、配置与环境变量 |
+| DeepSeek Harness | PATH 中的 dsh，以 acp profile 运行标准 JSON-RPC | CLI 原生 profile、模型目录与认证 |
 
 Default 与 OpenCode CLI 分别配置。外部 CLI 不读取 OpenDirector 保存的模型凭证。进程继承服务端环境，包括 PATH 和第三方 API 配置。
 
@@ -60,5 +61,6 @@ Default 将模型配置中的输入模态传入 bundled OpenCode。外部 harnes
 | Codex | workspace-write 沙箱，开放 Shell 和业务工具 |
 | Claude Code | 明确允许 Skill、Bash、Read 和业务工具 |
 | JiuwenSwarm | 明确允许 skill_tool、list_skill、read_file、bash 和业务工具 |
+| DeepSeek Harness | 沿用原生工具与权限；Skill 限于本轮快照，业务工具通过 MCP 接入，未承接的审批不自动批准 |
 
 工具允许列表与操作系统沙箱提供不同约束。业务工具独立校验工程范围和输入；原生文件访问权限不授予直接改写工程存储的业务权限。

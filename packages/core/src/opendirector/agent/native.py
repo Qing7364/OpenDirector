@@ -9,6 +9,7 @@ import sys
 from tempfile import TemporaryDirectory
 
 from opendirector.agent.model_gateway import ModelGateway
+from opendirector.agent import deepseek
 from opendirector.agent.context import RunContext
 from opendirector.agent.gateway import ToolGateway
 from opendirector.agent.process import terminate
@@ -25,7 +26,7 @@ def executable(runtime: str) -> str | None:
             if path.is_file():
                 return str(path)
         return None
-    return shutil.which(runtime)
+    return shutil.which('dsh' if runtime == 'deepseek' else runtime)
 
 
 def command(runtime: str, work: Path, socket: str, token: str, model: str | None,
@@ -174,9 +175,13 @@ class NativeRuntime:
             model_server = await asyncio.start_server(model.connect, '127.0.0.1', 0) if model else None
             try:
                 model_url = f'http://127.0.0.1:{model_server.sockets[0].getsockname()[1]}' if model_server else ''
-                args, env = command(run.runtime, work, endpoint, token,
-                    config['modelId'] if config else runtime_model, model_url, catalog, bridge_env=bridge_env,
-                    **({'input_modalities': config.get('inputModalities', ['text'])} if run.runtime == 'default' else {}))
+                deepseek_server = None
+                if runtime == 'deepseek':
+                    args, env, deepseek_server = deepseek.command(work, endpoint, token, bridge_env)
+                else:
+                    args, env = command(run.runtime, work, endpoint, token,
+                        config['modelId'] if config else runtime_model, model_url, catalog, bridge_env=bridge_env,
+                        **({'input_modalities': config.get('inputModalities', ['text'])} if run.runtime == 'default' else {}))
                 if thinking != 'auto' and runtime == 'codex':
                     args += ['-c', f'model_reasoning_effort={json.dumps(thinking)}']
                 elif thinking != 'auto' and runtime == 'claude':
@@ -193,6 +198,8 @@ class NativeRuntime:
                         prompt = f'${name}\n' + prompt
                     elif runtime == 'claude':
                         prompt = f'/opendirector:{name}\n' + prompt
+                    elif runtime == 'deepseek':
+                        prompt = f'Use the native skill tool to load {name} from {work / ".agents/skills"} before proceeding.\n' + prompt
                     else:
                         prompt = f'Use the native skill tool to load {name} before proceeding.\n' + prompt
                 process = await asyncio.create_subprocess_exec(*args, cwd=work, env=env,
@@ -204,14 +211,20 @@ class NativeRuntime:
                         stderr_tail.extend(chunk)
                         del stderr_tail[:-8192]
                 stderr_task = asyncio.create_task(drain_stderr())
-                process.stdin.write(prompt.encode() + b'\n')
-                await process.stdin.drain()
-                process.stdin.close()
+                if runtime != 'deepseek':
+                    process.stdin.write(prompt.encode() + b'\n')
+                    await process.stdin.drain()
+                    process.stdin.close()
                 async def output():
                     try:
-                        while line := await process.stdout.readline():
-                            raw = json.loads(line)
-                            await queue.put({'native': raw})
+                        if runtime == 'deepseek':
+                            async def observe(raw):
+                                await queue.put({'native': raw})
+                            await deepseek.run(process, work, SYSTEM + '\n' + prompt, runtime_model, thinking, deepseek_server, observe)
+                        else:
+                            while line := await process.stdout.readline():
+                                raw = json.loads(line)
+                                await queue.put({'native': raw})
                         if await process.wait():
                             await stderr_task
                             diagnostic = stderr_tail.decode('utf-8', errors='replace').replace(token, '[redacted]')
@@ -224,12 +237,13 @@ class NativeRuntime:
                 pump = asyncio.create_task(output())
                 run_dir = directory / 'agent-runs'
                 run_dir.mkdir(exist_ok=True)
+                native_calls = {}
                 with (run_dir / f'{turn_id}.{runtime}.jsonl').open('a', encoding='utf-8') as trace:
                     while (event := await queue.get()) is not None:
                         trace.write(json.dumps(event, ensure_ascii=False) + '\n')
                         trace.flush()
                         if 'native' in event:
-                            for item in text_events(runtime, event['native']):
+                            for item in (deepseek.events(event['native'], native_calls) if runtime == 'deepseek' else text_events(runtime, event['native'])):
                                 yield item
                         else:
                             yield event
@@ -246,6 +260,11 @@ class NativeRuntime:
                     for task in model.active:
                         task.cancel()
                     await asyncio.gather(*model.active, return_exceptions=True)
+                if runtime == 'deepseek' and pump and not pump.done():
+                    while not queue.empty():
+                        queue.get_nowait()
+                    pump.cancel()
+                    await asyncio.gather(pump, return_exceptions=True)
                 if process is not None:
                     await terminate(process, group=True)
                 while not queue.empty():

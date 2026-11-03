@@ -58,6 +58,8 @@ pygments==2.21.0
     # via pytest
 pytest==9.1.1
     # via opendirector-api
+pyyaml==6.0.3
+    # via opendirector-core
 starlette==1.8.0
     # via fastapi
 typing-extensions==4.16.0

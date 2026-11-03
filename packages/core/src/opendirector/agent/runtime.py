@@ -30,6 +30,7 @@ RUNTIMES = {
     'default': RuntimeSpec(id='default', label='Default', group='default', modelSource='settings', modelOverride=False, engine='default'),
     'opencode': RuntimeSpec(id='opencode', label='OpenCode', group='harness', modelSource='cli', modelOverride=True, engine='opencode'),
     'jiuwenswarm': RuntimeSpec(id='jiuwenswarm', label='JiuwenSwarm', group='harness', modelSource='cli', modelOverride=True, engine='jiuwenswarm'),
+    'deepseek': RuntimeSpec(id='deepseek', label='DeepSeek Harness', group='harness', modelSource='cli', modelOverride=True, engine='deepseek'),
     'codex': RuntimeSpec(id='codex', label='Codex', group='harness', modelSource='cli', modelOverride=True, engine='codex'),
     'claude': RuntimeSpec(id='claude', label='Claude Code', group='harness', modelSource='cli', modelOverride=True, engine='claude'),
 }
@@ -55,6 +56,14 @@ def runtime_catalog() -> list[dict]:
 
 
 async def runtime_readiness(engine: str) -> str:
+    if engine == 'deepseek':
+        if native.executable(engine) is None:
+            return 'not_installed'
+        from opendirector.agent.deepseek import model_choices
+        try:
+            return 'ready' if await model_choices() else 'needs_configuration'
+        except ProjectError:
+            return 'unknown'
     if engine == 'jiuwenswarm':
         return await jiuwenswarm.readiness()
     executable = native.executable(engine)

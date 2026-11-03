@@ -34,7 +34,7 @@ class Draft(BaseModel):
     assets: list[dict[str, JsonValue]] = Field(default_factory=list, max_length=64)
     runtime: Runtime = 'default'
     runtimeModel: str | None = Field(default=None, max_length=200)
-    harnessModels: dict[Literal["opencode", "codex", "claude", "jiuwenswarm"], Annotated[str, Field(max_length=200)] | None] = Field(default_factory=dict)
+    harnessModels: dict[Literal["opencode", "codex", "claude", "jiuwenswarm", "deepseek"], Annotated[str, Field(max_length=200)] | None] = Field(default_factory=dict)
     thinking: Literal['auto', 'low', 'medium', 'high'] = 'auto'
     modelSelections: dict[str, str | None] = Field(default_factory=dict)
     skills: list[str] = Field(default_factory=list, max_length=1)
@@ -195,8 +195,11 @@ def agent_routes(projects, generation, configs, provider=None) -> APIRouter:
         return {**item, 'status': await runtime_readiness(runtime)}
 
     @router.get('/runtimes/{runtime}/models')
-    async def runtime_models(project_id: UUID, runtime: Literal['opencode', 'codex', 'claude', 'jiuwenswarm']):
+    async def runtime_models(project_id: UUID, runtime: Literal['opencode', 'codex', 'claude', 'jiuwenswarm', 'deepseek'], selected: str | None = None):
         await asyncio.to_thread(conversations.path, project_id)
+        if runtime == 'deepseek':
+            from opendirector.agent.deepseek import model_choices as deepseek_models
+            return await deepseek_models(selected)
         return await model_choices(runtime)
 
     @router.get('/skills')

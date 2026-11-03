@@ -50,6 +50,9 @@ async def opencode_fallback(binary: str, configured_providers: list[str]) -> str
 
 
 async def model_choices(runtime: str) -> list[dict]:
+    if runtime == 'deepseek':
+        from opendirector.agent.deepseek import model_choices as deepseek_models
+        return await deepseek_models()
     if runtime == 'jiuwenswarm':
         from opendirector.agent.jiuwenswarm import model_choices as swarm_models
         return await swarm_models()

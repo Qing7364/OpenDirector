@@ -531,7 +531,8 @@
                   "opencode",
                   "codex",
                   "claude",
-                  "jiuwenswarm"
+                  "jiuwenswarm",
+                  "deepseek"
                 ],
                 "type": "string"
               },
@@ -12586,7 +12587,8 @@
                   "opencode",
                   "codex",
                   "claude",
-                  "jiuwenswarm"
+                  "jiuwenswarm",
+                  "deepseek"
                 ],
                 "type": "string"
               },

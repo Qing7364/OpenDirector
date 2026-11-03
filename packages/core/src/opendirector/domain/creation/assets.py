@@ -62,7 +62,7 @@ class AssetProvenance(Contract):
     sources: tuple[AssetRef, ...] = ()
     inputFingerprint: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$')
     agentRunId: UUID | None = None
-    agentRuntime: Literal['opencode', 'codex', 'claude', 'jiuwenswarm'] | None = None
+    agentRuntime: Literal['opencode', 'codex', 'claude', 'jiuwenswarm', 'deepseek'] | None = None
     modelSnapshot: ModelSnapshot | None = None
     prompt: str | None = Field(default=None, max_length=20000)
 
