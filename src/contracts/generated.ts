@@ -755,7 +755,7 @@ export interface ModelConnectionInput extends ContractInput {
   readonly url: string;
   readonly modelId: string;
   readonly connectionType: "api" | "self_hosted";
-  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music";
+  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth";
   readonly authMode: "none" | "bearer";
   readonly inputModalities?: ReadonlyArray<"text" | "image"> | null;
   readonly videoAdapter?: "auto" | "fasth3" | "minimax_h3" | "standard";
@@ -767,7 +767,7 @@ export interface ModelSnapshotInput extends ContractInput {
   readonly kind: "agent" | "image" | "video" | "audio" | "vision";
   readonly modelId: string;
   readonly url: string;
-  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music";
+  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth";
   readonly connectionType: "api" | "self_hosted";
   readonly inputModalities?: ReadonlyArray<"text" | "image"> | null;
   readonly videoAdapter?: "auto" | "fasth3" | "minimax_h3" | "standard";
@@ -2126,7 +2126,7 @@ export interface ModelConnection extends Contract {
   readonly url: string;
   readonly modelId: string;
   readonly connectionType: "api" | "self_hosted";
-  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music";
+  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth";
   readonly authMode: "none" | "bearer";
   readonly inputModalities: ReadonlyArray<"text" | "image"> | null;
   readonly videoAdapter: "auto" | "fasth3" | "minimax_h3" | "standard";
@@ -2138,7 +2138,7 @@ export interface ModelSnapshot extends Contract {
   readonly kind: "agent" | "image" | "video" | "audio" | "vision";
   readonly modelId: string;
   readonly url: string;
-  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music";
+  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth";
   readonly connectionType: "api" | "self_hosted";
   readonly inputModalities?: ReadonlyArray<"text" | "image"> | null;
   readonly videoAdapter: "auto" | "fasth3" | "minimax_h3" | "standard";

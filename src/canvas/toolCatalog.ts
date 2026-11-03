@@ -429,7 +429,7 @@ export const CANVAS_TOOLS: readonly CanvasToolDefinition[] = [
   tool(
     "video-depth-capture",
     "深度动作捕捉",
-    "原站实测提供 480P / 720P；实际输出和当前报价由真实服务确定。",
+    "输出 480P / 720P 灰度深度视频（近处亮、远处暗），素材最长 30 秒；需要接入 vLLM-Omni 深度接口。",
     [choice("resolution", "清晰度", ["480P", "720P"])],
     { category: "video", sources: ["video"], parameterCoverage: "entry-only" },
   ),

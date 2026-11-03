@@ -75,6 +75,8 @@ def check_video_config(kind, protocol, adapter, capabilities):
         raise ProjectError('输出能力配置仅适用于视频模型。')
     if protocol == 'vllm_omni_segmentation' and (adapter != 'auto' or capabilities is not None):
         raise ProjectError('视觉分割接口不支持视频生成输出规格。')
+    if protocol == 'vllm_omni_depth' and (adapter != 'auto' or capabilities is not None):
+        raise ProjectError('视频深度接口不支持视频生成输出规格。')
     if adapter != 'auto' and protocol != 'vllm_omni':
         raise ProjectError('所选视频适配方式需要 /videos 接口协议。')
     if capabilities is not None:

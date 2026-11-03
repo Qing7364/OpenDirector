@@ -219,6 +219,26 @@ def conform(source: Path, out: Path, *, width: int, height: int, fps: float, sta
     return out
 
 
+def picture(source: Path, out: Path, *, width: int, height: int) -> Path:
+    """The silent picture resized to width x height, keeping every decoded frame and its timing."""
+    _run(['ffmpeg', '-v', 'error', '-y', '-i', str(source), '-vf', f'scale={width}:{height},setsar=1,format=yuv420p', '-an',
+          '-vsync', 'passthrough', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', str(out)])
+    return out
+
+
+def disparity(source: Path, out: Path, *, near: float, far: float) -> bytes:
+    """A depth video whose gray maps linearly from near (black) to far (white), re-mapped to inverse depth:
+    near is white and far black, with detail spread over near objects. Sound is dropped."""
+    near = max(near, 1e-3)
+    if far <= near:
+        curve = '0'
+    else:
+        curve = f'255*(1/({near}+val/255*({far - near}))-{1 / far})/{1 / near - 1 / far}'
+    _run(['ffmpeg', '-v', 'error', '-y', '-i', str(source), '-vf', f"format=gray,lut=y='{curve}',format=yuv420p", '-an',
+          '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-movflags', '+faststart', str(out)])
+    return out.read_bytes()
+
+
 def concat(workspace: Workspace, parts: list[Path], name='joined.mp4') -> bytes:
     """Join parts that share one canvas, rate and audio layout."""
     if len(parts) == 1:

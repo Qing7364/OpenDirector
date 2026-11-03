@@ -370,6 +370,10 @@ class ToolTasks:
                     config, adapter = frozen_model('video.matting')
                     return await adapter.track(config, request)
 
+                async def depth_model(request):
+                    config, adapter = frozen_model('video.motion_capture')
+                    return await adapter.depth(config, request)
+
                 keeps_layout, edit_max_images = True, 1
                 if 'image.edit' in task['requires']:
                     _, painter = frozen_model('image.edit')
@@ -390,7 +394,7 @@ class ToolTasks:
                                       edit_model=edit_model, edit_seconds=limits, chat_model=chat_model,
                                       segment_model=segment_model, track_model=track_model, edit_keeps_layout=keeps_layout,
                                       annotation=annotation, edit_max_images=edit_max_images,
-                                      segment_available='image.segment' in task['requires'])
+                                      segment_available='image.segment' in task['requires'], depth_model=depth_model)
                 outputs = await spec.recipe(context)
                 await progress('正在保存结果')
                 saved = []

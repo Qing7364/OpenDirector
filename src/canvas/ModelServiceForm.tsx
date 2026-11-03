@@ -36,6 +36,7 @@ const PROTOCOLS: Record<
     ["vllm_omni", "异步 /videos 接口（含 vLLM-Omni）"],
     ["volcengine", "火山方舟 / Agent Plan"],
     ["vllm_omni_segmentation", "vLLM-Omni 分割接口（SAM 3）"],
+    ["vllm_omni_depth", "vLLM-Omni 深度接口（Video Depth Anything）"],
   ],
   audio: [
     ["openai", "OpenAI 兼容语音合成（含 vLLM-Omni TTS）"],
@@ -54,6 +55,10 @@ const PLACEHOLDERS: Record<ModelKind, [string, string]> = {
 const MUSIC_PLACEHOLDERS: [string, string] = [
   "http://127.0.0.1:8240/v1",
   "m-a-p/YuE2-3B",
+];
+const DEPTH_PLACEHOLDERS: [string, string] = [
+  "http://127.0.0.1:8250/v1",
+  "depth-anything/Video-Depth-Anything-Small",
 ];
 
 export function ModelServiceForm({
@@ -112,10 +117,13 @@ export function ModelServiceForm({
   const [connectionOpen, setConnectionOpen] = useState(!existing);
   const locked = busy || discovering || testing;
   const segmentation = value.protocol === "vllm_omni_segmentation";
+  const depth = value.protocol === "vllm_omni_depth";
   const placeholders =
     value.protocol === "vllm_omni_music"
       ? MUSIC_PLACEHOLDERS
-      : PLACEHOLDERS[segmentation ? "vision" : kind];
+      : depth
+        ? DEPTH_PLACEHOLDERS
+        : PLACEHOLDERS[segmentation ? "vision" : kind];
   const hasSavedKey = Boolean(
     existing &&
     existing.authMode === "bearer" &&
@@ -189,7 +197,7 @@ export function ModelServiceForm({
     setError("");
     try {
       const videoCapabilities =
-        kind === "video" && !segmentation && outputDraft.custom
+        kind === "video" && !segmentation && !depth && outputDraft.custom
           ? createVideoCapabilities(
               outputDraft.outputs,
               outputDraft.defaultResolution,
@@ -400,7 +408,12 @@ export function ModelServiceForm({
             分割模型用于选区、图层拆分和抠像，不参与图片或视频生成。
           </p>
         )}
-        {kind === "video" && !segmentation && (
+        {depth && (
+          <p className="cw-model-note">
+            深度模型用于深度动作捕捉，不参与视频生成。
+          </p>
+        )}
+        {kind === "video" && !segmentation && !depth && (
           <details className="cw-video-config">
             <summary>
               <span>视频适配方式</span>

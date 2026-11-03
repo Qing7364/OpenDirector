@@ -23,6 +23,7 @@ H3 = ('video', 'http://gpu:8010/v1', 'MiniMaxAI/MiniMax-H3')
 TTS = ('audio', 'http://gpu:8220/v1', 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice')
 CHAT = ('agent', 'http://gpu:8100/v1', 'Qwen/Qwen3-30B-A3B')
 SAM3 = ('vision', 'http://gpu:8230/v1', 'facebook/sam3')
+VDA = ('video', 'http://gpu:8250/v1', 'depth-anything/Video-Depth-Anything-Small')
 
 
 def png(size=(64, 48), color='blue', mode='RGB'):
@@ -93,6 +94,7 @@ def test_adapters_declare_capabilities_from_profiles_not_operations():
     assert capabilities_of(config('audio', 'http://gpu:8240/v1', 'm-a-p/YuE2-3B', 'vllm_omni_music')) == {'audio.music'}
     assert capabilities_of(config(*CHAT)) == {'text.chat'}
     assert capabilities_of(config(*SAM3, protocol='vllm_omni')) == {'image.segment', 'video.matting'}
+    assert capabilities_of(config(*VDA, protocol='vllm_omni_depth')) == {'video.motion_capture'}
     assert capabilities_of(config('video', 'https://ark.cn-beijing.volces.com/api/plan/v3', 'doubao-seedance-2.0', None)) == set()
     # vLLM-Omni renders free sizes on the 16-pixel latent grid; OpenAI picks its nearest fixed size.
     assert adapter_for(config(*ZIMAGE)).size(4000, 2000) == (1536, 768)
@@ -670,6 +672,110 @@ def test_video_matting_keeps_the_tracked_subject_over_the_chosen_background(proj
     task = run(store, configs, httpx.MockTransport(tracking_server(log, empty=True)), project_id, session,
                {'tool': 'video-matting', 'sourceAssetIds': [source], 'parameters': {'background': 'black'}})
     assert task['status'] == 'failed' and '没有识别到「人物」' in task['error']
+
+
+def configure_depth(store):
+    configs = ModelConfigs(store.local.repository)
+    configs.save(*VDA, '', connection_type='self_hosted', protocol='vllm_omni_depth')
+    return configs
+
+
+def depth_server(log, tmp_path, *, metric=False, shade=40, meters=(0.0, 1.0)):
+    """Answers /videos/depth with a flat gray clip of the uploaded clip's size and frame count."""
+    def handle(request):
+        assert request.url.path == '/v1/videos/depth'
+        body = request.read()
+        boundary = request.headers['content-type'].split('boundary=', 1)[1].encode()
+        fields, clip = {}, None
+        for part in body.split(b'--' + boundary)[1:-1]:
+            head, _, value = part.partition(b'\r\n\r\n')
+            name = head.split(b'name="', 1)[1].split(b'"', 1)[0].decode()
+            if name == 'video':
+                clip = value[:-2]
+            else:
+                fields[name] = value[:-2].decode()
+        path = tmp_path / f'upload-{len(log)}.mp4'
+        path.write_bytes(clip)
+        info = json.loads(subprocess.run(['ffprobe', '-v', 'error', '-count_frames', '-select_streams', 'v:0', '-show_entries',
+                                          'stream=width,height,nb_read_frames', '-of', 'json', str(path)],
+                                         capture_output=True, check=True).stdout)['streams'][0]
+        log.append({**fields, 'width': info['width'], 'height': info['height'], 'frames': int(info['nb_read_frames'])})
+        color = f'0x{shade:02x}{shade:02x}{shade:02x}'
+        video = subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', f"color=c={color}:size={info['width']}x{info['height']}:rate=24",
+                                '-frames:v', str(info['nb_read_frames']), '-pix_fmt', 'yuv420p', '-f', 'mp4',
+                                '-movflags', 'frag_keyframe+empty_moov', 'pipe:1'], capture_output=True, check=True).stdout
+        return httpx.Response(200, json={'width': info['width'], 'height': info['height'], 'num_frames': int(info['nb_read_frames']),
+                                         'fps': 24.0, 'metric': metric, 'depth_min': meters[0], 'depth_max': meters[1],
+                                         'video': base64.b64encode(video).decode(), 'depth': None})
+    return handle
+
+
+def first_frame(store, project_id, task, tmp_path):
+    path = tmp_path / 'depth.mp4'
+    path.write_bytes(CreationToolAssets(store).read_bytes(project_id, task['outputs'][0]['id']))
+    frame = subprocess.run(['ffmpeg', '-v', 'error', '-i', str(path), '-frames:v', '1', '-f', 'image2', '-c:v', 'png', 'pipe:1'],
+                           capture_output=True, check=True).stdout
+    return Image.open(io.BytesIO(frame)).convert('L')
+
+
+def test_depth_capture_is_available_only_with_a_depth_model(project):
+    store, _, _ = project
+    tools = {item['id']: item for item in ToolTasks(store.local, configure(store, H3), None, projects=store).catalog()['tools']}
+    assert not tools['video-depth-capture']['available'] and '深度动作捕捉' in tools['video-depth-capture']['reason']
+    catalog = ToolTasks(store.local, configure_depth(store), None, projects=store).catalog()
+    tools = {item['id']: item for item in catalog['tools']}
+    assert tools['video-depth-capture']['available']
+    assert tools['video-depth-capture']['models']['video.motion_capture'][0]['label'] == 'Video-Depth-Anything-Small'
+    # A depth service never offers generation.
+    assert [model['label'] for model in catalog['capabilities'].get('video.generate', [])] == ['MiniMax-H3']
+
+
+def test_depth_capture_sends_the_clip_at_the_chosen_resolution(project, tmp_path):
+    store, project_id, session = project
+    source = upload(store, project_id, session, 'clip.mp4', sound_mp4(1, size='1280x720'))
+    log = []
+    configs = configure_depth(store)
+    task = run(store, configs, httpx.MockTransport(depth_server(log, tmp_path)), project_id, session,
+               {'tool': 'video-depth-capture', 'sourceAssetIds': [source], 'parameters': {'resolution': '480P'}})
+    assert task['status'] == 'succeeded', task['error']
+    assert log == [{'model': VDA[2], 'max_res': '-1', 'colormap': 'grayscale', 'width': 854, 'height': 480, 'frames': 24}]
+    output = task['outputs'][0]
+    assert output['type'] == 'video/mp4' and (output['width'], output['height']) == (854, 480)
+    assert output['title'] == '深度动作捕捉 480P' and task['modelConfigIds'].keys() == {'video.motion_capture'}
+    assert first_frame(store, project_id, task, tmp_path).getpixel((427, 240)) < 60  # Relative depth is already near-bright.
+    # A source below the target keeps its own size.
+    small = upload(store, project_id, session, 'small.mp4', sound_mp4(1, size='64x36'))
+    task = run(store, configs, httpx.MockTransport(depth_server(log, tmp_path)), project_id, session,
+               {'tool': 'video-depth-capture', 'sourceAssetIds': [small], 'parameters': {'resolution': '720P'}})
+    assert task['status'] == 'succeeded', task['error']
+    assert (log[-1]['width'], log[-1]['height']) == (64, 36) and task['outputs'][0]['title'] == '深度动作捕捉 720P'
+
+
+@pytest.mark.parametrize(('shade', 'low', 'high'), [(0, 245, 256), (128, 50, 80), (255, 0, 12)])
+def test_depth_capture_turns_metric_depth_into_inverse_depth(project, tmp_path, shade, low, high):
+    store, project_id, session = project
+    source = upload(store, project_id, session, 'clip.mp4', sound_mp4(1))
+    server = depth_server([], tmp_path, metric=True, shade=shade, meters=(1.0, 3.0))
+    task = run(store, configure_depth(store), httpx.MockTransport(server), project_id, session,
+               {'tool': 'video-depth-capture', 'sourceAssetIds': [source], 'parameters': {'resolution': '480P'}})
+    assert task['status'] == 'succeeded', task['error']
+    # Gray 128 is about 2 m between 1 and 3 m: inverse depth puts it at a quarter, not half, of the range.
+    assert low <= first_frame(store, project_id, task, tmp_path).getpixel((32, 18)) < high
+
+
+def test_depth_capture_rejects_long_clips_and_unknown_resolutions_before_calling_the_model(project, tmp_path):
+    store, project_id, session = project
+    configs = configure_depth(store)
+    log = []
+    long = upload(store, project_id, session, 'long.mp4', mp4(31))
+    task = run(store, configs, httpx.MockTransport(depth_server(log, tmp_path)), project_id, session,
+               {'tool': 'video-depth-capture', 'sourceAssetIds': [long], 'parameters': {'resolution': '480P'}})
+    assert task['status'] == 'failed' and '不超过 30 秒' in task['error']
+    short = upload(store, project_id, session, 'short.mp4', mp4(1))
+    task = run(store, configs, httpx.MockTransport(depth_server(log, tmp_path)), project_id, session,
+               {'tool': 'video-depth-capture', 'sourceAssetIds': [short], 'parameters': {'resolution': '1080P'}})
+    assert task['status'] == 'failed' and '不在可选范围内' in task['error']
+    assert log == []
 
 
 def test_cancel_drains_an_inflight_write_so_the_task_never_stays_running(project):

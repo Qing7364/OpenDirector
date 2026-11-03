@@ -14,8 +14,8 @@ from urllib.parse import quote, urlsplit
 import httpx
 
 from opendirector.domain.assets import MAX_ASSET_BYTES
-from opendirector.domain.capabilities import (ChatRequest, CutoutRequest, EditMask, ImageRequest, MediaResult, MusicRequest, Segment,
-                                          SegmentRequest, SpeechRequest, TrackRequest, Tracks, VideoEditRequest, VideoRequest)
+from opendirector.domain.capabilities import (ChatRequest, CutoutRequest, DepthRequest, EditMask, ImageRequest, MediaResult, MusicRequest,
+                                          Segment, SegmentRequest, SpeechRequest, TrackRequest, Tracks, VideoEditRequest, VideoRequest)
 from opendirector.domain.input_rules import input_rules
 from opendirector.domain.projects import ProjectError
 from opendirector.integrations.generation_errors import checked, protocol_failure, provider_failure, transport_failure
@@ -75,6 +75,9 @@ class ModelAdapter:
 
     async def track(self, config, request: TrackRequest) -> Tracks:
         raise ProjectError('所选模型不支持视频抠像。', 409)
+
+    async def depth(self, config, request: DepthRequest) -> MediaResult:
+        raise ProjectError('所选模型不支持深度动作捕捉。', 409)
 
 
 class OpenAIImages(ModelAdapter):
@@ -398,12 +401,49 @@ class VllmOmniSegmentation(ModelAdapter):
         return await _call('submit', work)
 
 
+class VllmOmniDepth(ModelAdapter):
+    """vLLM-Omni Video Depth Anything: /videos/depth estimates temporally consistent per-frame depth.
+
+    The clip is sent at the size it should come back at. Relative checkpoints
+    render inverse depth (near is bright); metric ones render meters (far is
+    bright) and are re-mapped to inverse depth, so every result reads the same way.
+    """
+
+    capabilities = frozenset({'video.motion_capture'})
+
+    async def depth(self, config, request: DepthRequest) -> MediaResult:
+        form = {'model': config['modelId'], 'max_res': '-1', 'colormap': 'grayscale'}
+
+        async def work():
+            # Depth runs in 32-frame windows; a 26-second 720P clip took about 30 s on one H200 (Small).
+            async with _client(self, config, timeout=1800) as client:
+                async with client.stream('POST', endpoint(config['url'], '/videos/depth'), headers=auth_headers(config),
+                                         data=form, files=[('video', ('clip.mp4', request.video, 'video/mp4'))],
+                                         extensions={'model_parameters': {'fields': form, 'file_count': 1}}) as response:
+                    # Base64 inflates the MP4 by a third.
+                    value = json.loads(await bounded(response, stage='submit', secrets=(config.get('apiKey', ''),),
+                                                     limit=MAX_ASSET_BYTES * 4 // 3 + 64 * 1024))
+            meters = (float(value['depth_min']), float(value['depth_max'])) if value['metric'] is True else None
+            return base64.b64decode(value['video'], validate=True), meters
+        data, meters = await _call('submit', work)
+        if meters:
+            data = await asyncio.to_thread(self._inverse, data, *meters)
+        return MediaResult(data, 'mp4')
+
+    @staticmethod
+    def _inverse(data, near, far):
+        with media.Workspace() as work:
+            return media.disparity(work.write('meters.mp4', data), work.path / 'inverse.mp4', near=near, far=far)
+
+
 def adapter_for(config, transport=None, poll_interval=3) -> ModelAdapter | None:
     """The adapter serving a configuration, chosen from its explicit profile and protocol."""
     kind, protocol = config['kind'], config.get('protocol')
     profile = input_rules(config)['profile']
     if profile == 'vllm-omni-segmentation':
         return VllmOmniSegmentation(transport, poll_interval)
+    if profile == 'vllm-omni-depth':
+        return VllmOmniDepth(transport, poll_interval)
     if kind == 'agent':
         return OpenAIChat(transport, poll_interval)
     if kind == 'image' and profile == 'vllm-omni-image':

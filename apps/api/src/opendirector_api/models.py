@@ -17,7 +17,7 @@ class Session(Model):
 
 class ModelConnection(Model):
     connectionType: Literal['api', 'self_hosted'] = 'api'
-    protocol: Literal['openai', 'volcengine', 'vllm_omni', 'vllm_omni_segmentation', 'vllm_omni_music'] | None = None
+    protocol: Literal['openai', 'volcengine', 'vllm_omni', 'vllm_omni_segmentation', 'vllm_omni_music', 'vllm_omni_depth'] | None = None
     authMode: Literal['none', 'bearer'] | None = None
 
 

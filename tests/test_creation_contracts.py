@@ -303,6 +303,14 @@ def test_shared_generation_contract_rejects_segmentation_models(kind):
         validate_generation(spec, sam)
 
 
+def test_shared_generation_contract_rejects_depth_models():
+    from opendirector.domain.creation.generation import VideoGenerationSpec
+    depth = model('video', protocol='vllm_omni_depth')
+    spec = VideoGenerationSpec(**entity(22, kind='video', modelConfigId=depth.id, prompt='generate'))
+    with pytest.raises(ValueError, match='视频深度模型'):
+        validate_generation(spec, depth)
+
+
 def test_credential_write_is_separate_and_protocols_are_restricted():
     value = model().model_dump(exclude={'id', 'inputRules'})
     write = ModelConfigWrite(**value, apiKey='private-key')

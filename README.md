@@ -149,6 +149,8 @@ Automatic region selection in images and video matting require a model with segm
 
 To generate music, add an audio model with the **vLLM-Omni music** protocol, for example `m-a-p/YuE2-3B` or `MiniMaxAI/MiniMax-Music3` served by `vllm serve <model> --omni`. An audio node that uses it takes a style description as its prompt, optional lyrics (leave them empty for an instrumental piece) and a maximum length of 8–360 seconds; the model may end the piece earlier. Speech models keep reading the prompt aloud.
 
+To use **Depth motion capture** on a video, add a video model with the **vLLM-Omni depth** protocol, for example `depth-anything/Video-Depth-Anything-Small` served by `vllm serve <model> --omni`. The tool turns a clip of up to 30 seconds into a grayscale depth video at 480P or 720P, frame for frame, with near objects bright and far ones dark, ready to use as a motion and structure reference. The depth model does not generate video.
+
 In **General (通用)** settings, you can switch themes and adjust the watermark removal option. Watermark settings affect only content generated afterward, and the actual effect depends on support from the model service.
 
 ## Make your first short film

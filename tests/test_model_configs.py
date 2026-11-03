@@ -157,6 +157,29 @@ def test_segmentation_rejects_generation_specific_configuration_and_wrong_catego
     assert ModelConfigs(store.repository).list() == []
 
 
+def test_depth_protocol_serves_depth_capture_without_generation(api):
+    from opendirector.integrations.model_adapters import capabilities_of
+    from opendirector.integrations.providers import GenerationProviders
+    client, store = api
+    response = client.post('/api/model-configs', json=payload('video', protocol='vllm_omni_depth',
+                                                               modelId='depth-anything/Video-Depth-Anything-Small'))
+    assert response.status_code == 200, response.text
+    saved = response.json()
+    assert saved['inputRules']['profile'] == 'vllm-omni-depth'
+    assert saved['inputRules']['allowedKinds'] == [] and saved['inputRules']['videoModes'] == []
+    private = ModelConfigs(store.repository).resolve(saved['id'], 'video')
+    assert capabilities_of(private) == {'video.motion_capture'}
+    with pytest.raises(ProjectError, match='视频深度模型'):
+        GenerationProviders(store).validate('video', private)
+    catalog = client.get('/api/tools').json()
+    assert catalog['capabilities']['video.motion_capture'][0]['id'] == saved['id']
+    assert 'video.generate' not in catalog['capabilities']
+    for kind in ('agent', 'image', 'audio'):
+        assert client.post('/api/model-configs', json=payload(kind, protocol='vllm_omni_depth')).status_code == 400
+    assert client.post('/api/model-configs', json=payload('video', protocol='vllm_omni_depth', videoAdapter='fasth3')).status_code == 400
+    assert ModelConfigs(store.repository).list() == [saved]
+
+
 @pytest.mark.parametrize('kind', ['image', 'video'])
 def test_generation_boundary_rejects_sam_before_creating_a_task(tmp_path, kind):
     from generation_helpers import new_project, prepared

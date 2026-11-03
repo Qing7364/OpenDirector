@@ -15,8 +15,8 @@ from typing import Awaitable, Callable
 
 from PIL import Image, ImageChops, ImageFilter
 
-from opendirector.domain.capabilities import (ChatRequest, CutoutRequest, EditMask, ImageRequest, SegmentRequest, TrackRequest, Tracks,
-                                          VideoEditRequest, VideoRequest)
+from opendirector.domain.capabilities import (ChatRequest, CutoutRequest, DepthRequest, EditMask, ImageRequest, SegmentRequest, TrackRequest,
+                                          Tracks, VideoEditRequest, VideoRequest)
 from opendirector.domain.projects import ProjectError
 from opendirector.media import processing as media
 
@@ -41,7 +41,7 @@ class ToolContext:
 
     def __init__(self, *, sources, mask, boxes, parameters, image_model, video_model, progress, video_submitted=None, cutout_model=None,
                  edit_model=None, edit_seconds=(4.0, 15.0), chat_model=None, segment_model=None, track_model=None,
-                 edit_keeps_layout=True, annotation=None, edit_max_images=1, segment_available=False):
+                 edit_keeps_layout=True, annotation=None, edit_max_images=1, segment_available=False, depth_model=None):
         self.sources: list[Source] = sources
         self.mask: bytes | None = mask
         self.annotation: bytes | None = annotation
@@ -50,7 +50,7 @@ class ToolContext:
         self.boxes: list[dict] = boxes
         self.parameters: dict = parameters
         self._image, self._video, self._cutout, self._edit = image_model, video_model, cutout_model, edit_model
-        self._segment, self._track = segment_model, track_model
+        self._segment, self._track, self._depth = segment_model, track_model, depth_model
         # img2img models redraw in place by strength; instruction editors recompose the picture.
         self.edit_keeps_layout = edit_keeps_layout
         # Shortest and longest clip one redraw accepts; longer sources are processed piecewise.
@@ -104,6 +104,10 @@ class ToolContext:
 
     async def track(self, clip: bytes, concepts: tuple[str, ...]) -> Tracks:
         return await self._track(TrackRequest(video=clip, concepts=concepts))
+
+    async def depth(self, clip: bytes) -> bytes:
+        """A grayscale depth video of clip at its size and rate; near is bright."""
+        return (await self._depth(DepthRequest(video=clip))).data
 
     async def concepts(self, text: str, default: tuple[str, ...]) -> list[tuple[str, str]]:
         """(English concept, label) pairs from a comma-separated description; segmentation models read English."""
@@ -663,6 +667,37 @@ async def video_matting(ctx: ToolContext):
     return [Output('video', data, suffix, '视频抠像')]
 
 
+DEPTH_MAX_SECONDS = 30
+DEPTH_MAX_FRAMES = 2048
+DEPTH_SHORT_EDGES = {'480P': 480, '720P': 720}
+
+
+def _depth_size(width, height, short_edge):
+    """The source size scaled down so its short side is at most short_edge, on even pixels."""
+    scale = min(1.0, short_edge / min(width, height))
+    return max(2, round(width * scale / 2) * 2), max(2, round(height * scale / 2) * 2)
+
+
+async def depth_capture(ctx: ToolContext):
+    source = _source_video(ctx)
+    resolution = ctx.choice('resolution', tuple(DEPTH_SHORT_EDGES), '480P')
+    with media.Workspace() as work:
+        raw = work.write('source', source.data)
+        info = await asyncio.to_thread(media.video_info, raw)
+        if not 0 < info['duration'] <= DEPTH_MAX_SECONDS + 0.05:
+            raise ProjectError(f'深度动作捕捉需要不超过 {DEPTH_MAX_SECONDS} 秒的素材，请先裁剪视频。', 422)
+        if info['duration'] * info['fps'] > DEPTH_MAX_FRAMES:
+            raise ProjectError(f'深度动作捕捉单次最多处理 {DEPTH_MAX_FRAMES} 帧，请先裁剪视频或降低帧率。', 422)
+        await ctx.progress('正在整理视频')
+        # The depth service returns the size it receives, so the clip is sized here; every
+        # source frame is kept so depth frame i lines up with source frame i.
+        width, height = _depth_size(info['width'], info['height'], DEPTH_SHORT_EDGES[resolution])
+        clip = await asyncio.to_thread(media.picture, raw, work.path / 'clip.mp4', width=width, height=height)
+        await ctx.progress('正在估计每一帧的深度')
+        data = await ctx.depth(clip.read_bytes())
+    return [Output('video', data, 'mp4', f'深度动作捕捉 {resolution}')]
+
+
 async def video_edit(ctx: ToolContext):
     source = _source_video(ctx)
     prompt = ctx.text('prompt')
@@ -801,6 +836,6 @@ TOOLS: dict[str, ToolSpec] = {item.id: item for item in [
                   '接入图片编辑模型时会补全背景。'),
     ToolSpec('video-matting', ('video',), _needs('video.matting'), video_matting,
              note='按描述跟踪对象（默认人物），多个对象用逗号分隔；透明背景输出带透明通道的 WebM。'),
-    # Recognised, but no adapter offers its capability yet.
-    ToolSpec('video-depth-capture', ('video',), _needs('video.motion_capture'), None),
+    ToolSpec('video-depth-capture', ('video',), _needs('video.motion_capture'), depth_capture,
+             note='逐帧估计景深，输出灰度深度视频（近处亮、远处暗），可作为视频生成的动作与结构参考；最长 30 秒。'),
 ]}

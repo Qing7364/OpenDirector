@@ -50,6 +50,7 @@ export interface ModelConfig {
     | "vllm_omni"
     | "vllm_omni_segmentation"
     | "vllm_omni_music"
+    | "vllm_omni_depth"
     | null;
   authMode: "none" | "bearer" | null;
   inputRules: InputRules;
@@ -68,6 +69,11 @@ export function isSegmentationModel(
   model: Pick<ModelConfig, "kind" | "protocol">,
 ) {
   return model.kind === "vision" || model.protocol === "vllm_omni_segmentation";
+}
+
+/** Video Depth Anything configurations serve the depth capture tool only. */
+export function isDepthModel(model: Pick<ModelConfig, "kind" | "protocol">) {
+  return model.protocol === "vllm_omni_depth";
 }
 
 /** vLLM-Omni music models read a style description and lyrics instead of text to speak. */
@@ -99,7 +105,7 @@ export function serviceAudioSettings(
 export function isGenerationModel(
   model: Pick<ModelConfig, "kind" | "protocol">,
 ) {
-  return !isSegmentationModel(model);
+  return !isSegmentationModel(model) && !isDepthModel(model);
 }
 
 const LABELS: Record<string, string> = {
@@ -405,6 +411,8 @@ export function backendBlocker(
   if (!config) return "所选模型配置已删除或尚未读取，请在设置中重新选择。";
   if (config.kind !== settings.mode)
     return "模型类型与节点不符，请重新选择模型。";
+  if (isDepthModel(config))
+    return "视频深度模型仅用于深度动作捕捉，请选择生成模型。";
   if (!isGenerationModel(config))
     return "视觉分割模型仅用于选区、分割和抠像，请选择生成模型。";
   if (!settings.prompt.trim())

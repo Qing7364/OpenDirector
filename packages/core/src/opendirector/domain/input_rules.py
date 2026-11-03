@@ -19,6 +19,10 @@ def _adapter_rules(config):
         # Shared image segmentation / video tracking service, never a generator.
         rules.update(profile='vllm-omni-segmentation', allowedKinds=[], maxImages=0, videoModes=[])
         return rules
+    if config.get('protocol') == 'vllm_omni_depth':
+        # Video depth estimation service (Video Depth Anything), never a generator.
+        rules.update(profile='vllm-omni-depth', allowedKinds=[], maxImages=0, videoModes=[])
+        return rules
     adapter = config.get('videoAdapter', 'auto')
     name = model.rsplit('/', 1)[-1].lower()
     if adapter == 'auto':

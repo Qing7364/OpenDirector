@@ -12,9 +12,9 @@ from opendirector.domain.projects import ProjectError
 
 Capability = Literal[
     'text.chat', 'image.generate', 'image.edit', 'image.cutout', 'video.generate', 'video.first_frame', 'video.edit',
-    'audio.speech', 'audio.music', 'image.segment', 'video.matting',
-    # Declared so operations can name what they lack; no current adapter offers them.
-    'audio.separate', 'video.motion_capture',
+    'audio.speech', 'audio.music', 'image.segment', 'video.matting', 'video.motion_capture',
+    # Declared so operations can name what they lack; no current adapter offers it.
+    'audio.separate',
 ]
 
 LABELS: dict[str, str] = {
@@ -89,6 +89,12 @@ class Tracks:
     height: int
     fps: float
     frames: tuple[tuple[tuple[int, ...], ...], ...]
+
+
+@dataclass(frozen=True)
+class DepthRequest:
+    """Per-frame depth of a whole clip, rendered as a grayscale video at the clip's size and rate."""
+    video: bytes
 
 
 @dataclass(frozen=True)

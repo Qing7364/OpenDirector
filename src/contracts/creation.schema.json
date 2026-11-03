@@ -6601,7 +6601,8 @@
               "volcengine",
               "vllm_omni",
               "vllm_omni_segmentation",
-              "vllm_omni_music"
+              "vllm_omni_music",
+              "vllm_omni_depth"
             ],
             "title": "Protocol",
             "type": "string"
@@ -6731,7 +6732,8 @@
               "volcengine",
               "vllm_omni",
               "vllm_omni_segmentation",
-              "vllm_omni_music"
+              "vllm_omni_music",
+              "vllm_omni_depth"
             ],
             "title": "Protocol",
             "type": "string"
@@ -6852,7 +6854,8 @@
               "volcengine",
               "vllm_omni",
               "vllm_omni_segmentation",
-              "vllm_omni_music"
+              "vllm_omni_music",
+              "vllm_omni_depth"
             ],
             "title": "Protocol",
             "type": "string"
@@ -6955,7 +6958,8 @@
               "volcengine",
               "vllm_omni",
               "vllm_omni_segmentation",
-              "vllm_omni_music"
+              "vllm_omni_music",
+              "vllm_omni_depth"
             ],
             "title": "Protocol",
             "type": "string"
@@ -18936,7 +18940,8 @@
               "volcengine",
               "vllm_omni",
               "vllm_omni_segmentation",
-              "vllm_omni_music"
+              "vllm_omni_music",
+              "vllm_omni_depth"
             ],
             "title": "Protocol",
             "type": "string"
@@ -19056,7 +19061,8 @@
               "volcengine",
               "vllm_omni",
               "vllm_omni_segmentation",
-              "vllm_omni_music"
+              "vllm_omni_music",
+              "vllm_omni_depth"
             ],
             "title": "Protocol",
             "type": "string"
@@ -19181,7 +19187,8 @@
               "volcengine",
               "vllm_omni",
               "vllm_omni_segmentation",
-              "vllm_omni_music"
+              "vllm_omni_music",
+              "vllm_omni_depth"
             ],
             "title": "Protocol",
             "type": "string"
@@ -19287,7 +19294,8 @@
               "volcengine",
               "vllm_omni",
               "vllm_omni_segmentation",
-              "vllm_omni_music"
+              "vllm_omni_music",
+              "vllm_omni_depth"
             ],
             "title": "Protocol",
             "type": "string"

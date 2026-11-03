@@ -82,6 +82,20 @@ test("SAM stays tool-only in both media categories and legacy vision configurati
   assert.equal(isGenerationModel(h3), true);
 });
 
+test("depth models serve depth capture only, never generation", () => {
+  const depth = {
+    ...config("video", {}),
+    protocol: "vllm_omni_depth" as const,
+  };
+  const settings = {
+    ...generationDefaults("video"),
+    modelConfigId: depth.id,
+    prompt: "test",
+  };
+  assert.equal(isGenerationModel(depth), false);
+  assert.match(backendBlocker(settings, [], [depth])!, /视频深度模型/);
+});
+
 test("text-only reference requests become text-to-video", () => {
   const settings = video({ videoMode: "reference" });
   assert.equal(backendVideoMode(settings, []), "first_frame");
