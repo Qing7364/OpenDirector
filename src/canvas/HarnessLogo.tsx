@@ -10,7 +10,7 @@ const monochrome: Record<string, string> = { codex, claude, opencode };
 export function HarnessLogo({ harness }: { harness: string }) {
   if (harness === "deepseek") return <ModelLogo organization="deepseek-ai" />;
   if (harness === "jiuwenswarm")
-    return <img className="cw-model-logo" src={jiuwenswarm} alt="" aria-hidden="true" />;
+    return <img className="cw-model-logo cw-brand-mono" src={jiuwenswarm} alt="" aria-hidden="true" />;
   const url = monochrome[harness];
   return url ? (
     <img className="cw-model-logo cw-brand-mono" src={url} alt="" aria-hidden="true" />

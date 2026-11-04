@@ -132,7 +132,7 @@ class PinnedReference(ReferenceBase):
     source: AssetRef = Field(description='Fixed asset version used by generation.')
     # Historical provenance only; execution always uses the pinned asset.
     sourceVersion: CanvasItemVersion | None = Field(default=None, exclude_if=lambda value: value is None,
-        description='Source canvas_item version for its connection; omit for asset-only references.')
+        description='Source canvas item identity and revision. Required for canvas-derived references to retain their connection.')
     subjectRole: Literal['main', 'auxiliary', 'voice'] | None = Field(default=None, exclude_if=lambda value: value is None,
         description='Subject media slot provenance only; omit for ordinary image references and explicit first_frame/last_frame assets. main does not mean first frame.')
 
@@ -144,7 +144,8 @@ class FollowingReference(ReferenceBase):
     source: FollowingSource = Field(description='Source canvas_item identity.')
 
 
-Reference = Annotated[PinnedReference | FollowingReference, Field(discriminator='binding')]
+Reference = Annotated[PinnedReference | FollowingReference, Field(discriminator='binding',
+    description='Generation input reference. Preserve source canvas identity for canvas-derived references, whether following or pinned.')]
 
 
 class ResolvedReference(Contract):

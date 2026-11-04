@@ -62,7 +62,7 @@ class CanvasShow(Contract):
 class CanvasCreateGeneration(Contract):
     spec: GenerationSpec = Field(description='New configuration with purpose=generation.')
     item: CanvasItem = Field(description='Visible item bound to spec.id with role=generation.')
-    references: tuple[Reference, ...] = Field(default=(), description='Ordered generation reference bindings.')
+    references: tuple[Reference, ...] = Field(default=(), description='Input references. Every canvas-derived reference must retain its source node: source.id for follow_current, sourceVersion for pinned. Never replace a canvas reference with an asset-only binding.')
 
     @model_validator(mode='after')
     def bindings(self):
@@ -190,7 +190,7 @@ class SpecWrite(Contract):
 
 
 class ReferenceWrite(Contract):
-    reference: Reference = Field(description='Generation reference to create or update.')
+    reference: Reference = Field(description='Generation input reference. Preserve source canvas identity for canvas-derived references, whether following or pinned.')
 
 
 class ReferenceRemove(Contract):
@@ -313,7 +313,7 @@ _COMMANDS = (
     ('AssetWriteTextCommand', 'asset.writeText', AssetWriteText, 'Write a text asset or a new version of an existing text asset.'),
     ('AssetMetadataCommand', 'asset.updateMetadata', AssetMetadataUpdate, 'Rename an asset.'),
     ('AssetDeleteCommand', 'asset.delete', AssetDelete, 'Delete assets after an impact preview.'),
-    ('CanvasCreateGenerationCommand', 'canvas.createGeneration', CanvasCreateGeneration, 'Create a visible generation node and references atomically, without separate configuration or display commands.'),
+    ('CanvasCreateGenerationCommand', 'canvas.createGeneration', CanvasCreateGeneration, 'Create a visible generation node and references atomically. Every canvas-derived reference must preserve its source node connection, including pinned references.'),
     ('CanvasShowCommand', 'canvas.show', CanvasShow, 'Create or restore a canvas display item.'),
     ('CanvasMoveCommand', 'canvas.move', CanvasMove, 'Move one or more canvas items.'),
     ('CanvasUpdateCommand', 'canvas.update', CanvasPresentationUpdate, 'Update canvas presentation, grouping or lock state.'),

@@ -1922,8 +1922,9 @@
           },
           "references": {
             "default": [],
-            "description": "Ordered generation reference bindings.",
+            "description": "Input references. Every canvas-derived reference must retain its source node: source.id for follow_current, sourceVersion for pinned. Never replace a canvas reference with an asset-only binding.",
             "items": {
+              "description": "Generation input reference. Preserve source canvas identity for canvas-derived references, whether following or pinned.",
               "discriminator": {
                 "mapping": {
                   "follow_current": "#/$defs/FollowingReference",
@@ -1953,7 +1954,7 @@
       },
       "CanvasCreateGenerationCommand": {
         "additionalProperties": false,
-        "description": "Create a visible generation node and references atomically, without separate configuration or display commands.",
+        "description": "Create a visible generation node and references atomically. Every canvas-derived reference must preserve its source node connection, including pinned references.",
         "properties": {
           "commandId": {
             "description": "Stable command ID for idempotent replay.",
@@ -1998,7 +1999,7 @@
           },
           "payload": {
             "$ref": "#/$defs/CanvasCreateGeneration",
-            "description": "Create a visible generation node and references atomically, without separate configuration or display commands."
+            "description": "Create a visible generation node and references atomically. Every canvas-derived reference must preserve its source node connection, including pinned references."
           }
         },
         "required": [
@@ -8764,7 +8765,7 @@
               }
             ],
             "default": null,
-            "description": "Source canvas_item version for its connection; omit for asset-only references."
+            "description": "Source canvas item identity and revision. Required for canvas-derived references to retain their connection."
           },
           "subjectRole": {
             "anyOf": [
@@ -9308,6 +9309,7 @@
             "default": [],
             "description": "Ordered generation reference bindings.",
             "items": {
+              "description": "Generation input reference. Preserve source canvas identity for canvas-derived references, whether following or pinned.",
               "discriminator": {
                 "mapping": {
                   "follow_current": "#/$defs/FollowingReference",
@@ -10045,7 +10047,7 @@
         "additionalProperties": false,
         "properties": {
           "reference": {
-            "description": "Generation reference to create or update.",
+            "description": "Generation input reference. Preserve source canvas identity for canvas-derived references, whether following or pinned.",
             "discriminator": {
               "mapping": {
                 "follow_current": "#/$defs/FollowingReference",
@@ -16018,8 +16020,9 @@
           },
           "references": {
             "default": [],
-            "description": "Ordered generation reference bindings.",
+            "description": "Input references. Every canvas-derived reference must retain its source node: source.id for follow_current, sourceVersion for pinned. Never replace a canvas reference with an asset-only binding.",
             "items": {
+              "description": "Generation input reference. Preserve source canvas identity for canvas-derived references, whether following or pinned.",
               "discriminator": {
                 "mapping": {
                   "follow_current": "#/$defs/FollowingReference",
@@ -16050,7 +16053,7 @@
       },
       "CanvasCreateGenerationCommand": {
         "additionalProperties": false,
-        "description": "Create a visible generation node and references atomically, without separate configuration or display commands.",
+        "description": "Create a visible generation node and references atomically. Every canvas-derived reference must preserve its source node connection, including pinned references.",
         "properties": {
           "commandId": {
             "description": "Stable command ID for idempotent replay.",
@@ -16095,7 +16098,7 @@
           },
           "payload": {
             "$ref": "#/$defs/CanvasCreateGeneration",
-            "description": "Create a visible generation node and references atomically, without separate configuration or display commands."
+            "description": "Create a visible generation node and references atomically. Every canvas-derived reference must preserve its source node connection, including pinned references."
           }
         },
         "required": [
@@ -23118,7 +23121,7 @@
               }
             ],
             "default": null,
-            "description": "Source canvas_item version for its connection; omit for asset-only references."
+            "description": "Source canvas item identity and revision. Required for canvas-derived references to retain their connection."
           },
           "subjectRole": {
             "anyOf": [
@@ -23684,6 +23687,7 @@
             "default": [],
             "description": "Ordered generation reference bindings.",
             "items": {
+              "description": "Generation input reference. Preserve source canvas identity for canvas-derived references, whether following or pinned.",
               "discriminator": {
                 "mapping": {
                   "follow_current": "#/$defs/FollowingReference",
@@ -24446,7 +24450,7 @@
         "additionalProperties": false,
         "properties": {
           "reference": {
-            "description": "Generation reference to create or update.",
+            "description": "Generation input reference. Preserve source canvas identity for canvas-derived references, whether following or pinned.",
             "discriminator": {
               "mapping": {
                 "follow_current": "#/$defs/FollowingReference",
