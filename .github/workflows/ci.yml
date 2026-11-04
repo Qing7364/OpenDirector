@@ -80,6 +80,7 @@ jobs:
           node tests/browser/created_node_focus.mjs
           node tests/browser/reference_reconnect.mjs
           node tests/browser/context_menu_dismissal.mjs
+          node tests/browser/project_list_overflow.mjs
           node tests/browser/mp4_export.mjs
           node tests/browser/editor_save.mjs
           node tests/browser/canvas_crop.mjs

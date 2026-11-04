@@ -635,6 +635,12 @@
   padding: 0 6px;
 }
 .cw-project-error {
+  /* One line per unreadable project can outgrow the menu; scroll it so the list keeps its room. */
+  flex-shrink: 0;
+  max-height: 96px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #ffffff20 transparent;
   color: #f3a3a3;
   font-size: 12px;
   padding: 0 6px;
