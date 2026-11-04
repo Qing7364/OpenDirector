@@ -8,6 +8,7 @@
 
 ```sh
 npm ci
+npm exec --no -- opencode --version
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 
@@ -16,6 +17,8 @@ npm test
 npm run build
 .venv/bin/python scripts/generate_contracts.py --check
 ```
+
+内置 Agent 安装验证必须实际执行上述 OpenCode 版本命令，不能只检查文件存在。不要跳过 `opencode-ai` 的安装脚本；若依赖安装不完整，在仓库根目录重新执行 `npm ci` 并允许安装脚本运行。
 
 Windows 使用对应虚拟环境的 Python 路径。涉及真实媒体探测、工具处理或对应测试时，需要 PATH 中的 `ffmpeg` 和 `ffprobe`；视频处理使用 `libx264` 编码器，可通过 `ffmpeg -encoders` 检查是否包含它。不因纯文档修改而运行全部生成或媒体测试。
 

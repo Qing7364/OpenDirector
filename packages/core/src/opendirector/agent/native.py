@@ -20,6 +20,9 @@ from opendirector.domain.projects import ProjectError
 from opendirector.integrations.chat_completions import ChatCompletions
 
 
+BUNDLED_INSTALL_ERROR = ('内置 Agent 依赖安装不完整或无法运行，请在仓库根目录执行 npm ci，并确保允许 opencode-ai 的安装脚本运行。')
+
+
 def executable(runtime: str) -> str | None:
     if runtime == 'default':
         for name in ('opencode.exe', 'opencode'):
@@ -35,7 +38,7 @@ def command(runtime: str, work: Path, socket: str, token: str, model: str | None
             bridge_env: dict[str, str] | None = None) -> tuple[list[str], dict[str, str]]:
     binary = executable(runtime)
     if binary is None:
-        raise ProjectError('内置 OpenCode 未安装，请执行 npm ci。' if runtime == 'default' else f'{runtime} CLI 未安装，请先安装。', 503)
+        raise ProjectError(BUNDLED_INSTALL_ERROR if runtime == 'default' else f'{runtime} CLI 未安装，请先安装。', 503)
     bundled = runtime == 'default'
     if bundled:
         runtime = 'opencode'
@@ -209,9 +212,14 @@ class NativeRuntime:
                         prompt = f'Use the native skill tool to load {name} from {work / ".agents/skills"} before proceeding.\n' + prompt
                     else:
                         prompt = f'Use the native skill tool to load {name} before proceeding.\n' + prompt
-                process = await asyncio.create_subprocess_exec(*args, cwd=work, env=env,
-                    stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE, start_new_session=True, limit=64 * 1024 * 1024)
+                try:
+                    process = await asyncio.create_subprocess_exec(*args, cwd=work, env=env,
+                        stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE, start_new_session=True, limit=64 * 1024 * 1024)
+                except OSError as error:
+                    if run.runtime == 'default':
+                        raise ProjectError(BUNDLED_INSTALL_ERROR, 503, code='agent_dependency_unavailable') from error
+                    raise
                 stderr_tail = bytearray()
                 async def drain_stderr():
                     while chunk := await process.stderr.read(4096):

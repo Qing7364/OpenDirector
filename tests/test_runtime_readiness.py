@@ -97,3 +97,39 @@ def test_runtime_catalog_can_skip_probes_and_check_one_harness(tmp_path, monkeyp
         assert response.status_code == 200
         assert response.json()['status']=='ready'
         assert calls == ['codex']
+
+
+@pytest.mark.parametrize('content, expected', [
+    ('echo "postinstall was not run"\nexit 1\n', 'unknown'),
+    (f'#!{sys.executable}\nraise SystemExit(1)\n', 'unknown'),
+    (f'#!{sys.executable}\nimport sys\nassert sys.argv[1:] == ["--version"]\nprint("1.19.5")\n', 'ready'),
+])
+def test_bundled_readiness_runs_binary(tmp_path, monkeypatch, content, expected):
+    binary = tmp_path / 'opencode.exe'
+    binary.write_text(content)
+    binary.chmod(0o755)
+    monkeypatch.setattr(runtime.native, 'executable', lambda _: str(binary))
+    assert asyncio.run(runtime.runtime_readiness('default')) == expected
+
+
+def test_skill_endpoint_reports_incomplete_bundled_install(tmp_path, monkeypatch):
+    from uuid import uuid4
+    from fastapi.testclient import TestClient
+    from opendirector_api.main import create_app
+    from opendirector.infrastructure.local_projects import LocalProjects
+
+    binary = tmp_path / 'opencode.exe'
+    binary.write_text('echo "postinstall was not run"\nexit 1\n')
+    binary.chmod(0o755)
+    monkeypatch.setattr('opendirector.agent.skills.executable', lambda _: str(binary))
+    pid = str(uuid4())
+    path = f'/api/creation/projects/{pid}'
+    with TestClient(create_app(LocalProjects(tmp_path)), headers={
+        'X-OpenDirector-Request': '1', 'X-OpenDirector-Session': str(uuid4())}) as client:
+        assert client.post(path + '/commands', json={'type': 'project.create', 'projectId': pid,
+            'commandId': str(uuid4()), 'payload': {'name': 'Incomplete install'}}).status_code == 200
+        response = client.get(path + '/assistant/skills')
+        assert response.status_code == 503
+        assert response.json()['code'] == 'agent_dependency_unavailable'
+        assert 'npm ci' in response.json()['detail']
+        assert '磁盘空间' not in response.json()['detail']

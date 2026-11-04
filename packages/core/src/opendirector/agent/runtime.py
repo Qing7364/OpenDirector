@@ -69,9 +69,9 @@ async def runtime_readiness(engine: str) -> str:
     executable = native.executable(engine)
     if executable is None:
         return 'not_installed'
-    if engine in {'default', 'opencode'}:
+    if engine == 'opencode':
         return 'ready'
-    args = ['login', 'status'] if engine == 'codex' else ['auth', 'status', '--json']
+    args = ['--version'] if engine == 'default' else ['login', 'status'] if engine == 'codex' else ['auth', 'status', '--json']
     try:
         process = await asyncio.create_subprocess_exec(
             str(executable), *args, stdout=asyncio.subprocess.PIPE,
@@ -80,6 +80,8 @@ async def runtime_readiness(engine: str) -> str:
         return 'unknown'
     try:
         output, _ = await asyncio.wait_for(process.communicate(), 5)
+        if engine == 'default':
+            return 'ready' if process.returncode == 0 and output.strip() else 'unknown'
         if engine == 'claude':
             try:
                 logged_in = json.loads(output)['loggedIn']

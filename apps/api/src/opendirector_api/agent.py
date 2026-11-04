@@ -187,7 +187,7 @@ def agent_routes(projects, generation, configs, provider=None) -> APIRouter:
         if probe:
             return await configured_runtimes()
         return [{**item, 'status': 'not_installed' if not item['available'] else
-                 'ready' if item['id'] in {'default', 'opencode'} else 'checking'}
+                 'ready' if item['id'] == 'opencode' else 'checking'}
                 for item in runtime_catalog()]
 
     @router.get('/runtimes/{runtime}/status')

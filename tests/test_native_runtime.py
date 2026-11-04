@@ -245,3 +245,24 @@ def test_bundled_model_declares_configured_inputs_without_changing_cli_provider(
     config = json.loads(env['OPENCODE_CONFIG_CONTENT'])
     assert config['provider']['opendirector']['models']['vision-agent']['modalities'] == {
         'input': ['text', 'image'], 'output': ['text']}
+
+
+def test_bundled_launch_reports_incomplete_install(tmp_path, monkeypatch):
+    from opendirector.domain.projects import ProjectError
+    from opendirector.infrastructure.creation_projects import CreationProjects
+
+    binary = tmp_path / 'opencode.exe'
+    binary.write_text('echo "postinstall was not run"\nexit 1\n')
+    binary.chmod(0o755)
+    monkeypatch.setattr(native, 'executable', lambda _: str(binary))
+    instance = AgentRuntimes(CreationProjects(LocalProjects(tmp_path)), None, ModelConfigs(tmp_path))
+    async def check():
+        with pytest.raises(ProjectError, match='内置 Agent 依赖安装不完整') as caught:
+            async for _ in instance.stream(RunContext(runtime='default', project_id=uuid4(),
+                    turn_id=uuid4(), session=str(uuid4()), directory=tmp_path,
+                    config={'modelId': 'test', 'apiKey': '', 'url': 'http://localhost/v1', 'protocol': 'openai'},
+                    messages=[{'role': 'user', 'content': 'hello'}], selected_skills=[])):
+                pass
+        assert caught.value.code == 'agent_dependency_unavailable'
+        assert caught.value.status == 503
+    asyncio.run(check())

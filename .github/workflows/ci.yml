@@ -41,6 +41,7 @@ jobs:
           npm --version
           python --version
           npm ci
+          npm exec --no -- opencode --version
           python -m pip install -r requirements.txt
           python -m pip check
       - name: Frontend tests
