@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  centeredViewport,
   selectionPlacement,
   selectionViewport,
   type SelectionChrome,
@@ -141,4 +142,18 @@ test("manual zoom and pan preserve the composer's canvas anchor and scaled gap",
     assert.ok(Math.abs(panned.composer.top - placed.composer.top - 150) < 1e-6);
     assert.deepEqual(view, { x: 300, y: 100, zoom });
   }
+});
+
+
+test("created content centers in the canvas beside the assistant without enlarging", () => {
+  const chrome = { safe: { x: 80, y: 72, width: 800, height: 650 }, toolbar: { width: 0, height: 0 }, composer: { width: 0, height: 0 } };
+  const node = { x: 0, y: 0, width: 352, height: 528 };
+  const view = centeredViewport(node, { x: 0, y: 0, zoom: .8 }, chrome);
+  assert.equal(view.zoom, .8);
+  assert.equal(view.x + node.width * view.zoom / 2, 480);
+  assert.equal(view.y + node.height * view.zoom / 2, 397);
+  const large = centeredViewport({ ...node, x: 5000, width: 2000, height: 1200 }, { x: 0, y: 0, zoom: 1 }, chrome);
+  assert.ok(large.zoom < 1);
+  assert.ok(large.x + 5000 * large.zoom >= chrome.safe.x);
+  assert.ok(large.x + 7000 * large.zoom <= chrome.safe.x + chrome.safe.width);
 });

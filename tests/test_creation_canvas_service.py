@@ -1,8 +1,11 @@
 """Real committed commands: no alternate graph and no visible execution nodes."""
+from io import BytesIO
 from uuid import uuid4
 
+from PIL import Image
 import pytest
 
+from opendirector.application.creation_assets import CreationAssets
 from opendirector.application.creation_canvas import CreationCanvas, asset_ref, resolved_inputs
 from opendirector.domain.creation.commands import parse_command
 from opendirector.infrastructure.creation_projects import CreationProjects
@@ -388,3 +391,45 @@ def test_canvas_item_wait_returns_on_change_and_timeout(project, monkeypatch):
     assert result['status'] == 'succeeded'
     monkeypatch.setattr(canvas, 'item_status', lambda *args: {'status': 'running'})
     assert asyncio.run(canvas.wait_item_status(pid, item.id, .01)) == {'status': 'running'}
+
+
+@pytest.mark.parametrize('binding', ['follow_current', 'pinned'])
+def test_canvas_reference_sources_create_a_connected_video_node(project, binding):
+    store, pid, session = project
+    assets = CreationAssets(store)
+    image = BytesIO()
+    Image.new('RGB', (16, 16), 'blue').save(image, 'PNG')
+    handle = uuid4()
+    writer = assets.uploads.begin(pid, handle, session, 'reference.png', expected_kind='image')
+    writer.write(image.getvalue())
+    writer.finish()
+    assert send(store, pid, 'asset.import', session=session, uploadHandle=handle,
+        name='reference.png', expectedKind='image').status == 'applied'
+    asset = store.snapshot(pid).assets[-1]
+    source_id = uuid4()
+    assert send(store, pid, 'canvas.show', session=session, item=dict(id=source_id,
+        projectId=pid, kind='image', binding=dict(role='material', objectRef=asset_ref(asset)))).status == 'applied'
+    canvas = CreationCanvas(store)
+    before = store.snapshot(pid)
+    sources = canvas.item_status(pid, source_id)['referenceSources']
+    assert store.snapshot(pid) == before
+    spec_id, target_id, ref_id = uuid4(), uuid4(), uuid4()
+    source = sources['followCurrent'] if binding == 'follow_current' else sources['pinned']
+    receipt = send(store, pid, 'canvas.createGeneration', session=session,
+        spec=dict(id=spec_id, projectId=pid, kind='video', purpose='generation', prompt='Animate the reference',
+            parameters=dict(durationSeconds=5, videoMode='reference')),
+        item=dict(id=target_id, projectId=pid, kind='video',
+            binding=dict(role='generation', objectRef=dict(id=spec_id))),
+        references=[dict(id=ref_id, projectId=pid, targetSpecId=spec_id, **source)])
+    assert receipt.status == 'applied', receipt.issues
+    projection = canvas.projection(pid)
+    assert projection['edges'] == [dict(referenceId=ref_id, sourceItemId=source_id,
+        targetSpecId=spec_id, state='pending')]
+    current = store.snapshot(pid)
+    assert next(item for item in current.canvasItems if item.id == target_id).visible
+    assert not current.jobs
+    pinned = current.references[0].source if binding == 'pinned' else None
+    assert resolved_inputs(current, spec_id)[0].asset.assetId == asset.id
+    assert canvas.item_status(pid, target_id)['referenceSources'] is None
+    if pinned is not None:
+        assert pinned == asset_ref(asset)

@@ -31,6 +31,7 @@ export interface InputRules {
   maxVideos: number;
   maxAudios: number;
   videoModes: BackendVideoMode[];
+  generateAudioOptions?: boolean[] | null;
   imageOutputs?: { aspectRatio: string; size: string }[];
   outputResolutions?: string[];
   referenceImageResolutions?: string[];
@@ -387,7 +388,7 @@ export function serviceGenerationSettings(
     next.imagePreset = "none";
     if (!/^[A-Za-z0-9_.-]{1,64}$/.test(next.voiceName ?? ""))
       next.voiceName = undefined;
-    if (config.protocol !== "volcengine") next.audioEnabled = true;
+    if (!(config.inputRules.generateAudioOptions?.includes(false) ?? config.protocol === "volcengine")) next.audioEnabled = true;
   }
   return next;
 }
@@ -492,7 +493,7 @@ export function backendBlocker(
   if (
     settings.mode === "video" &&
     settings.audioEnabled === false &&
-    config.protocol !== "volcengine"
+    !(rules.generateAudioOptions?.includes(false) ?? config.protocol === "volcengine")
   )
     return "当前视频适配器不支持关闭生成音频。";
   const references = backendReferences(settings, incoming, config);

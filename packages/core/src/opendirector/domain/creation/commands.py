@@ -186,7 +186,7 @@ class SpecPromptWrite(Contract):
 
 
 class SpecWrite(Contract):
-    spec: GenerationSpec = Field(description='Generation configuration for this operation.')
+    spec: GenerationSpec = Field(description='Configuration with its current revision; the server increments it on commit.')
 
 
 class ReferenceWrite(Contract):
@@ -313,7 +313,7 @@ _COMMANDS = (
     ('AssetWriteTextCommand', 'asset.writeText', AssetWriteText, 'Write a text asset or a new version of an existing text asset.'),
     ('AssetMetadataCommand', 'asset.updateMetadata', AssetMetadataUpdate, 'Rename an asset.'),
     ('AssetDeleteCommand', 'asset.delete', AssetDelete, 'Delete assets after an impact preview.'),
-    ('CanvasCreateGenerationCommand', 'canvas.createGeneration', CanvasCreateGeneration, 'Create a visible generation node with configuration and references atomically; does not submit generation.'),
+    ('CanvasCreateGenerationCommand', 'canvas.createGeneration', CanvasCreateGeneration, 'Create a visible generation node and references atomically, without separate configuration or display commands.'),
     ('CanvasShowCommand', 'canvas.show', CanvasShow, 'Create or restore a canvas display item.'),
     ('CanvasMoveCommand', 'canvas.move', CanvasMove, 'Move one or more canvas items.'),
     ('CanvasUpdateCommand', 'canvas.update', CanvasPresentationUpdate, 'Update canvas presentation, grouping or lock state.'),
@@ -413,30 +413,53 @@ class CommandReceipt(Contract):
         return self
 
 
-class CanvasItemQuery(Contract):
-    itemId: UUID = Field(description='Canvas item ID from the current project.')
-    waitSeconds: float = Field(default=0, ge=0, le=30, description='Wait for status changes, up to 30 seconds; zero returns immediately.')
-
-
-class AssetPreviewQuery(Contract):
-    assetId: UUID = Field(description='Asset ID from the current project.')
-
-
-class Query(Contract):
+class QueryBase(Contract):
     queryId: UUID = Field(description='Caller-supplied query ID.')
     projectId: UUID = Field(description='Owning project ID.')
-    type: Literal['project.get', 'object.get', 'asset.search', 'asset.usage', 'generationSpec.versions', 'canvas.versions', 'job.get'] = Field(description='Operation or variant discriminator.')
-    objectId: UUID | None = Field(default=None, description='Target business object ID.')
-    revision: Revision | None = Field(default=None, description='Historical revision to read, when specified.')
-    text: str = Field(default='', max_length=1000, description='UTF-8 text content or search query.')
+
+
+class ProjectQuery(QueryBase):
+    type: Literal['project.get'] = Field(description='Read the current project.')
+
+
+class ObjectQuery(QueryBase):
+    type: Literal['object.get', 'job.get'] = Field(description='Read an object or generation job.')
+    objectId: UUID = Field(description='Target business object ID.')
+    revision: Revision | None = Field(default=None, description='Historical object revision, or current when omitted.')
+
+
+class VersionsQuery(QueryBase):
+    type: Literal['generationSpec.versions', 'canvas.versions'] = Field(description='Read object versions.')
+    objectId: UUID = Field(description='Target configuration or canvas item ID.')
+
+
+class AssetSearchQuery(QueryBase):
+    type: Literal['asset.search'] = Field(description='Search project assets.')
+    text: str = Field(default='', max_length=1000, description='Asset search text.')
     offset: int = Field(default=0, strict=True, ge=0, description='Number of matching records to skip.')
     limit: int = Field(default=50, strict=True, ge=1, le=200, description='Maximum number of records to return.')
 
-    @model_validator(mode='after')
-    def target(self):
-        if self.type in {'object.get', 'generationSpec.versions', 'canvas.versions', 'job.get'} and self.objectId is None:
-            raise ValueError('Object query needs a stable object ID')
-        return self
+
+class AssetUsageQuery(QueryBase):
+    type: Literal['asset.usage'] = Field(description='Read asset dependencies.')
+    objectId: UUID | None = Field(default=None, description='Asset ID, or all assets when omitted.')
+    offset: int = Field(default=0, strict=True, ge=0, description='Number of matching records to skip.')
+    limit: int = Field(default=50, strict=True, ge=1, le=200, description='Maximum number of records to return.')
+
+
+class CanvasStatusQuery(QueryBase):
+    type: Literal['canvas.status'] = Field(description='Read node status, current asset and reusable referenceSources.')
+    objectId: UUID = Field(description='Canvas item ID.')
+    waitSeconds: float = Field(default=0, ge=0, le=30, description='Wait for generation changes; zero returns immediately.')
+
+
+class AssetPreviewQuery(QueryBase):
+    type: Literal['asset.preview'] = Field(description='Preview an asset; does not establish model observation.')
+    objectId: UUID = Field(description='Asset ID.')
+
+
+Query = Annotated[ProjectQuery | ObjectQuery | VersionsQuery | AssetSearchQuery | AssetUsageQuery |
+                  CanvasStatusQuery | AssetPreviewQuery, Field(discriminator='type')]
 
 
 class ChangedObject(Contract):

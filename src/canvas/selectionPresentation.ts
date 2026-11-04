@@ -16,6 +16,15 @@ const COMPOSER_GAP = 16;
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
+/** Center content in the usable canvas, preserving zoom unless it cannot fit. */
+export function centeredViewport(node: Rect, viewport: Viewport, chrome: SelectionChrome): Viewport {
+  return selectionViewport(node, {
+    ...viewport,
+    x: chrome.safe.x + chrome.safe.width / 2 - (node.x + node.width / 2) * viewport.zoom,
+    y: chrome.safe.y + chrome.safe.height / 2 - (node.y + node.height / 2) * viewport.zoom,
+  }, chrome);
+}
+
 /** Keep the selected node and its controls in one visible envelope.
  * Authored node geometry never changes when opening a generator. */
 export function selectionViewport(

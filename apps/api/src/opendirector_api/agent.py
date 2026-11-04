@@ -252,6 +252,7 @@ def agent_routes(projects, generation, configs, provider=None) -> APIRouter:
             async def produce() -> None:
                 text, status, error, accepted = '', 'complete', None, False
                 activities = []
+                plan = None
                 try:
                     user = {'id': str(value.id), 'role': 'user', 'text': value.text, 'content': value.content,
                         'assets': [{'id': str(assets[key].id), 'name': assets[key].name, 'type': assets[key].metadata.mimeType,
@@ -282,6 +283,8 @@ def agent_routes(projects, generation, configs, provider=None) -> APIRouter:
                         async for event in stream:
                             if event['type'] == 'delta':
                                 text += event['text']
+                            if event['type'] == 'plan':
+                                plan = event['entries']
                             if event['type'] == 'tool':
                                 previous = next((item for item in activities if item['id'] == event['id']), None)
                                 activity = {**{key: item for key, item in event.items() if key != 'type'},
@@ -308,7 +311,8 @@ def agent_routes(projects, generation, configs, provider=None) -> APIRouter:
                         saved = await asyncio.to_thread(conversations.update, project_id, finish={
                             'id': str(uuid5(value.id, 'assistant')), 'role': 'assistant', 'text': text, 'status': status,
                             'model': model,
-                            'runtime': value.runtime, 'thinking': value.thinking, 'tools': activities}, conversation_id=value.conversationId)
+                            'runtime': value.runtime, 'thinking': value.thinking, 'tools': activities,
+                            **({'plan': plan} if plan is not None else {})}, conversation_id=value.conversationId)
                     else:
                         saved = None
                     if asyncio.current_task().cancelling():

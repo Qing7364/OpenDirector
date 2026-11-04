@@ -48,7 +48,12 @@ export interface ConversationSummary {
   title: string;
   messageCount: number;
 }
+export interface ChatPlanEntry {
+  content: string;
+  status: "pending" | "in_progress" | "completed";
+}
 export interface ChatMessage {
+  plan?: ChatPlanEntry[];
   runtime?: AgentRuntime;
   tools?: ChatTool[];
   id: string;
@@ -94,6 +99,7 @@ export interface Conversation extends ChatDraft {
 export type ChatEvent =
   | { type: "start"; conversation: Conversation }
   | { type: "thinking" }
+  | { type: "plan"; entries: ChatPlanEntry[] }
   | ({ type: "tool" } & ChatTool)
   | { type: "delta"; text: string }
   | { type: "end"; conversation: Conversation | null; error: string | null };

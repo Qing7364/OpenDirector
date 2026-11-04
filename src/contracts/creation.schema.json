@@ -461,15 +461,36 @@
       "AssetPreviewQuery": {
         "additionalProperties": false,
         "properties": {
-          "assetId": {
-            "description": "Asset ID from the current project.",
+          "queryId": {
+            "description": "Caller-supplied query ID.",
             "format": "uuid",
-            "title": "Assetid",
+            "title": "Queryid",
+            "type": "string"
+          },
+          "projectId": {
+            "description": "Owning project ID.",
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "const": "asset.preview",
+            "description": "Preview an asset; does not establish model observation.",
+            "title": "Type",
+            "type": "string"
+          },
+          "objectId": {
+            "description": "Asset ID.",
+            "format": "uuid",
+            "title": "Objectid",
             "type": "string"
           }
         },
         "required": [
-          "assetId"
+          "queryId",
+          "projectId",
+          "type",
+          "objectId"
         ],
         "title": "AssetPreviewQuery",
         "type": "object"
@@ -691,6 +712,117 @@
           "kind"
         ],
         "title": "AssetRef",
+        "type": "object"
+      },
+      "AssetSearchQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "queryId": {
+            "description": "Caller-supplied query ID.",
+            "format": "uuid",
+            "title": "Queryid",
+            "type": "string"
+          },
+          "projectId": {
+            "description": "Owning project ID.",
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "const": "asset.search",
+            "description": "Search project assets.",
+            "title": "Type",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "description": "Asset search text.",
+            "maxLength": 1000,
+            "title": "Text",
+            "type": "string"
+          },
+          "offset": {
+            "default": 0,
+            "description": "Number of matching records to skip.",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "limit": {
+            "default": 50,
+            "description": "Maximum number of records to return.",
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "queryId",
+          "projectId",
+          "type"
+        ],
+        "title": "AssetSearchQuery",
+        "type": "object"
+      },
+      "AssetUsageQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "queryId": {
+            "description": "Caller-supplied query ID.",
+            "format": "uuid",
+            "title": "Queryid",
+            "type": "string"
+          },
+          "projectId": {
+            "description": "Owning project ID.",
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "const": "asset.usage",
+            "description": "Read asset dependencies.",
+            "title": "Type",
+            "type": "string"
+          },
+          "objectId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Asset ID, or all assets when omitted.",
+            "title": "Objectid"
+          },
+          "offset": {
+            "default": 0,
+            "description": "Number of matching records to skip.",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "limit": {
+            "default": 50,
+            "description": "Maximum number of records to return.",
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "queryId",
+          "projectId",
+          "type"
+        ],
+        "title": "AssetUsageQuery",
         "type": "object"
       },
       "AssetWriteText": {
@@ -1821,7 +1953,7 @@
       },
       "CanvasCreateGenerationCommand": {
         "additionalProperties": false,
-        "description": "Create a visible generation node with configuration and references atomically; does not submit generation.",
+        "description": "Create a visible generation node and references atomically, without separate configuration or display commands.",
         "properties": {
           "commandId": {
             "description": "Stable command ID for idempotent replay.",
@@ -1866,7 +1998,7 @@
           },
           "payload": {
             "$ref": "#/$defs/CanvasCreateGeneration",
-            "description": "Create a visible generation node with configuration and references atomically; does not submit generation."
+            "description": "Create a visible generation node and references atomically, without separate configuration or display commands."
           }
         },
         "required": [
@@ -2278,28 +2410,34 @@
         "title": "CanvasItemBase",
         "type": "object"
       },
-      "CanvasItemQuery": {
+      "CanvasItemVersion": {
         "additionalProperties": false,
         "properties": {
-          "itemId": {
-            "description": "Canvas item ID from the current project.",
-            "format": "uuid",
-            "title": "Itemid",
+          "objectType": {
+            "const": "canvas_item",
+            "description": "Source canvas item type.",
+            "title": "Objecttype",
             "type": "string"
           },
-          "waitSeconds": {
-            "default": 0,
-            "description": "Wait for status changes, up to 30 seconds; zero returns immediately.",
-            "maximum": 30,
-            "minimum": 0,
-            "title": "Waitseconds",
-            "type": "number"
+          "id": {
+            "description": "Stable object ID.",
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "revision": {
+            "description": "Current object revision for optimistic concurrency.",
+            "minimum": 1,
+            "title": "Revision",
+            "type": "integer"
           }
         },
         "required": [
-          "itemId"
+          "objectType",
+          "id",
+          "revision"
         ],
-        "title": "CanvasItemQuery",
+        "title": "CanvasItemVersion",
         "type": "object"
       },
       "CanvasMaterialize": {
@@ -2786,6 +2924,25 @@
         "title": "CanvasPublishMediaCommand",
         "type": "object"
       },
+      "CanvasReferenceSources": {
+        "additionalProperties": false,
+        "properties": {
+          "followCurrent": {
+            "$ref": "#/$defs/FollowingReferenceSource",
+            "description": "Source fields for a follow_current reference."
+          },
+          "pinned": {
+            "$ref": "#/$defs/PinnedReferenceSource",
+            "description": "Source fields for a pinned reference retaining its canvas connection."
+          }
+        },
+        "required": [
+          "followCurrent",
+          "pinned"
+        ],
+        "title": "CanvasReferenceSources",
+        "type": "object"
+      },
       "CanvasShow": {
         "additionalProperties": false,
         "properties": {
@@ -2930,6 +3087,51 @@
           "payload"
         ],
         "title": "CanvasShowCommandOperation",
+        "type": "object"
+      },
+      "CanvasStatusQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "queryId": {
+            "description": "Caller-supplied query ID.",
+            "format": "uuid",
+            "title": "Queryid",
+            "type": "string"
+          },
+          "projectId": {
+            "description": "Owning project ID.",
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "const": "canvas.status",
+            "description": "Read node status, current asset and reusable referenceSources.",
+            "title": "Type",
+            "type": "string"
+          },
+          "objectId": {
+            "description": "Canvas item ID.",
+            "format": "uuid",
+            "title": "Objectid",
+            "type": "string"
+          },
+          "waitSeconds": {
+            "default": 0,
+            "description": "Wait for generation changes; zero returns immediately.",
+            "maximum": 30,
+            "minimum": 0,
+            "title": "Waitseconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "queryId",
+          "projectId",
+          "type",
+          "objectId"
+        ],
+        "title": "CanvasStatusQuery",
         "type": "object"
       },
       "CanvasUpdateCommand": {
@@ -3587,8 +3789,45 @@
             "description": "Immutable command execution receipt."
           },
           "query": {
-            "$ref": "#/$defs/Query",
-            "description": "Read-only project query."
+            "description": "Read-only project query.",
+            "discriminator": {
+              "mapping": {
+                "asset.preview": "#/$defs/AssetPreviewQuery",
+                "asset.search": "#/$defs/AssetSearchQuery",
+                "asset.usage": "#/$defs/AssetUsageQuery",
+                "canvas.status": "#/$defs/CanvasStatusQuery",
+                "canvas.versions": "#/$defs/VersionsQuery",
+                "generationSpec.versions": "#/$defs/VersionsQuery",
+                "job.get": "#/$defs/ObjectQuery",
+                "object.get": "#/$defs/ObjectQuery",
+                "project.get": "#/$defs/ProjectQuery"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ProjectQuery"
+              },
+              {
+                "$ref": "#/$defs/ObjectQuery"
+              },
+              {
+                "$ref": "#/$defs/VersionsQuery"
+              },
+              {
+                "$ref": "#/$defs/AssetSearchQuery"
+              },
+              {
+                "$ref": "#/$defs/AssetUsageQuery"
+              },
+              {
+                "$ref": "#/$defs/CanvasStatusQuery"
+              },
+              {
+                "$ref": "#/$defs/AssetPreviewQuery"
+              }
+            ],
+            "title": "Query"
           },
           "event": {
             "$ref": "#/$defs/ProjectEvent",
@@ -4678,13 +4917,13 @@
           },
           "binding": {
             "const": "follow_current",
-            "description": "Business object displayed by this canvas item.",
+            "description": "Follow the source canvas item's current asset.",
             "title": "Binding",
             "type": "string"
           },
           "source": {
             "$ref": "#/$defs/FollowingSource",
-            "description": "Input source or recorded provenance."
+            "description": "Source canvas_item identity."
           }
         },
         "required": [
@@ -4695,6 +4934,27 @@
           "source"
         ],
         "title": "FollowingReference",
+        "type": "object"
+      },
+      "FollowingReferenceSource": {
+        "additionalProperties": false,
+        "properties": {
+          "binding": {
+            "const": "follow_current",
+            "default": "follow_current",
+            "description": "Follow the canvas source current asset.",
+            "title": "Binding",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/$defs/FollowingSource",
+            "description": "Source canvas_item identity."
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "FollowingReferenceSource",
         "type": "object"
       },
       "FollowingSource": {
@@ -6256,6 +6516,24 @@
             ],
             "default": null,
             "description": "Supported video generation capabilities."
+          },
+          "generateAudioOptions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "boolean"
+                },
+                "maxItems": 2,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Allowed generateAudio values; omitted in legacy execution snapshots.",
+            "title": "Generateaudiooptions"
           }
         },
         "required": [
@@ -8208,6 +8486,60 @@
         "title": "NodeVersionApplyCommand",
         "type": "object"
       },
+      "ObjectQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "queryId": {
+            "description": "Caller-supplied query ID.",
+            "format": "uuid",
+            "title": "Queryid",
+            "type": "string"
+          },
+          "projectId": {
+            "description": "Owning project ID.",
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "description": "Read an object or generation job.",
+            "enum": [
+              "object.get",
+              "job.get"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "objectId": {
+            "description": "Target business object ID.",
+            "format": "uuid",
+            "title": "Objectid",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Historical object revision, or current when omitted.",
+            "title": "Revision"
+          }
+        },
+        "required": [
+          "queryId",
+          "projectId",
+          "type",
+          "objectId"
+        ],
+        "title": "ObjectQuery",
+        "type": "object"
+      },
       "ObjectVersion": {
         "additionalProperties": false,
         "properties": {
@@ -8359,25 +8691,25 @@
           },
           "binding": {
             "const": "pinned",
-            "description": "Business object displayed by this canvas item.",
+            "description": "Use a fixed asset version, retaining canvas provenance when supplied.",
             "title": "Binding",
             "type": "string"
           },
           "source": {
             "$ref": "#/$defs/AssetRef",
-            "description": "Input source or recorded provenance."
+            "description": "Fixed asset version used by generation."
           },
           "sourceVersion": {
             "anyOf": [
               {
-                "$ref": "#/$defs/ObjectVersion"
+                "$ref": "#/$defs/CanvasItemVersion"
               },
               {
                 "type": "null"
               }
             ],
             "default": null,
-            "description": "Captured source object version."
+            "description": "Source canvas_item version for its connection; omit for asset-only references."
           },
           "subjectRole": {
             "anyOf": [
@@ -8406,6 +8738,32 @@
           "source"
         ],
         "title": "PinnedReference",
+        "type": "object"
+      },
+      "PinnedReferenceSource": {
+        "additionalProperties": false,
+        "properties": {
+          "binding": {
+            "const": "pinned",
+            "default": "pinned",
+            "description": "Use the fixed asset version.",
+            "title": "Binding",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/$defs/AssetRef",
+            "description": "Fixed current asset version."
+          },
+          "sourceVersion": {
+            "$ref": "#/$defs/CanvasItemVersion",
+            "description": "Canvas source version retaining the connection."
+          }
+        },
+        "required": [
+          "source",
+          "sourceVersion"
+        ],
+        "title": "PinnedReferenceSource",
         "type": "object"
       },
       "Playhead": {
@@ -8662,6 +9020,36 @@
           "source"
         ],
         "title": "ProjectEvent",
+        "type": "object"
+      },
+      "ProjectQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "queryId": {
+            "description": "Caller-supplied query ID.",
+            "format": "uuid",
+            "title": "Queryid",
+            "type": "string"
+          },
+          "projectId": {
+            "description": "Owning project ID.",
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "const": "project.get",
+            "description": "Read the current project.",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "queryId",
+          "projectId",
+          "type"
+        ],
+        "title": "ProjectQuery",
         "type": "object"
       },
       "ProjectRename": {
@@ -9134,7 +9522,7 @@
         "title": "PromptText",
         "type": "object"
       },
-      "Query": {
+      "QueryBase": {
         "additionalProperties": false,
         "properties": {
           "queryId": {
@@ -9148,78 +9536,13 @@
             "format": "uuid",
             "title": "Projectid",
             "type": "string"
-          },
-          "type": {
-            "description": "Operation or variant discriminator.",
-            "enum": [
-              "project.get",
-              "object.get",
-              "asset.search",
-              "asset.usage",
-              "generationSpec.versions",
-              "canvas.versions",
-              "job.get"
-            ],
-            "title": "Type",
-            "type": "string"
-          },
-          "objectId": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Target business object ID.",
-            "title": "Objectid"
-          },
-          "revision": {
-            "anyOf": [
-              {
-                "minimum": 1,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Historical revision to read, when specified.",
-            "title": "Revision"
-          },
-          "text": {
-            "default": "",
-            "description": "UTF-8 text content or search query.",
-            "maxLength": 1000,
-            "title": "Text",
-            "type": "string"
-          },
-          "offset": {
-            "default": 0,
-            "description": "Number of matching records to skip.",
-            "minimum": 0,
-            "title": "Offset",
-            "type": "integer"
-          },
-          "limit": {
-            "default": 50,
-            "description": "Maximum number of records to return.",
-            "maximum": 200,
-            "minimum": 1,
-            "title": "Limit",
-            "type": "integer"
           }
         },
         "required": [
           "queryId",
-          "projectId",
-          "type"
+          "projectId"
         ],
-        "title": "Query",
+        "title": "QueryBase",
         "type": "object"
       },
       "RectangleLayerContent": {
@@ -10420,7 +10743,7 @@
         "additionalProperties": false,
         "properties": {
           "spec": {
-            "description": "Generation configuration for this operation.",
+            "description": "Configuration with its current revision; the server increments it on commit.",
             "discriminator": {
               "mapping": {
                 "audio": "#/$defs/AudioGenerationSpec",
@@ -12462,6 +12785,46 @@
         "title": "Vector3",
         "type": "object"
       },
+      "VersionsQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "queryId": {
+            "description": "Caller-supplied query ID.",
+            "format": "uuid",
+            "title": "Queryid",
+            "type": "string"
+          },
+          "projectId": {
+            "description": "Owning project ID.",
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "description": "Read object versions.",
+            "enum": [
+              "generationSpec.versions",
+              "canvas.versions"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "objectId": {
+            "description": "Target configuration or canvas item ID.",
+            "format": "uuid",
+            "title": "Objectid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "queryId",
+          "projectId",
+          "type",
+          "objectId"
+        ],
+        "title": "VersionsQuery",
+        "type": "object"
+      },
       "VideoCanvasItem": {
         "additionalProperties": false,
         "properties": {
@@ -12983,7 +13346,7 @@
         "properties": {
           "generateAudio": {
             "default": true,
-            "description": "Whether video generation includes audio.",
+            "description": "Include audio; value must be allowed by model inputRules.generateAudioOptions.",
             "title": "Generateaudio",
             "type": "boolean"
           },
@@ -13465,8 +13828,45 @@
         "description": "Immutable command execution receipt."
       },
       "query": {
-        "$ref": "#/$defs/Query",
-        "description": "Read-only project query."
+        "description": "Read-only project query.",
+        "discriminator": {
+          "mapping": {
+            "asset.preview": "#/$defs/AssetPreviewQuery",
+            "asset.search": "#/$defs/AssetSearchQuery",
+            "asset.usage": "#/$defs/AssetUsageQuery",
+            "canvas.status": "#/$defs/CanvasStatusQuery",
+            "canvas.versions": "#/$defs/VersionsQuery",
+            "generationSpec.versions": "#/$defs/VersionsQuery",
+            "job.get": "#/$defs/ObjectQuery",
+            "object.get": "#/$defs/ObjectQuery",
+            "project.get": "#/$defs/ProjectQuery"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/ProjectQuery"
+          },
+          {
+            "$ref": "#/$defs/ObjectQuery"
+          },
+          {
+            "$ref": "#/$defs/VersionsQuery"
+          },
+          {
+            "$ref": "#/$defs/AssetSearchQuery"
+          },
+          {
+            "$ref": "#/$defs/AssetUsageQuery"
+          },
+          {
+            "$ref": "#/$defs/CanvasStatusQuery"
+          },
+          {
+            "$ref": "#/$defs/AssetPreviewQuery"
+          }
+        ],
+        "title": "Query"
       },
       "event": {
         "$ref": "#/$defs/ProjectEvent",
@@ -14046,15 +14446,36 @@
       "AssetPreviewQuery": {
         "additionalProperties": false,
         "properties": {
-          "assetId": {
-            "description": "Asset ID from the current project.",
+          "queryId": {
+            "description": "Caller-supplied query ID.",
             "format": "uuid",
-            "title": "Assetid",
+            "title": "Queryid",
+            "type": "string"
+          },
+          "projectId": {
+            "description": "Owning project ID.",
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "const": "asset.preview",
+            "description": "Preview an asset; does not establish model observation.",
+            "title": "Type",
+            "type": "string"
+          },
+          "objectId": {
+            "description": "Asset ID.",
+            "format": "uuid",
+            "title": "Objectid",
             "type": "string"
           }
         },
         "required": [
-          "assetId"
+          "queryId",
+          "projectId",
+          "type",
+          "objectId"
         ],
         "title": "AssetPreviewQuery",
         "type": "object"
@@ -14287,6 +14708,123 @@
           "kind"
         ],
         "title": "AssetRef",
+        "type": "object"
+      },
+      "AssetSearchQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "queryId": {
+            "description": "Caller-supplied query ID.",
+            "format": "uuid",
+            "title": "Queryid",
+            "type": "string"
+          },
+          "projectId": {
+            "description": "Owning project ID.",
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "const": "asset.search",
+            "description": "Search project assets.",
+            "title": "Type",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "description": "Asset search text.",
+            "maxLength": 1000,
+            "title": "Text",
+            "type": "string"
+          },
+          "offset": {
+            "default": 0,
+            "description": "Number of matching records to skip.",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "limit": {
+            "default": 50,
+            "description": "Maximum number of records to return.",
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "queryId",
+          "projectId",
+          "type",
+          "text",
+          "offset",
+          "limit"
+        ],
+        "title": "AssetSearchQuery",
+        "type": "object"
+      },
+      "AssetUsageQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "queryId": {
+            "description": "Caller-supplied query ID.",
+            "format": "uuid",
+            "title": "Queryid",
+            "type": "string"
+          },
+          "projectId": {
+            "description": "Owning project ID.",
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "const": "asset.usage",
+            "description": "Read asset dependencies.",
+            "title": "Type",
+            "type": "string"
+          },
+          "objectId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Asset ID, or all assets when omitted.",
+            "title": "Objectid"
+          },
+          "offset": {
+            "default": 0,
+            "description": "Number of matching records to skip.",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "limit": {
+            "default": 50,
+            "description": "Maximum number of records to return.",
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "queryId",
+          "projectId",
+          "type",
+          "objectId",
+          "offset",
+          "limit"
+        ],
+        "title": "AssetUsageQuery",
         "type": "object"
       },
       "AssetWriteText": {
@@ -15455,7 +15993,7 @@
       },
       "CanvasCreateGenerationCommand": {
         "additionalProperties": false,
-        "description": "Create a visible generation node with configuration and references atomically; does not submit generation.",
+        "description": "Create a visible generation node and references atomically, without separate configuration or display commands.",
         "properties": {
           "commandId": {
             "description": "Stable command ID for idempotent replay.",
@@ -15500,7 +16038,7 @@
           },
           "payload": {
             "$ref": "#/$defs/CanvasCreateGeneration",
-            "description": "Create a visible generation node with configuration and references atomically; does not submit generation."
+            "description": "Create a visible generation node and references atomically, without separate configuration or display commands."
           }
         },
         "required": [
@@ -15930,29 +16468,34 @@
         "title": "CanvasItemBase",
         "type": "object"
       },
-      "CanvasItemQuery": {
+      "CanvasItemVersion": {
         "additionalProperties": false,
         "properties": {
-          "itemId": {
-            "description": "Canvas item ID from the current project.",
-            "format": "uuid",
-            "title": "Itemid",
+          "objectType": {
+            "const": "canvas_item",
+            "description": "Source canvas item type.",
+            "title": "Objecttype",
             "type": "string"
           },
-          "waitSeconds": {
-            "default": 0,
-            "description": "Wait for status changes, up to 30 seconds; zero returns immediately.",
-            "maximum": 30,
-            "minimum": 0,
-            "title": "Waitseconds",
-            "type": "number"
+          "id": {
+            "description": "Stable object ID.",
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "revision": {
+            "description": "Current object revision for optimistic concurrency.",
+            "minimum": 1,
+            "title": "Revision",
+            "type": "integer"
           }
         },
         "required": [
-          "itemId",
-          "waitSeconds"
+          "objectType",
+          "id",
+          "revision"
         ],
-        "title": "CanvasItemQuery",
+        "title": "CanvasItemVersion",
         "type": "object"
       },
       "CanvasMaterialize": {
@@ -16454,6 +16997,25 @@
         "title": "CanvasPublishMediaCommand",
         "type": "object"
       },
+      "CanvasReferenceSources": {
+        "additionalProperties": false,
+        "properties": {
+          "followCurrent": {
+            "$ref": "#/$defs/FollowingReferenceSource",
+            "description": "Source fields for a follow_current reference."
+          },
+          "pinned": {
+            "$ref": "#/$defs/PinnedReferenceSource",
+            "description": "Source fields for a pinned reference retaining its canvas connection."
+          }
+        },
+        "required": [
+          "followCurrent",
+          "pinned"
+        ],
+        "title": "CanvasReferenceSources",
+        "type": "object"
+      },
       "CanvasShow": {
         "additionalProperties": false,
         "properties": {
@@ -16600,6 +17162,52 @@
           "payload"
         ],
         "title": "CanvasShowCommandOperation",
+        "type": "object"
+      },
+      "CanvasStatusQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "queryId": {
+            "description": "Caller-supplied query ID.",
+            "format": "uuid",
+            "title": "Queryid",
+            "type": "string"
+          },
+          "projectId": {
+            "description": "Owning project ID.",
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "const": "canvas.status",
+            "description": "Read node status, current asset and reusable referenceSources.",
+            "title": "Type",
+            "type": "string"
+          },
+          "objectId": {
+            "description": "Canvas item ID.",
+            "format": "uuid",
+            "title": "Objectid",
+            "type": "string"
+          },
+          "waitSeconds": {
+            "default": 0,
+            "description": "Wait for generation changes; zero returns immediately.",
+            "maximum": 30,
+            "minimum": 0,
+            "title": "Waitseconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "queryId",
+          "projectId",
+          "type",
+          "objectId",
+          "waitSeconds"
+        ],
+        "title": "CanvasStatusQuery",
         "type": "object"
       },
       "CanvasUpdateCommand": {
@@ -17267,8 +17875,45 @@
             "description": "Immutable command execution receipt."
           },
           "query": {
-            "$ref": "#/$defs/Query",
-            "description": "Read-only project query."
+            "description": "Read-only project query.",
+            "discriminator": {
+              "mapping": {
+                "asset.preview": "#/$defs/AssetPreviewQuery",
+                "asset.search": "#/$defs/AssetSearchQuery",
+                "asset.usage": "#/$defs/AssetUsageQuery",
+                "canvas.status": "#/$defs/CanvasStatusQuery",
+                "canvas.versions": "#/$defs/VersionsQuery",
+                "generationSpec.versions": "#/$defs/VersionsQuery",
+                "job.get": "#/$defs/ObjectQuery",
+                "object.get": "#/$defs/ObjectQuery",
+                "project.get": "#/$defs/ProjectQuery"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ProjectQuery"
+              },
+              {
+                "$ref": "#/$defs/ObjectQuery"
+              },
+              {
+                "$ref": "#/$defs/VersionsQuery"
+              },
+              {
+                "$ref": "#/$defs/AssetSearchQuery"
+              },
+              {
+                "$ref": "#/$defs/AssetUsageQuery"
+              },
+              {
+                "$ref": "#/$defs/CanvasStatusQuery"
+              },
+              {
+                "$ref": "#/$defs/AssetPreviewQuery"
+              }
+            ],
+            "title": "Query"
           },
           "event": {
             "$ref": "#/$defs/ProjectEvent",
@@ -18407,13 +19052,13 @@
           },
           "binding": {
             "const": "follow_current",
-            "description": "Business object displayed by this canvas item.",
+            "description": "Follow the source canvas item's current asset.",
             "title": "Binding",
             "type": "string"
           },
           "source": {
             "$ref": "#/$defs/FollowingSource",
-            "description": "Input source or recorded provenance."
+            "description": "Source canvas_item identity."
           }
         },
         "required": [
@@ -18428,6 +19073,28 @@
           "source"
         ],
         "title": "FollowingReference",
+        "type": "object"
+      },
+      "FollowingReferenceSource": {
+        "additionalProperties": false,
+        "properties": {
+          "binding": {
+            "const": "follow_current",
+            "default": "follow_current",
+            "description": "Follow the canvas source current asset.",
+            "title": "Binding",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/$defs/FollowingSource",
+            "description": "Source canvas_item identity."
+          }
+        },
+        "required": [
+          "binding",
+          "source"
+        ],
+        "title": "FollowingReferenceSource",
         "type": "object"
       },
       "FollowingSource": {
@@ -20074,6 +20741,24 @@
             ],
             "default": null,
             "description": "Supported video generation capabilities."
+          },
+          "generateAudioOptions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "boolean"
+                },
+                "maxItems": 2,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Allowed generateAudio values; omitted in legacy execution snapshots.",
+            "title": "Generateaudiooptions"
           }
         },
         "required": [
@@ -22093,6 +22778,61 @@
         "title": "NodeVersionApplyCommand",
         "type": "object"
       },
+      "ObjectQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "queryId": {
+            "description": "Caller-supplied query ID.",
+            "format": "uuid",
+            "title": "Queryid",
+            "type": "string"
+          },
+          "projectId": {
+            "description": "Owning project ID.",
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "description": "Read an object or generation job.",
+            "enum": [
+              "object.get",
+              "job.get"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "objectId": {
+            "description": "Target business object ID.",
+            "format": "uuid",
+            "title": "Objectid",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Historical object revision, or current when omitted.",
+            "title": "Revision"
+          }
+        },
+        "required": [
+          "queryId",
+          "projectId",
+          "type",
+          "objectId",
+          "revision"
+        ],
+        "title": "ObjectQuery",
+        "type": "object"
+      },
       "ObjectVersion": {
         "additionalProperties": false,
         "properties": {
@@ -22248,25 +22988,25 @@
           },
           "binding": {
             "const": "pinned",
-            "description": "Business object displayed by this canvas item.",
+            "description": "Use a fixed asset version, retaining canvas provenance when supplied.",
             "title": "Binding",
             "type": "string"
           },
           "source": {
             "$ref": "#/$defs/AssetRef",
-            "description": "Input source or recorded provenance."
+            "description": "Fixed asset version used by generation."
           },
           "sourceVersion": {
             "anyOf": [
               {
-                "$ref": "#/$defs/ObjectVersion"
+                "$ref": "#/$defs/CanvasItemVersion"
               },
               {
                 "type": "null"
               }
             ],
             "default": null,
-            "description": "Captured source object version."
+            "description": "Source canvas_item version for its connection; omit for asset-only references."
           },
           "subjectRole": {
             "anyOf": [
@@ -22299,6 +23039,33 @@
           "source"
         ],
         "title": "PinnedReference",
+        "type": "object"
+      },
+      "PinnedReferenceSource": {
+        "additionalProperties": false,
+        "properties": {
+          "binding": {
+            "const": "pinned",
+            "default": "pinned",
+            "description": "Use the fixed asset version.",
+            "title": "Binding",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/$defs/AssetRef",
+            "description": "Fixed current asset version."
+          },
+          "sourceVersion": {
+            "$ref": "#/$defs/CanvasItemVersion",
+            "description": "Canvas source version retaining the connection."
+          }
+        },
+        "required": [
+          "binding",
+          "source",
+          "sourceVersion"
+        ],
+        "title": "PinnedReferenceSource",
         "type": "object"
       },
       "Playhead": {
@@ -22568,6 +23335,36 @@
           "jobIds"
         ],
         "title": "ProjectEvent",
+        "type": "object"
+      },
+      "ProjectQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "queryId": {
+            "description": "Caller-supplied query ID.",
+            "format": "uuid",
+            "title": "Queryid",
+            "type": "string"
+          },
+          "projectId": {
+            "description": "Owning project ID.",
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "const": "project.get",
+            "description": "Read the current project.",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "queryId",
+          "projectId",
+          "type"
+        ],
+        "title": "ProjectQuery",
         "type": "object"
       },
       "ProjectRename": {
@@ -23057,7 +23854,7 @@
         "title": "PromptText",
         "type": "object"
       },
-      "Query": {
+      "QueryBase": {
         "additionalProperties": false,
         "properties": {
           "queryId": {
@@ -23071,83 +23868,13 @@
             "format": "uuid",
             "title": "Projectid",
             "type": "string"
-          },
-          "type": {
-            "description": "Operation or variant discriminator.",
-            "enum": [
-              "project.get",
-              "object.get",
-              "asset.search",
-              "asset.usage",
-              "generationSpec.versions",
-              "canvas.versions",
-              "job.get"
-            ],
-            "title": "Type",
-            "type": "string"
-          },
-          "objectId": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Target business object ID.",
-            "title": "Objectid"
-          },
-          "revision": {
-            "anyOf": [
-              {
-                "minimum": 1,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Historical revision to read, when specified.",
-            "title": "Revision"
-          },
-          "text": {
-            "default": "",
-            "description": "UTF-8 text content or search query.",
-            "maxLength": 1000,
-            "title": "Text",
-            "type": "string"
-          },
-          "offset": {
-            "default": 0,
-            "description": "Number of matching records to skip.",
-            "minimum": 0,
-            "title": "Offset",
-            "type": "integer"
-          },
-          "limit": {
-            "default": 50,
-            "description": "Maximum number of records to return.",
-            "maximum": 200,
-            "minimum": 1,
-            "title": "Limit",
-            "type": "integer"
           }
         },
         "required": [
           "queryId",
-          "projectId",
-          "type",
-          "objectId",
-          "revision",
-          "text",
-          "offset",
-          "limit"
+          "projectId"
         ],
-        "title": "Query",
+        "title": "QueryBase",
         "type": "object"
       },
       "RectangleLayerContent": {
@@ -24379,7 +25106,7 @@
         "additionalProperties": false,
         "properties": {
           "spec": {
-            "description": "Generation configuration for this operation.",
+            "description": "Configuration with its current revision; the server increments it on commit.",
             "discriminator": {
               "mapping": {
                 "audio": "#/$defs/AudioGenerationSpec",
@@ -26532,6 +27259,46 @@
         "title": "Vector3",
         "type": "object"
       },
+      "VersionsQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "queryId": {
+            "description": "Caller-supplied query ID.",
+            "format": "uuid",
+            "title": "Queryid",
+            "type": "string"
+          },
+          "projectId": {
+            "description": "Owning project ID.",
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "description": "Read object versions.",
+            "enum": [
+              "generationSpec.versions",
+              "canvas.versions"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "objectId": {
+            "description": "Target configuration or canvas item ID.",
+            "format": "uuid",
+            "title": "Objectid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "queryId",
+          "projectId",
+          "type",
+          "objectId"
+        ],
+        "title": "VersionsQuery",
+        "type": "object"
+      },
       "VideoCanvasItem": {
         "additionalProperties": false,
         "properties": {
@@ -27084,7 +27851,7 @@
         "properties": {
           "generateAudio": {
             "default": true,
-            "description": "Whether video generation includes audio.",
+            "description": "Include audio; value must be allowed by model inputRules.generateAudioOptions.",
             "title": "Generateaudio",
             "type": "boolean"
           },
@@ -27583,8 +28350,45 @@
         "description": "Immutable command execution receipt."
       },
       "query": {
-        "$ref": "#/$defs/Query",
-        "description": "Read-only project query."
+        "description": "Read-only project query.",
+        "discriminator": {
+          "mapping": {
+            "asset.preview": "#/$defs/AssetPreviewQuery",
+            "asset.search": "#/$defs/AssetSearchQuery",
+            "asset.usage": "#/$defs/AssetUsageQuery",
+            "canvas.status": "#/$defs/CanvasStatusQuery",
+            "canvas.versions": "#/$defs/VersionsQuery",
+            "generationSpec.versions": "#/$defs/VersionsQuery",
+            "job.get": "#/$defs/ObjectQuery",
+            "object.get": "#/$defs/ObjectQuery",
+            "project.get": "#/$defs/ProjectQuery"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/ProjectQuery"
+          },
+          {
+            "$ref": "#/$defs/ObjectQuery"
+          },
+          {
+            "$ref": "#/$defs/VersionsQuery"
+          },
+          {
+            "$ref": "#/$defs/AssetSearchQuery"
+          },
+          {
+            "$ref": "#/$defs/AssetUsageQuery"
+          },
+          {
+            "$ref": "#/$defs/CanvasStatusQuery"
+          },
+          {
+            "$ref": "#/$defs/AssetPreviewQuery"
+          }
+        ],
+        "title": "Query"
       },
       "event": {
         "$ref": "#/$defs/ProjectEvent",

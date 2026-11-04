@@ -37,7 +37,7 @@ Default 与 OpenCode CLI 分别配置。外部 CLI 不读取 OpenDirector 保存
 
 适配层为每轮创建 `agent-runs/<turn-id>/work/`，启动 harness 并连接本轮 MCP 工具入口。原生工具以此目录为工作目录，通过继承的 PATH 查找 FFmpeg、ffprobe 等程序。
 
-业务工具分为工程查询 `read_project`、技能或文本素材读取 `read`、命令契约查询 `command_schema` 和命令执行 `execute_command`。Gateway 按调用身份保留任务和结果：相同身份、相同输入复用结果，不同输入拒绝执行。
+业务工具分为工程与模型概览 `read_project`、对象／状态／素材查询 `query`、技能或文本素材读取 `read`、命令契约查询 `command_schema` 和命令执行 `execute_command`。Gateway 按调用身份保留任务和结果：相同身份、相同输入复用结果，不同输入拒绝执行。
 
 新文件通过 `artifact.publish` 登记，再根据需要调用 `canvas.show` 展示。发布回执、素材登记和画布展示分别表达，不以创建节点代替文件交付。
 

@@ -5,9 +5,26 @@ from uuid import UUID
 from pydantic import Field, model_validator
 
 from .assets import AssetRef
-from .base import Contract, Identifier, Point, Positive, ProjectEntity, unique
-from .generation import GenerationSpec, ResolvedReference, validate_generation
+from .base import CanvasItemVersion, Contract, Identifier, Point, Positive, ProjectEntity, unique
+from .generation import FollowingSource, GenerationSpec, ResolvedReference, validate_generation
 from .models import ModelConfigPublic
+
+
+class FollowingReferenceSource(Contract):
+    binding: Literal['follow_current'] = Field(default='follow_current', description='Follow the canvas source current asset.')
+    source: FollowingSource = Field(description='Source canvas_item identity.')
+
+
+class PinnedReferenceSource(Contract):
+    binding: Literal['pinned'] = Field(default='pinned', description='Use the fixed asset version.')
+    source: AssetRef = Field(description='Fixed current asset version.')
+    sourceVersion: CanvasItemVersion = Field(description='Canvas source version retaining the connection.')
+
+
+class CanvasReferenceSources(Contract):
+    followCurrent: FollowingReferenceSource = Field(description='Source fields for a follow_current reference.')
+    pinned: PinnedReferenceSource = Field(description='Source fields for a pinned reference retaining its canvas connection.')
+
 
 CanvasKind = Literal['text', 'image', 'video', 'audio', 'file', 'group', 'timeline', 'subject', 'stack', 'tool', 'external']
 MediaRole = Literal['empty', 'material', 'generation']

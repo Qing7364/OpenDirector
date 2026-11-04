@@ -299,7 +299,7 @@ async def test_close_cancels_pending_canvas_status_wait(gateway, monkeypatch):
             cancelled.set()
 
     monkeypatch.setattr(gateway.business, 'execute', execute)
-    waiter = asyncio.create_task(gateway.call('status', 'read_canvas_item', {'itemId': str(uuid4()), 'waitSeconds': 30}))
+    waiter = asyncio.create_task(gateway.call('status', 'query', {'type': 'canvas.status', 'objectId': str(uuid4()), 'waitSeconds': 30}))
     await entered.wait()
     await asyncio.wait_for(gateway.close(), timeout=1)
     assert cancelled.is_set()

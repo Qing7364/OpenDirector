@@ -401,7 +401,14 @@ export function useAssistantChat(
               ),
             }));
           } else if (event.type === "thinking") setThinkingNow(true);
-          else if (event.type === "tool") {
+          else if (event.type === "plan") {
+            setValue((previous) => ({
+              ...previous,
+              messages: previous.messages.map((message) => message.id === assistantId
+                ? { ...message, plan: event.entries } : message),
+            }));
+          } else if (event.type === "tool") {
+            setThinkingNow(false);
             const { type, ...tool } = event;
             setValue((previous) => ({
               ...previous,

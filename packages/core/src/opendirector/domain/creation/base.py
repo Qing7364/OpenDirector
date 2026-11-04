@@ -43,6 +43,10 @@ class ObjectVersion(Contract):
     revision: Revision = Field(description='Current object revision for optimistic concurrency.')
 
 
+class CanvasItemVersion(ObjectVersion):
+    objectType: Literal['canvas_item'] = Field(description='Source canvas item type.')
+
+
 class Point(Contract):
     x: Number = Field(default=0, description='Horizontal coordinate.')
     y: Number = Field(default=0, description='Vertical coordinate.')

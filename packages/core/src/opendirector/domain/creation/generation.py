@@ -8,7 +8,7 @@ from pydantic import Field, JsonValue, model_validator
 
 from opendirector.domain.generation import GenerationFailure, ResultCheck
 from .assets import AssetRef, MediaMetadata
-from .base import Contract, Digest, GenerationKind, NonNegative, ObjectVersion, PositiveInt, ProjectEntity, Revision, digest, unique
+from .base import CanvasItemVersion, Contract, Digest, GenerationKind, NonNegative, ObjectVersion, PositiveInt, ProjectEntity, Revision, digest, unique
 from .models import ModelConfigPublic, ModelSnapshot, VideoMode
 
 
@@ -26,7 +26,7 @@ class ImageParameters(Contract):
 
 
 class VideoParameters(Contract):
-    generateAudio: bool = Field(default=True, description='Whether video generation includes audio.')
+    generateAudio: bool = Field(default=True, description='Include audio; value must be allowed by model inputRules.generateAudioOptions.')
     videoMode: VideoMode = Field(default='first_frame', description='Video generation input mode.')
     durationSeconds: Annotated[float, Field(strict=True, ge=1, le=60)] | None = Field(default=None, description='Duration in seconds.')
     aspectRatio: str | None = Field(default=None, pattern=r'^[1-9]\d?:[1-9]\d?$', description='Output width-to-height ratio.')
@@ -127,24 +127,19 @@ class ReferenceBase(ProjectEntity):
 
 
 class PinnedReference(ReferenceBase):
-    binding: Literal['pinned'] = Field(description='Business object displayed by this canvas item.')
-    source: AssetRef = Field(description='Input source or recorded provenance.')
+    binding: Literal['pinned'] = Field(description='Use a fixed asset version, retaining canvas provenance when supplied.')
+    source: AssetRef = Field(description='Fixed asset version used by generation.')
     # Historical provenance only; execution always uses the pinned asset.
-    sourceVersion: ObjectVersion | None = Field(default=None, exclude_if=lambda value: value is None, description='Captured source object version.')
+    sourceVersion: CanvasItemVersion | None = Field(default=None, exclude_if=lambda value: value is None,
+        description='Source canvas_item version for its connection; omit for asset-only references.')
     subjectRole: Literal['main', 'auxiliary', 'voice'] | None = Field(default=None, exclude_if=lambda value: value is None, description='Subject media slot used by this reference.')
-
-    @model_validator(mode='after')
-    def source_identity(self):
-        if self.sourceVersion and self.sourceVersion.objectType != 'canvas_item':
-            raise ValueError('Pinned source provenance must identify a canvas item')
-        return self
 
 
 class FollowingReference(ReferenceBase):
     # A stable logical source item survives hiding; its current Asset/Spec
     # binding may change. It never points to a transient React Flow instance.
-    binding: Literal['follow_current'] = Field(description='Business object displayed by this canvas item.')
-    source: FollowingSource = Field(description='Input source or recorded provenance.')
+    binding: Literal['follow_current'] = Field(description="Follow the source canvas item's current asset.")
+    source: FollowingSource = Field(description='Source canvas_item identity.')
 
 
 Reference = Annotated[PinnedReference | FollowingReference, Field(discriminator='binding')]
@@ -376,12 +371,15 @@ def validate_generation(spec: GenerationSpec, model: ModelConfigPublic, referenc
             raise ValueError('首尾帧和续写参考只能用于视频生成。')
         return
     params = spec.parameters
-    if not params.generateAudio and model.protocol != 'volcengine':
+    audio_options = rules.generateAudioOptions
+    if audio_options is None:
+        audio_options = (True, False) if model.protocol == 'volcengine' else (True,)
+    if params.generateAudio not in audio_options:
         raise ValueError('当前视频适配器不支持关闭生成音频。')
     if params.videoMode == 'first_frame' and len({ref.referenceId for ref in references if ref.asset.kind == 'image' and ref.subjectRole is None}) > 2:
         raise ValueError('首尾帧模式最多连接 2 个图片节点，请先断开多余连线。')
     if params.videoMode not in rules.videoModes:
-        raise ValueError('当前模型不支持这种视频模式。')
+        raise ValueError(f"当前模型不支持视频模式 {params.videoMode}；允许值：{', '.join(rules.videoModes)}。")
     if params.videoMode == 'continuation':
         continuation = [ref for ref in references if ref.role == 'continuation']
         if len(continuation) != 1 or continuation[0].asset.kind != 'video' or kinds.count('video') != 1:

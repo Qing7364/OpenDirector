@@ -54,8 +54,9 @@ export interface AssetMetadataUpdateInput extends ContractInput {
   readonly name: string;
 }
 
-export interface AssetPreviewQueryInput extends ContractInput {
-  readonly assetId: string;
+export interface AssetPreviewQueryInput extends QueryBaseInput {
+  readonly type: "asset.preview";
+  readonly objectId: string;
 }
 
 export interface AssetProvenanceInput extends ContractInput {
@@ -78,6 +79,20 @@ export interface AssetRefInput extends ContractInput {
   readonly revision: number;
   readonly fingerprint: string;
   readonly kind: "text" | "image" | "video" | "audio" | "file";
+}
+
+export interface AssetSearchQueryInput extends QueryBaseInput {
+  readonly type: "asset.search";
+  readonly text?: string;
+  readonly offset?: number;
+  readonly limit?: number;
+}
+
+export interface AssetUsageQueryInput extends QueryBaseInput {
+  readonly type: "asset.usage";
+  readonly objectId?: string | null;
+  readonly offset?: number;
+  readonly limit?: number;
 }
 
 export interface AssetWriteTextInput extends ContractInput {
@@ -241,9 +256,8 @@ export interface CanvasItemBaseInput extends ProjectEntityInput {
   readonly tags?: ReadonlyArray<string>;
 }
 
-export interface CanvasItemQueryInput extends ContractInput {
-  readonly itemId: string;
-  readonly waitSeconds?: number;
+export interface CanvasItemVersionInput extends ObjectVersionInput {
+  readonly objectType: "canvas_item";
 }
 
 export interface CanvasMaterializeInput extends ContractInput {
@@ -304,6 +318,11 @@ export interface CanvasPublishMediaCommandInput extends CommandBaseInput {
   readonly payload: CanvasPublishMediaInput;
 }
 
+export interface CanvasReferenceSourcesInput extends ContractInput {
+  readonly followCurrent: FollowingReferenceSourceInput;
+  readonly pinned: PinnedReferenceSourceInput;
+}
+
 export interface CanvasShowInput extends ContractInput {
   readonly item: TextCanvasItemInput | ImageCanvasItemInput | VideoCanvasItemInput | AudioCanvasItemInput | FileCanvasItemInput | SubjectCanvasItemInput | TimelineCanvasItemInput | StackCanvasItemInput | ToolCanvasItemInput | DirectorCanvasItemInput | GroupCanvasItemInput;
 }
@@ -316,6 +335,12 @@ export interface CanvasShowCommandInput extends CommandBaseInput {
 export interface CanvasShowCommandOperationInput {
   readonly type: "canvas.show";
   readonly payload: CanvasShowInput;
+}
+
+export interface CanvasStatusQueryInput extends QueryBaseInput {
+  readonly type: "canvas.status";
+  readonly objectId: string;
+  readonly waitSeconds?: number;
 }
 
 export interface CanvasUpdateCommandInput extends CommandBaseInput {
@@ -374,7 +399,7 @@ export interface CreationContractsInput extends ContractInput {
   readonly editorDocument: TimelineDocumentInput | SubjectDocumentInput | LayerDocumentInput | ImageCropDocumentInput | StackDocumentInput | ToolDocumentInput | DirectorDocumentInput | MediaEditDocumentInput;
   readonly command: ProjectCreateCommandInput | ProjectRenameCommandInput | ProjectTrashCommandInput | ProjectRestoreCommandInput | AssetImportCommandInput | ArtifactPublishCommandInput | AssetWriteTextCommandInput | AssetMetadataCommandInput | AssetDeleteCommandInput | CanvasCreateGenerationCommandInput | CanvasShowCommandInput | CanvasMoveCommandInput | CanvasUpdateCommandInput | CanvasHideCommandInput | CanvasMaterializeCommandInput | CanvasApplyEditCommandInput | CanvasPublishMediaCommandInput | TimelinePublishRenderCommandInput | NodeVersionApplyCommandInput | CanvasConfigureCommandInput | CanvasEditorAttachCommandInput | CanvasEditorDetachCommandInput | SpecCreateCommandInput | SpecUpdateCommandInput | SpecRestoreCommandInput | SpecPromptCommandInput | ReferenceAddCommandInput | ReferenceUpdateCommandInput | ReferenceRestoreCommandInput | ReferenceRemoveCommandInput | GenerationSubmitCommandInput | JobCancelCommandInput | JobRecoverCommandInput | JobCheckpointCommandInput | ResultSelectCommandInput | EditorCreateCommandInput | EditorSaveCommandInput | HistoryUndoCommandInput | HistoryRedoCommandInput | BatchCommandInput;
   readonly receipt: CommandReceiptInput;
-  readonly query: QueryInput;
+  readonly query: ProjectQueryInput | ObjectQueryInput | VersionsQueryInput | AssetSearchQueryInput | AssetUsageQueryInput | CanvasStatusQueryInput | AssetPreviewQueryInput;
   readonly event: ProjectEventInput;
   readonly job: JobInput;
   readonly result: ResultVersionInput;
@@ -475,6 +500,11 @@ export interface FileCanvasItemInput extends MediaCanvasItemInput {
 
 export interface FollowingReferenceInput extends ReferenceBaseInput {
   readonly binding: "follow_current";
+  readonly source: FollowingSourceInput;
+}
+
+export interface FollowingReferenceSourceInput extends ContractInput {
+  readonly binding?: "follow_current";
   readonly source: FollowingSourceInput;
 }
 
@@ -640,6 +670,7 @@ export interface InputRulesInput extends ContractInput {
   readonly outputResolutions?: ReadonlyArray<string>;
   readonly referenceImageResolutions?: ReadonlyArray<string> | null;
   readonly videoCapabilities?: VideoCapabilitiesInput | null;
+  readonly generateAudioOptions?: ReadonlyArray<boolean> | null;
 }
 
 export interface InputSnapshotInput extends ContractInput {
@@ -828,6 +859,12 @@ export interface NodeVersionApplyCommandInput extends CommandBaseInput {
   readonly payload: NodeVersionApplyInput;
 }
 
+export interface ObjectQueryInput extends QueryBaseInput {
+  readonly type: "object.get" | "job.get";
+  readonly objectId: string;
+  readonly revision?: number | null;
+}
+
 export interface ObjectVersionInput extends ContractInput {
   readonly objectType: "project" | "asset" | "generation_spec" | "reference" | "canvas_item" | "editor_document" | "job" | "result";
   readonly id: string;
@@ -847,8 +884,14 @@ export interface PaletteProvenanceInput extends ContractInput {
 export interface PinnedReferenceInput extends ReferenceBaseInput {
   readonly binding: "pinned";
   readonly source: AssetRefInput;
-  readonly sourceVersion?: ObjectVersionInput | null;
+  readonly sourceVersion?: CanvasItemVersionInput | null;
   readonly subjectRole?: "main" | "auxiliary" | "voice" | null;
+}
+
+export interface PinnedReferenceSourceInput extends ContractInput {
+  readonly binding?: "pinned";
+  readonly source: AssetRefInput;
+  readonly sourceVersion: CanvasItemVersionInput;
 }
 
 export interface PlayheadInput extends ContractInput {
@@ -890,6 +933,10 @@ export interface ProjectEventInput extends ContractInput {
   readonly source: "ui" | "agent" | "background" | "external";
   readonly changed?: ReadonlyArray<ChangedObjectInput>;
   readonly jobIds?: ReadonlyArray<string>;
+}
+
+export interface ProjectQueryInput extends QueryBaseInput {
+  readonly type: "project.get";
 }
 
 export interface ProjectRenameInput extends ProjectCreateInput {
@@ -935,15 +982,9 @@ export interface PromptTextInput extends ContractInput {
   readonly text: string;
 }
 
-export interface QueryInput extends ContractInput {
+export interface QueryBaseInput extends ContractInput {
   readonly queryId: string;
   readonly projectId: string;
-  readonly type: "project.get" | "object.get" | "asset.search" | "asset.usage" | "generationSpec.versions" | "canvas.versions" | "job.get";
-  readonly objectId?: string | null;
-  readonly revision?: number | null;
-  readonly text?: string;
-  readonly offset?: number;
-  readonly limit?: number;
 }
 
 export interface RectangleLayerContentInput extends LayerContentBaseInput {
@@ -1318,6 +1359,11 @@ export interface Vector3Input extends ContractInput {
   readonly z: number;
 }
 
+export interface VersionsQueryInput extends QueryBaseInput {
+  readonly type: "generationSpec.versions" | "canvas.versions";
+  readonly objectId: string;
+}
+
 export interface VideoCanvasItemInput extends MediaCanvasItemInput {
   readonly kind: "video";
 }
@@ -1451,8 +1497,9 @@ export interface AssetMetadataUpdate extends Contract {
   readonly name: string;
 }
 
-export interface AssetPreviewQuery extends Contract {
-  readonly assetId: string;
+export interface AssetPreviewQuery extends QueryBase {
+  readonly type: "asset.preview";
+  readonly objectId: string;
 }
 
 export interface AssetProvenance extends Contract {
@@ -1475,6 +1522,20 @@ export interface AssetRef extends Contract {
   readonly revision: number;
   readonly fingerprint: string;
   readonly kind: "text" | "image" | "video" | "audio" | "file";
+}
+
+export interface AssetSearchQuery extends QueryBase {
+  readonly type: "asset.search";
+  readonly text: string;
+  readonly offset: number;
+  readonly limit: number;
+}
+
+export interface AssetUsageQuery extends QueryBase {
+  readonly type: "asset.usage";
+  readonly objectId: string | null;
+  readonly offset: number;
+  readonly limit: number;
 }
 
 export interface AssetWriteText extends Contract {
@@ -1638,9 +1699,8 @@ export interface CanvasItemBase extends ProjectEntity {
   readonly tags: ReadonlyArray<string>;
 }
 
-export interface CanvasItemQuery extends Contract {
-  readonly itemId: string;
-  readonly waitSeconds: number;
+export interface CanvasItemVersion extends ObjectVersion {
+  readonly objectType: "canvas_item";
 }
 
 export interface CanvasMaterialize extends Contract {
@@ -1701,6 +1761,11 @@ export interface CanvasPublishMediaCommand extends CommandBase {
   readonly payload: CanvasPublishMedia;
 }
 
+export interface CanvasReferenceSources extends Contract {
+  readonly followCurrent: FollowingReferenceSource;
+  readonly pinned: PinnedReferenceSource;
+}
+
 export interface CanvasShow extends Contract {
   readonly item: TextCanvasItem | ImageCanvasItem | VideoCanvasItem | AudioCanvasItem | FileCanvasItem | SubjectCanvasItem | TimelineCanvasItem | StackCanvasItem | ToolCanvasItem | DirectorCanvasItem | GroupCanvasItem;
 }
@@ -1713,6 +1778,12 @@ export interface CanvasShowCommand extends CommandBase {
 export interface CanvasShowCommandOperation {
   readonly type: "canvas.show";
   readonly payload: CanvasShow;
+}
+
+export interface CanvasStatusQuery extends QueryBase {
+  readonly type: "canvas.status";
+  readonly objectId: string;
+  readonly waitSeconds: number;
 }
 
 export interface CanvasUpdateCommand extends CommandBase {
@@ -1771,7 +1842,7 @@ export interface CreationContracts extends Contract {
   readonly editorDocument: TimelineDocument | SubjectDocument | LayerDocument | ImageCropDocument | StackDocument | ToolDocument | DirectorDocument | MediaEditDocument;
   readonly command: ProjectCreateCommand | ProjectRenameCommand | ProjectTrashCommand | ProjectRestoreCommand | AssetImportCommand | ArtifactPublishCommand | AssetWriteTextCommand | AssetMetadataCommand | AssetDeleteCommand | CanvasCreateGenerationCommand | CanvasShowCommand | CanvasMoveCommand | CanvasUpdateCommand | CanvasHideCommand | CanvasMaterializeCommand | CanvasApplyEditCommand | CanvasPublishMediaCommand | TimelinePublishRenderCommand | NodeVersionApplyCommand | CanvasConfigureCommand | CanvasEditorAttachCommand | CanvasEditorDetachCommand | SpecCreateCommand | SpecUpdateCommand | SpecRestoreCommand | SpecPromptCommand | ReferenceAddCommand | ReferenceUpdateCommand | ReferenceRestoreCommand | ReferenceRemoveCommand | GenerationSubmitCommand | JobCancelCommand | JobRecoverCommand | JobCheckpointCommand | ResultSelectCommand | EditorCreateCommand | EditorSaveCommand | HistoryUndoCommand | HistoryRedoCommand | BatchCommand;
   readonly receipt: CommandReceipt;
-  readonly query: Query;
+  readonly query: ProjectQuery | ObjectQuery | VersionsQuery | AssetSearchQuery | AssetUsageQuery | CanvasStatusQuery | AssetPreviewQuery;
   readonly event: ProjectEvent;
   readonly job: Job;
   readonly result: ResultVersion;
@@ -1871,6 +1942,11 @@ export interface FileCanvasItem extends MediaCanvasItem {
 }
 
 export interface FollowingReference extends ReferenceBase {
+  readonly binding: "follow_current";
+  readonly source: FollowingSource;
+}
+
+export interface FollowingReferenceSource extends Contract {
   readonly binding: "follow_current";
   readonly source: FollowingSource;
 }
@@ -2037,6 +2113,7 @@ export interface InputRules extends Contract {
   readonly outputResolutions: ReadonlyArray<string>;
   readonly referenceImageResolutions: ReadonlyArray<string> | null;
   readonly videoCapabilities: VideoCapabilities | null;
+  readonly generateAudioOptions?: ReadonlyArray<boolean> | null;
 }
 
 export interface InputSnapshot extends Contract {
@@ -2224,6 +2301,12 @@ export interface NodeVersionApplyCommand extends CommandBase {
   readonly payload: NodeVersionApply;
 }
 
+export interface ObjectQuery extends QueryBase {
+  readonly type: "object.get" | "job.get";
+  readonly objectId: string;
+  readonly revision: number | null;
+}
+
 export interface ObjectVersion extends Contract {
   readonly objectType: "project" | "asset" | "generation_spec" | "reference" | "canvas_item" | "editor_document" | "job" | "result";
   readonly id: string;
@@ -2243,8 +2326,14 @@ export interface PaletteProvenance extends Contract {
 export interface PinnedReference extends ReferenceBase {
   readonly binding: "pinned";
   readonly source: AssetRef;
-  readonly sourceVersion?: ObjectVersion | null;
+  readonly sourceVersion?: CanvasItemVersion | null;
   readonly subjectRole?: "main" | "auxiliary" | "voice" | null;
+}
+
+export interface PinnedReferenceSource extends Contract {
+  readonly binding: "pinned";
+  readonly source: AssetRef;
+  readonly sourceVersion: CanvasItemVersion;
 }
 
 export interface Playhead extends Contract {
@@ -2286,6 +2375,10 @@ export interface ProjectEvent extends Contract {
   readonly source: "ui" | "agent" | "background" | "external";
   readonly changed: ReadonlyArray<ChangedObject>;
   readonly jobIds: ReadonlyArray<string>;
+}
+
+export interface ProjectQuery extends QueryBase {
+  readonly type: "project.get";
 }
 
 export interface ProjectRename extends ProjectCreate {
@@ -2331,15 +2424,9 @@ export interface PromptText extends Contract {
   readonly text: string;
 }
 
-export interface Query extends Contract {
+export interface QueryBase extends Contract {
   readonly queryId: string;
   readonly projectId: string;
-  readonly type: "project.get" | "object.get" | "asset.search" | "asset.usage" | "generationSpec.versions" | "canvas.versions" | "job.get";
-  readonly objectId: string | null;
-  readonly revision: number | null;
-  readonly text: string;
-  readonly offset: number;
-  readonly limit: number;
 }
 
 export interface RectangleLayerContent extends LayerContentBase {
@@ -2712,6 +2799,11 @@ export interface Vector3 extends Contract {
   readonly x: number;
   readonly y: number;
   readonly z: number;
+}
+
+export interface VersionsQuery extends QueryBase {
+  readonly type: "generationSpec.versions" | "canvas.versions";
+  readonly objectId: string;
 }
 
 export interface VideoCanvasItem extends MediaCanvasItem {

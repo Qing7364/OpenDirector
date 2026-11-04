@@ -43,6 +43,10 @@ class InputRules(Contract):
     referenceImageResolutions: tuple[str, ...] | None = Field(default=None, description='Supported reference image resolution values.')
     videoCapabilities: VideoCapabilities | None = Field(default=None, description='Supported video generation capabilities.')
 
+    generateAudioOptions: tuple[Annotated[bool, Field(strict=True)], ...] | None = Field(
+        default=None, min_length=1, max_length=2, exclude_if=lambda value: value is None,
+        description='Allowed generateAudio values; omitted in legacy execution snapshots.')
+
     @model_validator(mode='after')
     def consistent(self):
         from .base import unique

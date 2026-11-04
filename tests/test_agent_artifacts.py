@@ -4,6 +4,7 @@ import shutil
 import subprocess
 from uuid import UUID, uuid4, uuid5
 
+from fastapi.testclient import TestClient
 from PIL import Image
 import pytest
 
@@ -18,6 +19,7 @@ from opendirector.domain.projects import ProjectError
 from opendirector.infrastructure.creation_projects import CreationProjects
 from opendirector.infrastructure.local_projects import LocalProjects
 from opendirector.infrastructure.model_configs import ModelConfigs
+from opendirector_api.main import create_app
 
 
 @pytest.fixture
@@ -210,7 +212,7 @@ def test_asset_id_preview_is_bounded_and_preserves_project(publication, kind):
     asset_id = UUID(published['asset']['id'])
     before = business.projects.snapshot(run.project_id)
     gateway = ToolGateway(business, run)
-    result = asyncio.run(gateway.call('preview', 'preview_asset', {'assetId': str(asset_id)}))
+    result = asyncio.run(gateway.call('preview', 'query', {'type': 'asset.preview', 'objectId': str(asset_id)}))
     assert not result.error, result
     preview = Path(result.value['preview']['path'])
     assert preview.is_relative_to(work / 'previews') and preview.stat().st_size > 0
@@ -222,5 +224,57 @@ def test_asset_id_preview_is_bounded_and_preserves_project(publication, kind):
         with wave.open(str(preview)) as audio:
             assert audio.getnframes() / audio.getframerate() <= 30
     assert business.projects.snapshot(run.project_id) == before
-    missing = asyncio.run(gateway.call('missing', 'preview_asset', {'assetId': str(uuid4())}))
+    missing = asyncio.run(gateway.call('missing', 'query', {'type': 'asset.preview', 'objectId': str(uuid4())}))
     assert missing.error
+
+
+@pytest.mark.anyio
+async def test_public_queries_share_http_and_agent_results(publication):
+    business, run, work = publication
+    source = work / 'query-source.png'
+    Image.new('RGB', (24, 32), 'blue').save(source)
+    asset = publish(publication, source.name)['asset']
+    item_id = uuid4()
+    business.projects.execute(parse_command({'type': 'canvas.show', 'projectId': run.project_id,
+        'commandId': uuid4(), 'payload': {'item': {'id': item_id, 'projectId': run.project_id,
+            'kind': 'image', 'binding': {'role': 'material', 'objectRef': asset_ref(business.assets.get(run.project_id, UUID(asset['id'])))}}}}), session=run.session)
+    before = business.projects.snapshot(run.project_id)
+    gateway = ToolGateway(business, run)
+    path = f'/api/creation/projects/{run.project_id}'
+    with TestClient(create_app(business.projects.local), headers={'X-OpenDirector-Request': '1'}) as client:
+        for kind, extra in [('project.get', {}), ('object.get', {'objectId': str(item_id)}),
+                            ('canvas.status', {'objectId': str(item_id), 'waitSeconds': 0}),
+                            ('asset.search', {'text': 'query-source', 'limit': 1}),
+                            ('asset.usage', {'objectId': asset['id']})]:
+            args = {'type': kind, **extra}
+            result = await gateway.call(kind, 'query', args)
+            response = client.post(path + '/queries', json={**args, 'projectId': str(run.project_id), 'queryId': str(uuid4())})
+            assert response.status_code == 200, response.text
+            assert not result.error, result
+            assert result.value == response.json()
+        args = {'type': 'asset.preview', 'objectId': asset['id']}
+        preview = await gateway.call('preview-shared', 'query', args)
+        assert not preview.error
+        assert Path(preview.value['preview']['path']).is_relative_to(work / 'previews')
+        response = client.post(path + '/queries', json={**args, 'projectId': str(run.project_id), 'queryId': str(uuid4())})
+        assert response.status_code == 200, response.text
+        value = response.json()
+        assert 'path' not in value['preview']
+        media = client.get(value['preview']['url'])
+        assert media.status_code == 200 and media.headers['content-type'] == 'image/webp'
+        assert media.content == Path(preview.value['preview']['path']).read_bytes()
+        assert value['metadata'] == preview.value['metadata']
+    wrong = await gateway.call('wrong-fields', 'query', {'type': 'object.get', 'objectId': str(item_id), 'waitSeconds': 1})
+    assert wrong.error and 'waitSeconds' in wrong.error
+    missing = await gateway.call('missing-id', 'query', {'type': 'canvas.status'})
+    assert missing.error and 'objectId' in missing.error
+    destination = Path(preview.value['preview']['path'])
+    destination.unlink()
+    destination.symlink_to(source)
+    original = source.read_bytes()
+    protected = await gateway.call('preview-symlink', 'query', {'type': 'asset.preview', 'objectId': asset['id']})
+    assert protected.error and source.read_bytes() == original
+    scoped = await gateway.call('wrong-scope', 'query', {'type': 'project.get', 'projectId': str(uuid4())})
+    assert scoped.error
+    assert business.projects.snapshot(run.project_id) == before
+    await gateway.close()

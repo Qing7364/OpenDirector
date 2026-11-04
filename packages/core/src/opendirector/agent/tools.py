@@ -1,5 +1,6 @@
 """Business commands shared by every agent runtime."""
 import asyncio
+import shutil
 from pathlib import Path
 from uuid import UUID, uuid5
 
@@ -10,9 +11,11 @@ from opendirector.application.creation_assets import CreationAssets
 from opendirector.application.creation_canvas import CreationCanvas
 from opendirector.domain.creation.assets import AssetProvenance
 from opendirector.domain.creation.base import ObjectVersion
-from opendirector.domain.creation.commands import AssetPreviewQuery, CanvasItemQuery, COMMAND_MODELS, parse_command
+from opendirector.domain.creation.commands import Query, COMMAND_MODELS, parse_command
 from opendirector.domain.creation.models import ModelSnapshot
 from opendirector.domain.projects import ProjectError
+from opendirector.infrastructure.creation_projects import directory
+from opendirector.infrastructure.local_projects import child
 
 ROOT = Path(__file__).resolve().parents[5]
 EXCLUDED = {'project.create', 'project.trash', 'project.restore', 'asset.import', 'job.checkpoint',
@@ -45,13 +48,16 @@ def tools() -> list[dict]:
                          {'type': 'object', 'properties': {}, 'additionalProperties': False}),
               tool_schema('read', 'Read a discovered skill file/resource, or text asset via asset:<UUID>. No scripts.',
                          {'type': 'object', 'properties': {'path': {'type': 'string'}}, 'required': ['path'], 'additionalProperties': False})]
-    result += [tool_schema('read_canvas_item', 'Read a canvas item, generation status and current asset; optionally wait for changes.',
-                           CanvasItemQuery.model_json_schema()),
-               tool_schema('preview_asset', 'Preview an asset by ID: image thumbnail, video first frame, audio first 30 seconds or text excerpt.',
-                           AssetPreviewQuery.model_json_schema())]
+    query_schema = TypeAdapter(Query).json_schema()
+    query_schema['type'] = 'object'
+    for definition in query_schema['$defs'].values():
+        for field in ('queryId', 'projectId'):
+            definition['properties'].pop(field)
+            definition['required'].remove(field)
+    result.append(tool_schema('query', 'Query objects, jobs, assets or versions. canvas.status can wait; asset.preview provides media for native viewing.', query_schema))
     command_type = {'type': 'string', 'enum': list(COMMANDS)}
-    result.append(tool_schema('command_schema', 'Read the exact input schema before executing a project command.',
-        {'type': 'object', 'properties': {'type': command_type}, 'required': ['type'], 'additionalProperties': False}))
+    result.append(tool_schema('command_schema', 'Read command inputs; pass modelConfigId for a compact schema constrained to the chosen model.',
+        {'type': 'object', 'properties': {'type': command_type, 'modelConfigId': {'type': 'string', 'format': 'uuid', 'description': 'Chosen generation model; narrows media kind and supported parameters.'}}, 'required': ['type'], 'additionalProperties': False}))
     versions = TypeAdapter(list[ObjectVersion]).json_schema()
     definitions = versions.pop('$defs')
     result.append(tool_schema('execute_command', 'Execute a validated project command. Read command_schema first. IDs and project scope come from the host.',
@@ -74,15 +80,22 @@ class AgentTools:
             snapshot = await asyncio.to_thread(self.projects.snapshot, project_id)
             return {'project': snapshot.model_dump(mode='json'), 'models': self.configs.list(), 'commands': list(COMMANDS),
                 'commandMetadata': {kind: {'description': model.__doc__} for kind, model in COMMANDS.items()}}
-        if name == 'read_canvas_item':
-            query = CanvasItemQuery.model_validate(arguments)
-            return await CreationCanvas(self.projects).wait_item_status(project_id, query.itemId, query.waitSeconds)
-        if name == 'preview_asset':
-            query = AssetPreviewQuery.model_validate(arguments)
-            with self.projects.local.transaction() as db:
-                directory, _, _ = self.projects._load(db, project_id)
-            target = directory / 'agent-runs' / str(turn_id) / 'work' / 'previews'
-            return await asyncio.to_thread(self.assets.preview, project_id, query.assetId, target)
+        if name == 'query':
+            if {'projectId', 'queryId'} & arguments.keys():
+                raise ProjectError('查询身份与工程范围由宿主提供。')
+            query = TypeAdapter(Query).validate_python({**arguments, 'projectId': project_id,
+                'queryId': uuid5(turn_id, call_id)})
+            result = await CreationCanvas(self.projects).query(query)
+            if query.type == 'asset.preview' and 'preview' in result:
+                with self.projects.local.transaction() as db:
+                    project_directory, _, _ = self.projects._load(db, project_id)
+                target = directory(project_directory / 'agent-runs' / str(turn_id) / 'work' / 'previews')
+                target.mkdir(parents=True, exist_ok=True)
+                source = Path(result['preview']['path'])
+                destination = child(target, source.name)
+                await asyncio.to_thread(shutil.copyfile, source, destination)
+                result['preview']['path'] = str(destination.resolve())
+            return result
         if name == 'read':
             path = TypeAdapter(str).validate_python(arguments['path'], strict=True)
             if path.startswith('asset:'):
@@ -111,6 +124,55 @@ class AgentTools:
             for field in ('commandId', 'projectId'):
                 schema['properties'].pop(field)
             schema['required'] = [key for key in schema['required'] if key not in {'commandId', 'projectId'}]
+            if arguments.get('modelConfigId'):
+                config_id = str(UUID(arguments['modelConfigId']))
+                config = next((value for value in self.configs.list() if value['id'] == config_id), None)
+                if config is None:
+                    raise ProjectError('所选模型不可用。')
+                media_kind = 'text' if config['kind'] == 'agent' else config['kind']
+                def narrow(value: JsonValue) -> None:
+                    if isinstance(value, dict):
+                        discriminator = value.get('discriminator', {})
+                        mapping = discriminator.get('mapping', {})
+                        if discriminator.get('propertyName') == 'kind' and media_kind in mapping:
+                            value['$ref'] = mapping[media_kind]
+                            value.pop('oneOf')
+                            value.pop('discriminator')
+                        for child in value.values():
+                            narrow(child)
+                    elif isinstance(value, list):
+                        for child in value:
+                            narrow(child)
+                narrow(schema)
+                parameters = schema.get('$defs', {}).get('VideoParameters')
+                if parameters and media_kind == 'video':
+                    for field, choices in [('videoMode', config['inputRules']['videoModes']),
+                                           ('generateAudio', config['inputRules']['generateAudioOptions'])]:
+                        prop = parameters['properties'][field]
+                        prop['enum'] = choices
+                        if prop['default'] not in choices:
+                            prop.pop('default')
+                            parameters.setdefault('required', []).append(field)
+                            spec = schema['$defs']['VideoGenerationSpec']
+                            if 'parameters' not in spec.get('required', []):
+                                spec.setdefault('required', []).append('parameters')
+            definitions = schema.pop('$defs', {})
+            used: set[str] = set()
+            def references(value: JsonValue) -> None:
+                if isinstance(value, dict):
+                    if '$ref' in value:
+                        key = value['$ref'].rsplit('/', 1)[1]
+                        if key not in used:
+                            used.add(key)
+                            references(definitions[key])
+                    for child in value.values():
+                        references(child)
+                elif isinstance(value, list):
+                    for child in value:
+                        references(child)
+            references(schema)
+            if used:
+                schema['$defs'] = {key: value for key, value in definitions.items() if key in used}
             return schema
         if name != 'execute_command':
             raise ProjectError('未知业务工具。')
@@ -129,9 +191,9 @@ class AgentTools:
                 provenance = AssetProvenance(source='agent_written', agentRunId=turn_id, agentRuntime=native_runtime)
             if command.type == 'artifact.publish':
                 with self.projects.local.transaction() as db:
-                    directory, _, _ = self.projects._load(db, project_id)
+                    project_directory, _, _ = self.projects._load(db, project_id)
                 receipt = await asyncio.to_thread(publish_artifact, self.assets, command,
-                    execution_directory=directory / 'agent-runs' / str(turn_id) / 'work', session=session, provenance=provenance)
+                    execution_directory=project_directory / 'agent-runs' / str(turn_id) / 'work', session=session, provenance=provenance)
             else:
                 receipt = await asyncio.to_thread(self.assets.execute, command, session=session, source='agent', provenance=provenance)
         else:

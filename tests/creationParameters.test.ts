@@ -356,3 +356,19 @@ test("a music node follows a connected recording only through YuE2 and a transcr
     /扒谱模型仅用于/,
   );
 });
+
+test("video audio controls and validation consume declared audio choices", () => {
+  const config: ModelConfig = {
+    id: crypto.randomUUID(), kind: "video", url: "https://fixture.invalid/v1",
+    modelId: "fixture", protocol: "volcengine", connectionType: "api", authMode: "none",
+    inputRules: { profile: "compatible", allowedKinds: ["text", "image"],
+      maxImages: 8, maxVideos: 0, maxAudios: 0, videoModes: ["reference"], generateAudioOptions: [true] },
+  };
+  const settings = { ...generationDefaults("video"), modelConfigId: config.id,
+    videoMode: "reference" as const, prompt: "test", audioEnabled: false };
+  assert.equal(backendBlocker(settings, [], [config]), "当前视频适配器不支持关闭生成音频。");
+  assert.equal(serviceGenerationSettings(settings, config, [], true).audioEnabled, true);
+  const optional: ModelConfig = { ...config, inputRules: { ...config.inputRules, generateAudioOptions: [true, false] } };
+  assert.equal(serviceGenerationSettings(settings, optional, [], true).audioEnabled, false);
+  assert.notEqual(backendBlocker(settings, [], [optional]), "当前视频适配器不支持关闭生成音频。");
+});

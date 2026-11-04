@@ -160,7 +160,7 @@ import {
 } from "./generationReferenceContent.ts";
 import { referenceContentCommand } from "./generationReferenceEdit.ts";
 import type { GenerationReferenceControls } from "./GenerationReferenceEditor";
-import { absolutePosition, arrangeNodes } from "./geometry";
+import { absolutePosition, arrangeNodes, boundsOfNodes } from "./geometry";
 import { lockedNodeIds } from "./hierarchy";
 import {
   beginTransaction,
@@ -527,6 +527,8 @@ function Workspace() {
   const [measurements, setMeasurements] = useState<
     Record<string, { width: number; height: number }>
   >({});
+  const revealCreatedNodes = useRef<(nodes: CanvasNode[], allNodes: CanvasNode[]) => void>(() => {});
+  const viewportMoving = useRef(false);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
   const selectionAtPointerDown = useRef<string[]>([]);
@@ -1465,6 +1467,11 @@ function Workspace() {
           projection.baseline = merged;
           projection.basis = snapshot;
           setHistory((history) => ({ ...history, present: merged }));
+          const known = new Set(current.nodes.map((node) => node.id));
+          const created = next.nodes.filter((node) => !known.has(node.id));
+          if (created.length) requestAnimationFrame(() => {
+            if (active && historyRef.current.present.id === current.id) revealCreatedNodes.current(created, next.nodes);
+          });
         })
         .catch((error) => active && notify(errorMessage(error)));
     };
@@ -2072,8 +2079,18 @@ function Workspace() {
       spacePressed ||
       pointerGesture.current.moved ||
       !selectionControls,
-    controlsKey: `${hasComposer}:${hasToolbar}:${composerExpanded}:${activeAction?.token ?? ""}:${activeAction?.tool === "outpaint" ? JSON.stringify(presentationBounds) : ""}`,
+    controlsKey: `${assistantOpen}:${assistantLayout.width}:${hasComposer}:${hasToolbar}:${composerExpanded}:${activeAction?.token ?? ""}:${activeAction?.tool === "outpaint" ? JSON.stringify(presentationBounds) : ""}`,
   });
+  revealCreatedNodes.current = (nodes, allNodes) => {
+    if (switchPending.current || viewportMoving.current || interacting || pointerGesture.current.active ||
+        references.connecting || spacePressed || selectedRef.current.length > 1 ||
+        editing || preview || activeAction || textEditingId || composerExpanded) return;
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && root.current?.contains(focused) &&
+        focused.matches("input,textarea,[contenteditable=true]") && !focused.closest(".cw-assistant-panel")) return;
+    const bounds = boundsOfNodes(nodes, allNodes);
+    if (bounds) selectionPresentation.reveal(bounds);
+  };
   useCanvasWheelBoundary(root, selectionPresentation.userNavigation);
   const flowNodes: FlowNode[] = useMemo(
     () =>
@@ -4347,13 +4364,19 @@ function Workspace() {
               });
             }}
             onMoveStart={(event) => {
-              if (event) selectionPresentation.userNavigation();
+              if (event) {
+                selectionPresentation.userNavigation();
+                viewportMoving.current = true;
+              }
             }}
             onMove={(event, view) => {
               setZoom(view.zoom);
               if (event) setMenu(null);
             }}
-            onMoveEnd={(_, viewport) => command({ type: "viewport", viewport })}
+            onMoveEnd={(_, viewport) => {
+              viewportMoving.current = false;
+              command({ type: "viewport", viewport });
+            }}
             minZoom={MIN_ZOOM}
             maxZoom={MAX_ZOOM}
             nodeDragThreshold={0}

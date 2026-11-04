@@ -61,7 +61,7 @@ class ToolGateway:
                     raise ProjectError('工具调用标识或名称无效。')
                 arguments = TypeAdapter(dict[str, JsonValue]).validate_python(arguments, strict=True)
                 schema = next(item['function']['parameters'] for item in tools() if item['function']['name'] == name)
-                if set(arguments) - set(schema['properties']) or set(schema.get('required', [])) - set(arguments):
+                if 'properties' in schema and (set(arguments) - set(schema['properties']) or set(schema.get('required', [])) - set(arguments)):
                     raise ProjectError('工具参数缺失或包含未定义字段。')
                 value = await self.business.execute(self.run.project_id, self.run.turn_id, self.run.session,
                     call_id, name, arguments, self.roots, self.run.config,
@@ -91,6 +91,7 @@ class ToolGateway:
     async def close(self) -> None:
         self.closed = True
         for identity, task in self.calls.values():
-            if json.loads(identity)[0] == 'read_canvas_item':
+            name, arguments = json.loads(identity)
+            if name == 'query' and arguments.get('type') == 'canvas.status':
                 task.cancel()
         await asyncio.gather(*(task for _, task in self.calls.values()), return_exceptions=True)

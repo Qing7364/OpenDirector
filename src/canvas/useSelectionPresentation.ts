@@ -8,6 +8,7 @@ import {
 import { useReactFlow, useViewport } from "@xyflow/react";
 import type { Rect, Viewport } from "./model";
 import {
+  centeredViewport,
   selectionPlacement,
   selectionViewport,
   type SelectionChrome,
@@ -71,13 +72,12 @@ export function useSelectionPresentation({
     if (!host) return;
     const measure = () => {
       const rect = host.getBoundingClientRect();
-      const sidebar = host
-        .querySelector(".cw-side-panel")
-        ?.getBoundingClientRect();
+      const panels = [...host.querySelectorAll(".cw-side-panel,.cw-assistant-panel:not([hidden])")];
       let left = rect.width < 700 ? 64 : 80;
       let right = rect.width - 20;
-      if (sidebar) {
-        if (sidebar.left - rect.left < rect.width / 2)
+      for (const panel of panels) {
+        const sidebar = panel.getBoundingClientRect();
+        if (!panel.classList.contains("cw-assistant-panel") && sidebar.left - rect.left < rect.width / 2)
           left = Math.max(left, sidebar.right - rect.left + 16);
         else right = Math.min(right, sidebar.left - rect.left - 16);
       }
@@ -121,8 +121,7 @@ export function useSelectionPresentation({
     observer.observe(host);
     if (toolbar.current) observer.observe(toolbar.current);
     if (composer.current) observer.observe(composer.current);
-    const sidebar = host.querySelector(".cw-side-panel");
-    if (sidebar) observer.observe(sidebar);
+    for (const panel of host.querySelectorAll(".cw-side-panel,.cw-assistant-panel:not([hidden])")) observer.observe(panel);
     measure();
     return () => observer.disconnect();
   }, [root, toolbar, composer, measurementKey, scaleComposer]);
@@ -228,6 +227,12 @@ export function useSelectionPresentation({
         viewport: view,
       };
       present(selectionViewport(bounds, view, chrome));
+    },
+    reveal: (bounds: Rect) => {
+      if (obscured || !chrome.safe.width) return;
+      present(centeredViewport(bounds, flow.getViewport(), {
+        safe: chrome.safe, toolbar: { width: 0, height: 0 }, composer: { width: 0, height: 0 },
+      }));
     },
     placement,
     mediaRect: mediaBounds

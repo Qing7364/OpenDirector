@@ -33,11 +33,11 @@ def rpc(value):
  assert 'error' not in response, response
  return response['result']
 rpc({'id':1, 'method':'initialize'})
-assert len(rpc({'id':2, 'method':'tools/list'})['tools']) == 6
+assert len(rpc({'id':2, 'method':'tools/list'})['tools']) == 5
 result = rpc({'id':3, 'method':'tools/call', 'params':{'name':'execute_command', 'arguments':{'type':'asset.writeText','payload':{'name':'native.md','text':'Native plan'}}}})
 assert not result['isError'], result
 assert rpc({'id':3, 'method':'tools/call', 'params':{'name':'execute_command', 'arguments':{'type':'asset.writeText','payload':{'name':'native.md','text':'Native plan'}}}}) == result
-preview = rpc({'id':4, 'method':'tools/call', 'params':{'name':'preview_asset', 'arguments':{'assetId':'00000000-0000-0000-0000-000000000001'}}})
+preview = rpc({'id':4, 'method':'tools/call', 'params':{'name':'query', 'arguments':{'type':'asset.preview','objectId':'00000000-0000-0000-0000-000000000001'}}})
 assert not preview['isError'], preview
 assert preview['content'][1] == {'type':'image','data':'cHJldmlldw==','mimeType':'image/webp'}, preview
 bridge.stdin.close(); bridge.wait()

@@ -6,11 +6,16 @@ entire transaction once, including versions, receipt and outbox event.
 import asyncio
 from uuid import UUID
 
+from pydantic import JsonValue
+from pydantic_core import to_jsonable_python
+
+from opendirector.application.creation_assets import CreationAssets
+
 from opendirector.domain.creation.assets import AssetRef
-from opendirector.domain.creation.base import ObjectVersion
-from opendirector.domain.creation.commands import CanvasShow, ReferenceWrite, SpecWrite
-from opendirector.domain.creation.generation import ResolvedReference
-from opendirector.domain.creation.canvas import media_card_size, node_capabilities, VideoCanvasItem
+from opendirector.domain.creation.base import CanvasItemVersion, ObjectVersion
+from opendirector.domain.creation.commands import CanvasShow, Query, ReferenceWrite, SpecWrite
+from opendirector.domain.creation.generation import FollowingSource, ResolvedReference
+from opendirector.domain.creation.canvas import CanvasReferenceSources, FollowingReferenceSource, PinnedReferenceSource, media_card_size, node_capabilities, VideoCanvasItem
 from opendirector.domain.creation.models import ModelConfigPublic
 from opendirector.domain.creation.project import ProjectSnapshot, asset_references
 from opendirector.domain.creation.validation import ContractError
@@ -618,7 +623,11 @@ class CreationCanvas:
         active = [job for job in related if job.status in {'queued', 'running'}]
         jobs = active[:50] if active else related[:1]
         asset = current_asset(snapshot, item)
-        return {'item': item.model_dump(mode='json'),
+        reference_sources = CanvasReferenceSources(
+            followCurrent=FollowingReferenceSource(source=FollowingSource(id=item.id)),
+            pinned=PinnedReferenceSource(source=asset_ref(asset), sourceVersion=CanvasItemVersion(
+                objectType='canvas_item', id=item.id, revision=item.revision))) if asset else None
+        return {'referenceSources': reference_sources.model_dump(mode='json') if reference_sources else None, 'item': item.model_dump(mode='json'),
             'generationSpec': {'id': str(spec.id), 'revision': spec.revision,
                 'modelConfigId': str(spec.modelConfigId) if spec.modelConfigId else None,
                 'currentResultId': str(spec.currentResultId) if spec.currentResultId else None} if spec else None,
@@ -718,7 +727,15 @@ class CreationCanvas:
         return dict(snapshot=snapshot, visibleItemIds=[i.id for i in snapshot.canvasItems if i.id in visible],
                     hiddenItemIds=[i.id for i in snapshot.canvasItems if i.id not in visible], edges=edges, capabilities=capabilities)
 
-    def query(self, query):
+    async def query(self, query: Query) -> JsonValue:
+        if query.type == 'canvas.status':
+            return await self.wait_item_status(query.projectId, query.objectId, query.waitSeconds)
+        if query.type == 'asset.preview':
+            target = self.projects.local.state_dir / 'previews' / str(query.projectId)
+            return await asyncio.to_thread(CreationAssets(self.projects).preview, query.projectId, query.objectId, target)
+        return to_jsonable_python(await asyncio.to_thread(self.query_snapshot, query))
+
+    def query_snapshot(self, query):
         from opendirector.application.creation_history import CreationHistory
         from opendirector.infrastructure.creation_projects import object_index
         snapshot = self.projects.snapshot(query.projectId)

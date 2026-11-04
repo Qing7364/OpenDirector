@@ -58,6 +58,8 @@ for line in sys.stdin:
   if mode=='wait':
    write(dict(method='session/update',params=dict(sessionId=sid,update=dict(sessionUpdate='agent_message_chunk',content=dict(type='text',text='Waiting')))))
    continue
+  write(dict(method='session/update',params=dict(sessionId=sid,update=dict(sessionUpdate='agent_thought_chunk',content=dict(type='text',text='Test native thought')))))
+  write(dict(method='session/update',params=dict(sessionId=sid,update=dict(sessionUpdate='plan',entries=[dict(content='Save the plan',priority='medium',status='in_progress')]))))
   if mode=='permission':
    write(dict(id='approval-1',method='session/request_permission',params=dict(sessionId=sid,options=[dict(optionId='allow',kind='allow_once'),dict(optionId='reject',kind='reject_once')])))
    answer=read()
@@ -70,7 +72,7 @@ for line in sys.stdin:
    response=json.loads(bridge.stdout.readline());assert 'error' not in response,response
    return response['result']
   rpc({'id':1,'method':'initialize'})
-  assert len(rpc({'id':2,'method':'tools/list'})['tools'])==6
+  assert len(rpc({'id':2,'method':'tools/list'})['tools'])==5
   context=rpc({'id':20,'method':'tools/call','params':{'name':'read_project','arguments':{}}})
   assert 'selected-image' in json.dumps(context),context
   outcome=rpc({'id':3,'method':'tools/call','params':{'name':'execute_command','arguments':{'type':'asset.writeText','payload':{'name':'deepseek.md','text':'CLI saved'}}}})
@@ -78,6 +80,7 @@ for line in sys.stdin:
   bridge.stdin.close();bridge.wait()
   write(dict(method='session/update',params=dict(sessionId=sid,update=dict(sessionUpdate='tool_call',toolCallId='native-read',title='read',rawInput={'path':'file'},status='in_progress'))))
   write(dict(method='session/update',params=dict(sessionId=sid,update=dict(sessionUpdate='tool_call_update',toolCallId='native-read',status='completed',content=[]))))
+  write(dict(method='session/update',params=dict(sessionId=sid,update=dict(sessionUpdate='plan',entries=[dict(content='Save the plan',priority='medium',status='completed')]))))
   write(dict(method='session/update',params=dict(sessionId=sid,update=dict(sessionUpdate='agent_message_chunk',content=dict(type='text',text='Saved.')))))
   result(req,dict(stopReason='max_tokens' if mode=='incomplete' else 'end_turn'))
 '''
@@ -113,6 +116,10 @@ def test_acp_shared_write_and_native_trace(cli, tmp_path, monkeypatch, mode):
         assert (events[-1]['error'] is None) == (mode != 'incomplete'), events
         message = events[-1]['conversation']['messages'][-1]
         assert message['text'] == 'Saved.'
+        assert {'type': 'thinking'} in events
+        assert 'Test native thought' not in response.text
+        assert message['plan'] == [{'content': 'Save the plan', 'status': 'completed'}]
+        assert client.get(path + '/assistant').json()['messages'][-1]['plan'] == message['plan']
         assert any(tool['name']=='execute_command' and tool['status']=='complete' for tool in message['tools'])
         assert any(tool['name']=='read' and tool['status']=='complete' for tool in message['tools'])
         snapshot=client.get(path).json()

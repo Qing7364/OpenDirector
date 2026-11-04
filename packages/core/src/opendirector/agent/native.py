@@ -146,7 +146,7 @@ class NativeRuntime:
                         outcome = await gateway.call('mcp:' + key, params['name'], params.get('arguments', {}))
                         result = {'content': [{'type': 'text', 'text': json.dumps(outcome.value, ensure_ascii=False)}],
                                   'isError': bool(outcome.error)}
-                        if params['name'] == 'preview_asset' and not outcome.error:
+                        if params['name'] == 'query' and params.get('arguments', {}).get('type') == 'asset.preview' and not outcome.error:
                             preview = outcome.value.get('preview')
                             if preview:
                                 content = base64.b64encode(await asyncio.to_thread(Path(preview['path']).read_bytes)).decode()

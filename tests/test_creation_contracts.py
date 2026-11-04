@@ -512,3 +512,33 @@ def test_audio_voice_names_reject_invalid_characters_and_lengths(voice):
     from opendirector.domain.creation.generation import AudioParameters
     with pytest.raises(ValidationError):
         AudioParameters(voice=voice)
+
+
+def test_pinned_reference_schema_requires_canvas_provenance_type_and_preserves_legacy_json():
+    from opendirector.domain.creation.generation import PinnedReference
+    schema = PinnedReference.model_json_schema()
+    assert schema['$defs']['CanvasItemVersion']['properties']['objectType']['const'] == 'canvas_item'
+    value = dict(id=uid(90), projectId=uid(1), targetSpecId=uid(30), binding='pinned',
+        source=asset_ref(asset(18, 'image')))
+    without = PinnedReference.model_validate(value).model_dump(mode='json')
+    assert 'sourceVersion' not in without
+    provenance = dict(objectType='canvas_item', id=str(uid(40)), revision=1)
+    restored = PinnedReference.model_validate({**value, 'sourceVersion': provenance})
+    assert restored.model_dump(mode='json')['sourceVersion'] == provenance
+    with pytest.raises(ValidationError, match='canvas_item'):
+        PinnedReference.model_validate({**value, 'sourceVersion': {**provenance, 'objectType': 'asset'}})
+
+
+@pytest.mark.parametrize(('protocol', 'allowed'), [('vllm_omni', (True,)), ('volcengine', (True, False))])
+def test_audio_generation_options_match_shared_validation(protocol, allowed):
+    config = model('video', protocol=protocol)
+    assert config.inputRules.generateAudioOptions == allowed
+    validate_generation(video_spec(generateAudio=True), config)
+    if False in allowed:
+        validate_generation(video_spec(generateAudio=False), config)
+    else:
+        with pytest.raises(ValueError, match='不支持关闭生成音频'):
+            validate_generation(video_spec(generateAudio=False), config)
+    legacy = config.inputRules.model_dump(mode='json', exclude={'generateAudioOptions'})
+    from opendirector.domain.creation.models import InputRules
+    assert InputRules.model_validate(legacy).model_dump(mode='json') == legacy

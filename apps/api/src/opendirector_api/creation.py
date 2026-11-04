@@ -6,7 +6,7 @@ import re
 from urllib.parse import quote, unquote
 
 from fastapi import APIRouter, Header, Query, Request
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
@@ -85,10 +85,22 @@ def creation_routes(projects: CreationProjects, generation=None):
         return canvas.projection(project_id)
 
     @router.post('/projects/{project_id}/queries')
-    def query(project_id: UUID, value: CreationQuery):
+    async def query(project_id: UUID, value: CreationQuery):
         if value.projectId != project_id:
             raise ProjectError('查询不属于当前工程。')
-        return canvas.query(value)
+        result = await canvas.query(value)
+        if value.type == 'asset.preview' and 'preview' in result:
+            result['preview'].pop('path')
+            result['preview']['url'] = f'/api/creation/projects/{project_id}/assets/{value.objectId}/preview'
+        return result
+
+    @router.get('/projects/{project_id}/assets/{asset_id}/preview')
+    async def asset_preview(project_id: UUID, asset_id: UUID):
+        target = projects.local.state_dir / 'previews' / str(project_id)
+        result = await run_in_threadpool(assets.preview, project_id, asset_id, target)
+        if 'preview' not in result:
+            return result
+        return FileResponse(result['preview']['path'], media_type=result['preview']['mimeType'])
 
     @router.get('/projects/{project_id}/history')
     def operations(project_id: UUID):

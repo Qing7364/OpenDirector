@@ -72,6 +72,9 @@ jobs:
           curl --fail -H 'X-OpenDirector-Request: 1' "$CREATION_API_URL/api/creation-test-health"
           curl --silent --fail "$CREATION_WEB_URL/" >/dev/null
           node scripts/verify_creation_browser.mjs
+          node tests/browser/assistant_activity.mjs
+          node tests/browser/canvas_generation_reference.mjs
+          node tests/browser/created_node_focus.mjs
           node tests/browser/reference_reconnect.mjs
           node tests/browser/context_menu_dismissal.mjs
           node tests/browser/mp4_export.mjs
