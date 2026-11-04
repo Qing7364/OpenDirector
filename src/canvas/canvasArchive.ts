@@ -13,7 +13,7 @@ export const CANVAS_ASSET_DIRECTORY = "assets";
 
 const UNSAFE_FILE_NAME = /[\\/:*?"<>|\u0000-\u001f\u007f]/g;
 /** Field names that hold media: node sources, palettes and adopted outputs. */
-const MEDIA_FIELDS = new Set(["src", "sourceImageUri", "output"]);
+export const MEDIA_FIELDS = new Set(["src", "sourceImageUri", "output"]);
 
 export interface CanvasArchive {
   blob: Blob;

@@ -245,6 +245,11 @@ import {
   type CanvasFragment,
 } from "./operations";
 import { buildCanvasArchive, readCanvasArchive } from "./canvasArchive.ts";
+import {
+  captureClipboardMedia,
+  transferClipboardMedia,
+  type ClipboardMedia,
+} from "./clipboardMedia.ts";
 import { CanvasPointerGesture } from "./pointerGesture";
 import { resourceNodeData } from "./projectAssets";
 import { persistCurrentDocument } from "./projectManagement";
@@ -676,6 +681,8 @@ function Workspace() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantSelectionRequest, setAssistantSelectionRequest] = useState(0);
   const clipboard = useRef<CanvasFragment | null>(null);
+  const clipboardMedia = useRef<ClipboardMedia | null>(null);
+  const pasting = useRef(false);
   const pasteCount = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadTarget = useRef<string | null>(null);
@@ -2271,6 +2278,10 @@ function Workspace() {
       historyRef.current.present,
       selectedRef.current,
     );
+    clipboardMedia.current = captureClipboardMedia(
+      historyRef.current.present.id,
+      clipboard.current,
+    );
     pasteCount.current = 0;
     notify(`已复制 ${clipboard.current.nodes.length} 个节点`);
   };
@@ -2288,6 +2299,10 @@ function Workspace() {
     const fragment = result.fragment;
     change(() => result.document);
     clipboard.current = fragment;
+    clipboardMedia.current = captureClipboardMedia(
+      historyRef.current.present.id,
+      fragment,
+    );
     pasteCount.current = 0;
     setSelected([]);
     setMenu(null);
@@ -2299,7 +2314,48 @@ function Workspace() {
       ? copySelection(before, selectedRef.current)
       : clipboard.current;
     if (!fragment?.nodes.length) return;
-    const distance = 40 * (duplicate ? 1 : ++pasteCount.current);
+    const media = clipboardMedia.current;
+    if (!duplicate && media && media.projectId !== before.id) {
+      void pasteFromProject(fragment, media);
+      return;
+    }
+    insertFragment(fragment, 40 * (duplicate ? 1 : ++pasteCount.current));
+  };
+  const pasteFromProject = async (
+    fragment: CanvasFragment,
+    media: ClipboardMedia,
+  ) => {
+    if (pasting.current) return;
+    pasting.current = true;
+    const projectId = historyRef.current.present.id;
+    try {
+      const transferred = await transferClipboardMedia(
+        fragment,
+        media,
+        projectId,
+        async (blob, title, kind) => {
+          const client = creationClient(projectId);
+          const ref = await client.importBlob(
+            blob,
+            withMediaSuffix(title, blob.type),
+            kind,
+          );
+          return {
+            assetId: ref.assetId,
+            src: await client.mediaUrl(ref.assetId),
+          };
+        },
+      );
+      if (historyRef.current.present.id !== projectId) return;
+      insertFragment(transferred, 40 * ++pasteCount.current);
+    } catch (error) {
+      notify(`跨画布粘贴失败，未粘贴任何节点：${errorMessage(error)}`);
+    } finally {
+      pasting.current = false;
+    }
+  };
+  const insertFragment = (fragment: CanvasFragment, distance: number) => {
+    const before = historyRef.current.present;
     const result = pasteFragment(before, fragment, {
       x: distance,
       y: distance,

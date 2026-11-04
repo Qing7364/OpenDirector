@@ -78,6 +78,7 @@ jobs:
           node tests/browser/minimax_h3.mjs
           node tests/browser/provider_settings.mjs
           node tests/browser/created_node_focus.mjs
+          node tests/browser/cross_canvas_paste.mjs
           node tests/browser/reference_reconnect.mjs
           node tests/browser/context_menu_dismissal.mjs
           node tests/browser/mp4_export.mjs
