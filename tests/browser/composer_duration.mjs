@@ -1,3 +1,4 @@
+import { chooseGenerationModel } from "./model_picker.mjs";
 /** Isolated API only: independent duration control obeys model choices and persists. */
 import assert from "node:assert/strict";
 const { chromium } = await import(
@@ -89,9 +90,7 @@ try {
     .getByRole("button", { name: "添加视频", exact: true })
     .click();
   const editor = page.getByRole("textbox", { name: "生成提示词", exact: true });
-  await page
-    .getByRole("combobox", { name: "生成模型", exact: true })
-    .selectOption(`config:${fastConfig.id}`);
+  await chooseGenerationModel(page, `config:${fastConfig.id}`);
   await editor.fill(
     Array.from(
       { length: 30 },
@@ -236,7 +235,7 @@ try {
   );
   await parameterPanel.press("Escape");
   const model = page.getByRole("combobox", { name: "生成模型", exact: true });
-  await model.selectOption(`config:${config.id}`);
+  await chooseGenerationModel(page, `config:${config.id}`);
   await trigger.click();
   await popup.waitFor();
   assert.deepEqual(await popup.locator(".cw-duration-tick").allTextContents(), [
@@ -274,7 +273,7 @@ try {
   await page.getByText("已保存到本机", { exact: true }).waitFor();
   await page.locator(".react-flow__node").click();
   assert.equal(await trigger.innerText(), "7 秒");
-  await model.selectOption("Seedance 1.0 Fast");
+  await chooseGenerationModel(page, { label: "Seedance 1.0 Fast" });
   await trigger.click();
   await popup.waitFor();
   assert.equal(await slider.isDisabled(), true);
@@ -288,7 +287,7 @@ try {
     "30",
   ]);
   await popup.press("Escape");
-  await model.selectOption("Wan 3.0");
+  await chooseGenerationModel(page, { label: "Wan 3.0" });
   assert.equal(
     await trigger.isDisabled(),
     true,

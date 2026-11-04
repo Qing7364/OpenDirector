@@ -1,3 +1,4 @@
+import { chooseGenerationModel } from "./model_picker.mjs";
 /** Shared full-workflow prelude: genuine UI upload, reference, candidate and layers. */
 import assert from "node:assert/strict";
 export async function creationJourney(
@@ -67,9 +68,7 @@ export async function creationJourney(
     ),
   );
   await node(target.id).locator(".cw-node-title").click();
-  await page
-    .getByRole("combobox", { name: "生成模型", exact: true })
-    .selectOption({ label: "fixture-image" });
+  await chooseGenerationModel(page, { label: "fixture-image" });
   const prompt = page.getByRole("textbox", { name: "生成提示词", exact: true });
   await prompt.click();
   await prompt.press("Control+End");

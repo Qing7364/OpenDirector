@@ -127,13 +127,16 @@ def resolve_reference(snapshot, reference):
 
 def reference_policy(spec, values, rules=None, *, selected_frame=False):
     output = []
+    frame_roles = set(rules.frameRoles) if rules and rules.frameRoles else {'first_frame'}
     for value in values:
         kind = value.asset.kind
         # Speech reads its own text; only a music model that follows a recording takes one.
         ignored = spec.kind == 'audio' and not (kind == 'audio' and spec.parameters.creationType == 'music'
                                                 and rules is not None and 'audio' in rules.allowedKinds)
         if spec.kind == 'video' and spec.parameters.videoMode == 'first_frame':
-            ignored = kind not in {'text', 'image'} or kind == 'image' and (value.subjectRole is not None or not selected_frame or value.role != 'first_frame')
+            ignored = kind not in {'text', 'image'} or kind == 'image' and (value.subjectRole is not None or not selected_frame or value.role not in frame_roles)
+            if selected_frame and value.role in {'first_frame', 'last_frame'} and ignored:
+                raise ContractError('reference_invalid', '指定的首尾帧不能作为图片传入当前模型；请使用明确的图片素材引用，且不要填写主体槽位 subjectRole。', value.referenceId)
         if value.subjectRole is not None and rules is not None:
             ignored = ignored or kind not in rules.allowedKinds or (kind == 'image' and not rules.maxImages) or (kind == 'video' and not rules.maxVideos) or (kind == 'audio' and not rules.maxAudios)
             if spec.kind == 'video' and spec.parameters.videoMode == 'continuation' and kind == 'video':
@@ -155,7 +158,7 @@ def resolved_inputs(snapshot, spec_id, rules=None):
             if source and spec.kind not in downstream_kinds(snapshot, source):
                 raise ContractError('reference_invalid', '来源节点当前内容不支持作为该类型节点的参考。', ref.id)
     return reference_policy(spec, [value for ref in refs for value in resolve_reference(snapshot, ref)], rules,
-        selected_frame=any(ref.role == 'first_frame' for ref in refs))
+        selected_frame=any(ref.role in {'first_frame', 'last_frame'} for ref in refs))
 
 
 def validate_frame_reference_limit(snapshot):
@@ -194,7 +197,7 @@ def reference_evidence(snapshot, spec, reference):
 
     try:
         now = reference_policy(spec, resolve_reference(snapshot, reference), job.inputSnapshot.model.inputRules,
-            selected_frame=any(r.active and r.role == 'first_frame' and r.targetSpecId == spec.id for r in snapshot.references))
+            selected_frame=any(r.active and r.role in {'first_frame', 'last_frame'} and r.targetSpecId == spec.id for r in snapshot.references))
         now = [r for r in now if r.transmission != 'context_only']
     except ContractError:
         return 'unavailable'

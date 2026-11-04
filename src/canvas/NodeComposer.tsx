@@ -1,3 +1,6 @@
+import { modelDescription } from "./modelDescriptions";
+import { SearchableSelect } from "./SearchableSelect";
+import { providerLabel } from "./providerPresets";
 import { useEffect, useRef, useState } from "react";
 import type { CanvasNode, CanvasNodeData, GenerationSettings } from "./model";
 import { CanvasIcon } from "./CanvasIcon";
@@ -72,7 +75,8 @@ function clockTime(seconds: number) {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
 }
 
-const UNCONFIGURED_MODEL = "尚未配置可用的生成模型，请到“设置 → 模型接入”添加。";
+const UNCONFIGURED_MODEL =
+  "尚未配置可用的生成模型，请到“设置 → 模型接入”添加。";
 
 /** Shared defaults let the workspace run the same parameters that the controls display. */
 export function getNodeGenerationSettings(
@@ -311,9 +315,10 @@ export function NodeComposer({
             ).map(([field, label], index) => {
               const id = settings[field];
               const node = frameCandidates.find((item) => item.id === id);
-              // The local service accepts a first frame only; offering a tail frame
-              // here would permanently block submission.
-              const blocked = backend && field === "lastFrameNodeId";
+              const blocked =
+                backend &&
+                field === "lastFrameNodeId" &&
+                !config?.inputRules.frameRoles?.includes("last_frame");
               const unavailable = Boolean(
                 id && (!node?.data.src || node.data.assetState === "missing"),
               );
@@ -497,36 +502,35 @@ export function NodeComposer({
 
       <div className="cw-composer-footer">
         <div className="cw-composer-options">
-          <div className="cw-model-select">
-            <select
-              aria-label="生成模型"
-              title={settings.model}
-              value={
-                backend ? `config:${settings.modelConfigId}` : "unconfigured"
-              }
-              disabled={running || serviceModels.length === 0}
-              onChange={(event) => chooseModel(event.target.value)}
-            >
-              {serviceModels.length === 0 && (
-                <option value="unconfigured">未配置生成模型</option>
-              )}
-              {backend && !config && (
-                <option value={`config:${settings.modelConfigId}`}>
-                  {settings.model}（配置不可用）
-                </option>
-              )}
-              {serviceModels.length > 0 && (
-                <optgroup label="本地服务">
-                  {serviceModels.map((item) => (
-                    <option key={item.id} value={`config:${item.id}`}>
-                      {modelLabel(item)}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-            <CanvasIcon name="chevronDown" size={12} />
-          </div>
+          <SearchableSelect
+            compact
+            label="生成模型"
+            value={
+              backend ? `config:${settings.modelConfigId}` : "unconfigured"
+            }
+            disabled={running || serviceModels.length === 0}
+            onChange={chooseModel}
+            options={[
+              ...(!serviceModels.length
+                ? [{ id: "unconfigured", name: "未配置生成模型" }]
+                : []),
+              ...(backend && !config
+                ? [
+                    {
+                      id: `config:${settings.modelConfigId}`,
+                      name: `${settings.model}（配置不可用）`,
+                    },
+                  ]
+                : []),
+              ...serviceModels.map((item) => ({
+                id: `config:${item.id}`,
+                name: modelLabel(item),
+                modelId: item.modelId,
+                description: modelDescription(item),
+                group: providerLabel(item),
+              })),
+            ]}
+          />
           <button
             type="button"
             className={`cw-parameter-trigger${panel === "parameters" ? " cw-is-active" : ""}`}
@@ -751,7 +755,7 @@ export function NodeComposer({
               ? "取消生成"
               : canRun
                 ? backend
-                  ? "提交到本地服务"
+                  ? "提交到模型服务"
                   : "生成 · 请先接入模型服务"
                 : (blocker ?? "请补全创作参数")
           }

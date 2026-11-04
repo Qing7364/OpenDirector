@@ -31,6 +31,9 @@ export interface InputRules {
   maxVideos: number;
   maxAudios: number;
   videoModes: BackendVideoMode[];
+  aspectRatios?: string[] | null;
+  frameRoles?: ("first_frame" | "last_frame")[] | null;
+  audioReferenceStandalone?: boolean | null;
   generateAudioOptions?: boolean[] | null;
   imageOutputs?: { aspectRatio: string; size: string }[];
   outputResolutions?: string[];
@@ -48,6 +51,7 @@ export interface ModelConfig {
   protocol:
     | "openai"
     | "volcengine"
+    | "minimax_video_v2"
     | "vllm_omni"
     | "vllm_omni_segmentation"
     | "vllm_omni_music"
@@ -63,7 +67,7 @@ export interface ModelConfig {
 
 export interface BackendReference {
   node: CanvasNode;
-  role: "reference" | "firstFrame" | "continuation";
+  role: "reference" | "firstFrame" | "lastFrame" | "continuation";
 }
 
 /** SAM configurations serve editing tools, including legacy vision entries. */
@@ -235,6 +239,15 @@ export function backendReferences(
     );
     return [
       ...(frame ? [{ node: frame, role: "firstFrame" as const }] : []),
+      ...(config.inputRules.frameRoles?.includes("last_frame")
+        ? usable
+            .filter(
+              (node) =>
+                node.id === settings.lastFrameNodeId &&
+                node.data.kind === "image",
+            )
+            .map((node) => ({ node, role: "lastFrame" as const }))
+        : []),
       ...usable
         .filter((node) => node.data.kind === "text")
         .map((node) => ({ node, role: "reference" as const })),
@@ -338,6 +351,10 @@ export function backendAspectRatios(
         ),
       ),
     ];
+  if (settings.mode === "video" && config?.inputRules.aspectRatios)
+    return settings.videoMode === "first-last"
+      ? ["自动"]
+      : ["自动", ...config.inputRules.aspectRatios];
   if (
     settings.mode === "video" &&
     settings.videoMode !== "continuation" &&
@@ -388,7 +405,13 @@ export function serviceGenerationSettings(
     next.imagePreset = "none";
     if (!/^[A-Za-z0-9_.-]{1,64}$/.test(next.voiceName ?? ""))
       next.voiceName = undefined;
-    if (!(config.inputRules.generateAudioOptions?.includes(false) ?? config.protocol === "volcengine")) next.audioEnabled = true;
+    if (
+      !(
+        config.inputRules.generateAudioOptions?.includes(false) ??
+        config.protocol === "volcengine"
+      )
+    )
+      next.audioEnabled = true;
   }
   return next;
 }
@@ -493,7 +516,10 @@ export function backendBlocker(
   if (
     settings.mode === "video" &&
     settings.audioEnabled === false &&
-    !(rules.generateAudioOptions?.includes(false) ?? config.protocol === "volcengine")
+    !(
+      rules.generateAudioOptions?.includes(false) ??
+      config.protocol === "volcengine"
+    )
   )
     return "当前视频适配器不支持关闭生成音频。";
   const references = backendReferences(settings, incoming, config);
@@ -513,7 +539,13 @@ export function backendBlocker(
     )
       return "当前模型不支持所选视频模式。";
     if (settings.videoMode === "first-last") {
-      if (settings.lastFrameNodeId) return "本地服务只支持首帧，请移除尾帧。";
+      if (settings.lastFrameNodeId && !rules.frameRoles?.includes("last_frame"))
+        return "当前服务只支持首帧，请移除尾帧。";
+      if (
+        settings.lastFrameNodeId &&
+        !references.some((item) => item.role === "lastFrame")
+      )
+        return "尾帧素材未连接或已丢失，请重新选择。";
       if (
         settings.firstFrameNodeId &&
         !references.some((item) => item.role === "firstFrame")

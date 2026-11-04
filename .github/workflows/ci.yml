@@ -75,6 +75,8 @@ jobs:
           node scripts/verify_creation_browser.mjs
           node tests/browser/assistant_activity.mjs
           node tests/browser/canvas_generation_reference.mjs
+          node tests/browser/minimax_h3.mjs
+          node tests/browser/provider_settings.mjs
           node tests/browser/created_node_focus.mjs
           node tests/browser/reference_reconnect.mjs
           node tests/browser/context_menu_dismissal.mjs

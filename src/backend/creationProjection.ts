@@ -605,15 +605,20 @@ export class CreationProjection {
                 : {}),
             };
           if (spec.kind === "video" && node.data.settings) {
-            const frame = snapshot.references.find(
+            const frames = snapshot.references.filter(
               (ref) =>
                 ref.active &&
                 ref.targetSpecId === spec.id &&
-                ref.role === "first_frame" &&
+                (ref.role === "first_frame" || ref.role === "last_frame") &&
                 ref.binding === "follow_current",
             );
-            if (frame?.binding === "follow_current")
-              node.data.settings.firstFrameNodeId = frame.source.id;
+            for (const frame of frames)
+              if (frame.binding === "follow_current")
+                node.data.settings[
+                  frame.role === "last_frame"
+                    ? "lastFrameNodeId"
+                    : "firstFrameNodeId"
+                ] = frame.source.id;
           }
           const selected = snapshot.results.find(
             (r) => r.id === spec.currentResultId,
@@ -1505,7 +1510,14 @@ export class CreationProjection {
                     ref.role === "first_frame" &&
                     !settings.firstFrameNodeId))
               ? "first_frame"
-              : "reference";
+              : settings?.videoMode === "first-last" &&
+                  ((ref.binding === "follow_current" &&
+                    ref.source.id === settings.lastFrameNodeId) ||
+                    (ref.binding === "pinned" &&
+                      ref.role === "last_frame" &&
+                      !settings.lastFrameNodeId))
+                ? "last_frame"
+                : "reference";
         if (role !== ref.role) {
           expect("reference", ref);
           operations.push({
@@ -1536,7 +1548,14 @@ export class CreationProjection {
                       ref.role === "first_frame" &&
                       !settings.firstFrameNodeId))
                 ? "first_frame"
-                : "reference";
+                : settings?.videoMode === "first-last" &&
+                    ((ref.binding === "follow_current" &&
+                      ref.source.id === settings.lastFrameNodeId) ||
+                      (ref.binding === "pinned" &&
+                        ref.role === "last_frame" &&
+                        !settings.lastFrameNodeId))
+                  ? "last_frame"
+                  : "reference";
           operations[index] = {
             type: op.type,
             payload: { reference: { ...ref, role } },

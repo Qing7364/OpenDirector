@@ -37,7 +37,7 @@ def provider_failure(value, *, stage, headers=None, http_status=None, secrets=()
     value = value if isinstance(value, dict) else {}
     error = value.get('error')
     error = error if isinstance(error, dict) else value
-    code = _identifier(error.get('code'), 160, secrets)
+    code = _identifier(error.get('code', error.get('type')), 160, secrets)
     headers = headers or {}
     request_id = None
     for candidate in (headers.get('x-request-id'), headers.get('x-tt-logid'),
@@ -52,7 +52,7 @@ def provider_failure(value, *, stage, headers=None, http_status=None, secrets=()
         if match:
             request_id = _identifier(match[1].rstrip('.'), 200, secrets)
     category = {400: 'input', 401: 'authentication', 402: 'quota', 403: 'permission',
-                404: 'input', 413: 'input', 429: 'rate_limit'}.get(http_status, 'temporary' if http_status and http_status >= 500 else 'provider')
+                404: 'input', 413: 'input', 422: 'input', 429: 'rate_limit'}.get(http_status, 'temporary' if http_status and http_status >= 500 else 'provider')
     name = (code or '').lower()
     if name.startswith(('inputimagesensitivecontentdetected', 'inputvideosensitivecontentdetected', 'inputaudiosensitivecontentdetected')):
         category = 'reference'

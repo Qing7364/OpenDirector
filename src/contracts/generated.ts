@@ -670,6 +670,9 @@ export interface InputRulesInput extends ContractInput {
   readonly outputResolutions?: ReadonlyArray<string>;
   readonly referenceImageResolutions?: ReadonlyArray<string> | null;
   readonly videoCapabilities?: VideoCapabilitiesInput | null;
+  readonly aspectRatios?: ReadonlyArray<string> | null;
+  readonly frameRoles?: ReadonlyArray<"first_frame" | "last_frame"> | null;
+  readonly audioReferenceStandalone?: boolean | null;
   readonly generateAudioOptions?: ReadonlyArray<boolean> | null;
 }
 
@@ -811,7 +814,7 @@ export interface ModelConnectionInput extends ContractInput {
   readonly url: string;
   readonly modelId: string;
   readonly connectionType: "api" | "self_hosted";
-  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth" | "vllm_omni_score";
+  readonly protocol: "openai" | "volcengine" | "minimax_video_v2" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth" | "vllm_omni_score";
   readonly authMode: "none" | "bearer";
   readonly inputModalities?: ReadonlyArray<"text" | "image"> | null;
   readonly videoAdapter?: "auto" | "fasth3" | "minimax_h3" | "standard";
@@ -823,7 +826,7 @@ export interface ModelSnapshotInput extends ContractInput {
   readonly kind: "agent" | "image" | "video" | "audio" | "vision";
   readonly modelId: string;
   readonly url: string;
-  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth" | "vllm_omni_score";
+  readonly protocol: "openai" | "volcengine" | "minimax_video_v2" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth" | "vllm_omni_score";
   readonly connectionType: "api" | "self_hosted";
   readonly inputModalities?: ReadonlyArray<"text" | "image"> | null;
   readonly videoAdapter?: "auto" | "fasth3" | "minimax_h3" | "standard";
@@ -1004,7 +1007,7 @@ export interface ReferenceAddCommandOperationInput {
 
 export interface ReferenceBaseInput extends ProjectEntityInput {
   readonly targetSpecId: string;
-  readonly role?: "reference" | "first_frame" | "continuation";
+  readonly role?: "reference" | "first_frame" | "last_frame" | "continuation";
   readonly order?: number;
   readonly active?: boolean;
 }
@@ -1049,7 +1052,7 @@ export interface ReferenceWriteInput extends ContractInput {
 
 export interface ResolvedReferenceInput extends ContractInput {
   readonly referenceId: string;
-  readonly role: "reference" | "first_frame" | "continuation";
+  readonly role: "reference" | "first_frame" | "last_frame" | "continuation";
   readonly asset: AssetRefInput;
   readonly metadata: MediaMetadataInput;
   readonly sourceVersion?: ObjectVersionInput | null;
@@ -2113,6 +2116,9 @@ export interface InputRules extends Contract {
   readonly outputResolutions: ReadonlyArray<string>;
   readonly referenceImageResolutions: ReadonlyArray<string> | null;
   readonly videoCapabilities: VideoCapabilities | null;
+  readonly aspectRatios?: ReadonlyArray<string> | null;
+  readonly frameRoles?: ReadonlyArray<"first_frame" | "last_frame"> | null;
+  readonly audioReferenceStandalone?: boolean | null;
   readonly generateAudioOptions?: ReadonlyArray<boolean> | null;
 }
 
@@ -2253,7 +2259,7 @@ export interface ModelConnection extends Contract {
   readonly url: string;
   readonly modelId: string;
   readonly connectionType: "api" | "self_hosted";
-  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth" | "vllm_omni_score";
+  readonly protocol: "openai" | "volcengine" | "minimax_video_v2" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth" | "vllm_omni_score";
   readonly authMode: "none" | "bearer";
   readonly inputModalities: ReadonlyArray<"text" | "image"> | null;
   readonly videoAdapter: "auto" | "fasth3" | "minimax_h3" | "standard";
@@ -2265,7 +2271,7 @@ export interface ModelSnapshot extends Contract {
   readonly kind: "agent" | "image" | "video" | "audio" | "vision";
   readonly modelId: string;
   readonly url: string;
-  readonly protocol: "openai" | "volcengine" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth" | "vllm_omni_score";
+  readonly protocol: "openai" | "volcengine" | "minimax_video_v2" | "vllm_omni" | "vllm_omni_segmentation" | "vllm_omni_music" | "vllm_omni_depth" | "vllm_omni_score";
   readonly connectionType: "api" | "self_hosted";
   readonly inputModalities?: ReadonlyArray<"text" | "image"> | null;
   readonly videoAdapter: "auto" | "fasth3" | "minimax_h3" | "standard";
@@ -2446,7 +2452,7 @@ export interface ReferenceAddCommandOperation {
 
 export interface ReferenceBase extends ProjectEntity {
   readonly targetSpecId: string;
-  readonly role: "reference" | "first_frame" | "continuation";
+  readonly role: "reference" | "first_frame" | "last_frame" | "continuation";
   readonly order: number;
   readonly active: boolean;
 }
@@ -2491,7 +2497,7 @@ export interface ReferenceWrite extends Contract {
 
 export interface ResolvedReference extends Contract {
   readonly referenceId: string;
-  readonly role: "reference" | "first_frame" | "continuation";
+  readonly role: "reference" | "first_frame" | "last_frame" | "continuation";
   readonly asset: AssetRef;
   readonly metadata: MediaMetadata;
   readonly sourceVersion: ObjectVersion | null;

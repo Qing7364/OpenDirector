@@ -17,6 +17,8 @@ export const MODEL_KINDS: readonly {
   { id: "audio", label: "音频生成" },
 ];
 
+export type ModelOptions = Pick<ModelConfigInput, "inputModalities" | "videoAdapter" | "videoCapabilities">;
+
 export interface ModelConfigInput {
   kind: ModelKind;
   url: string;
@@ -98,10 +100,11 @@ export function useBackendModels() {
     value: ModelConfigInput,
     modelIds: string[],
     id?: string,
+    modelOptions: Record<string, ModelOptions> = {},
   ) => {
     await request<ModelConfig[]>(
       "/model-configs/batch",
-      json("POST", { ...value, modelIds, configId: id }),
+      json("POST", { ...value, modelIds, modelOptions, configId: id }),
     );
     await refresh();
   };

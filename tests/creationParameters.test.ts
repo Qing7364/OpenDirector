@@ -372,3 +372,25 @@ test("video audio controls and validation consume declared audio choices", () =>
   assert.equal(serviceGenerationSettings(settings, optional, [], true).audioEnabled, false);
   assert.notEqual(backendBlocker(settings, [], [optional]), "当前视频适配器不支持关闭生成音频。");
 });
+
+test("official H3 derives frame slots and output ratios from model capabilities", () => {
+  const config: ModelConfig = {
+    id: crypto.randomUUID(), kind: "video", url: "https://api.minimax.cn/v2", modelId: "MiniMax-H3",
+    protocol: "minimax_video_v2", connectionType: "api", authMode: "bearer",
+    inputRules: { profile: "minimax-h3-official", allowedKinds: ["text", "image", "video", "audio"],
+      maxImages: 9, maxVideos: 3, maxAudios: 3, videoModes: ["first_frame", "reference"],
+      frameRoles: ["first_frame", "last_frame"], aspectRatios: ["16:9", "9:16"],
+      generateAudioOptions: [true], outputResolutions: ["768P", "2K"] },
+  };
+  const first = createNode("image", { x: 0, y: 0 });
+  const last = createNode("image", { x: 500, y: 0 });
+  for (const node of [first, last]) node.data.src = "data:image/png;base64,AA==";
+  const settings = { ...generationDefaults("video"), modelConfigId: config.id, videoMode: "first-last" as const,
+    firstFrameNodeId: first.id, lastFrameNodeId: last.id, resolution: "768P", durationSeconds: 5, prompt: "Animate" };
+  assert.equal(backendBlocker(settings, [first, last], [config]), null);
+  assert.deepEqual(backendAspectRatios({ ...settings, videoMode: "reference" }, config), ["自动", "16:9", "9:16"]);
+  assert.deepEqual(backendAspectRatios(settings, config), ["自动"]);
+  assert.match(backendBlocker(settings, [first], [config])!, /尾帧素材/);
+  const local = { ...config, inputRules: { ...config.inputRules, frameRoles: null } };
+  assert.match(backendBlocker(settings, [first, last], [local])!, /只支持首帧/);
+});

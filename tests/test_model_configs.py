@@ -395,3 +395,36 @@ def test_media_generation_model_cannot_declare_agent_modalities(api):
     client, _ = api
     response = client.post('/api/model-configs', json=payload(kind='image', inputModalities=['text', 'image']))
     assert response.status_code == 400
+
+
+def test_batch_model_options_are_independent_and_survive_connection_edits(api):
+    client, store = api
+    request = payload(protocol='openai', modelIds=['text-model', 'vision-model'], modelOptions={
+        'text-model': {'inputModalities': ['text']},
+        'vision-model': {'inputModalities': ['text', 'image']}})
+    response = client.post('/api/model-configs/batch', json=request)
+    assert response.status_code == 200, response.text
+    saved = response.json()
+    assert [item['inputModalities'] for item in saved] == [['text'], ['text', 'image']]
+    assert saved[0]['providerId'] == saved[1]['providerId']
+    refreshed = client.post('/api/model-configs/batch', json={**request, 'configId': saved[0]['id'], 'apiKey': '', 'modelOptions': {}, 'modelIds': ['text-model', 'vision-model', 'new-model']})
+    assert refreshed.status_code == 200, refreshed.text
+    assert [item['inputModalities'] for item in refreshed.json()][:2] == [['text'], ['text', 'image']]
+    assert [item['id'] for item in refreshed.json()][:2] == [item['id'] for item in saved]
+    assert ModelConfigs(store.repository).list() == refreshed.json()
+    before = client.get('/api/model-configs').json()
+    failed = client.post('/api/model-configs/batch', json={**request, 'configId': saved[0]['id'], 'modelOptions': {'not-selected': {'inputModalities': ['text']}}})
+    assert failed.status_code == 400
+    assert client.get('/api/model-configs').json() == before
+
+
+def test_batch_video_cards_keep_distinct_adapter_and_output_settings(api):
+    client, _ = api
+    caps = {'outputs': [{'resolution': '540P', 'durations': [5], 'width': 960, 'height': 540}], 'defaultResolution': '540P', 'defaultDuration': 5}
+    response = client.post('/api/model-configs/batch', json=payload('video', protocol='vllm_omni', modelIds=['custom', 'MiniMax-H3'], modelOptions={
+        'custom': {'videoAdapter': 'standard', 'videoCapabilities': caps},
+        'MiniMax-H3': {'videoAdapter': 'minimax_h3', 'videoCapabilities': None}}))
+    assert response.status_code == 200, response.text
+    first, second = response.json()
+    assert first['videoCapabilities']['outputs'][0]['resolution'] == '540P'
+    assert second['videoCapabilities'] is None and second['inputRules']['profile'] == 'vllm-omni-h3'

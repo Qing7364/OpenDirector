@@ -12,7 +12,7 @@ from opendirector.domain.projects import ProjectError
 from .base import Contract
 
 ModelKind = Literal['agent', 'image', 'video', 'audio', 'vision']
-Protocol = Literal['openai', 'volcengine', 'vllm_omni', 'vllm_omni_segmentation', 'vllm_omni_music', 'vllm_omni_depth', 'vllm_omni_score']
+Protocol = Literal['openai', 'volcengine', 'minimax_video_v2', 'vllm_omni', 'vllm_omni_segmentation', 'vllm_omni_music', 'vllm_omni_depth', 'vllm_omni_score']
 VideoMode = Literal['first_frame', 'reference', 'continuation']
 Count = Annotated[int, Field(strict=True, ge=0)]
 
@@ -42,6 +42,13 @@ class InputRules(Contract):
     outputResolutions: tuple[str, ...] = Field(default=(), description='Supported output resolution values.')
     referenceImageResolutions: tuple[str, ...] | None = Field(default=None, description='Supported reference image resolution values.')
     videoCapabilities: VideoCapabilities | None = Field(default=None, description='Supported video generation capabilities.')
+
+    aspectRatios: tuple[str, ...] | None = Field(default=None, exclude_if=lambda value: value is None,
+        description='Supported explicit video output aspect ratios; unset uses existing protocol rules.')
+    frameRoles: tuple[Literal['first_frame', 'last_frame'], ...] | None = Field(
+        default=None, exclude_if=lambda value: value is None, description='Supported explicit image frame slots.')
+    audioReferenceStandalone: bool | None = Field(default=None, exclude_if=lambda value: value is None,
+        description='Whether audio-only references are supported.')
 
     generateAudioOptions: tuple[Annotated[bool, Field(strict=True)], ...] | None = Field(
         default=None, min_length=1, max_length=2, exclude_if=lambda value: value is None,
@@ -97,7 +104,7 @@ class ModelConnection(Contract):
     @model_validator(mode='after')
     def connection(self):
         allowed = {'agent': {'openai'}, 'image': {'openai', 'volcengine', 'vllm_omni_segmentation'},
-                   'video': {'vllm_omni', 'volcengine', 'vllm_omni_segmentation', 'vllm_omni_depth'},
+                   'video': {'minimax_video_v2', 'vllm_omni', 'volcengine', 'vllm_omni_segmentation', 'vllm_omni_depth'},
                    'audio': {'openai', 'volcengine', 'vllm_omni_music', 'vllm_omni_score'}, 'vision': {'vllm_omni'}}
         if self.protocol not in allowed[self.kind]:
             raise ValueError('Protocol is incompatible with model category')

@@ -17,7 +17,7 @@ class Session(Model):
 
 class ModelConnection(Model):
     connectionType: Literal['api', 'self_hosted'] = 'api'
-    protocol: Literal['openai', 'volcengine', 'vllm_omni', 'vllm_omni_segmentation', 'vllm_omni_music', 'vllm_omni_depth', 'vllm_omni_score'] | None = None
+    protocol: Literal['openai', 'volcengine', 'minimax_video_v2', 'vllm_omni', 'vllm_omni_segmentation', 'vllm_omni_music', 'vllm_omni_depth', 'vllm_omni_score'] | None = None
     authMode: Literal['none', 'bearer'] | None = None
 
 
@@ -31,9 +31,16 @@ class ModelConfigInput(ModelConnection):
     videoCapabilities: VideoCapabilities | None = None
 
 
+class ModelOptions(Model):
+    inputModalities: list[AgentInputModality] | None = Field(default=None, min_length=1, max_length=2)
+    videoAdapter: VideoAdapter | None = None
+    videoCapabilities: VideoCapabilities | None = None
+
+
 class ModelBatchInput(ModelConfigInput):
     modelId: str = ""
     modelIds: list[str] = Field(min_length=1, max_length=200)
+    modelOptions: dict[str, ModelOptions] = Field(default_factory=dict, max_length=200)
     configId: UUID | None = None
 
 

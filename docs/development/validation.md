@@ -112,3 +112,23 @@ AI 多会话检查使用同一隔离 API，但启动 `creation_server.py` 时额
 - **故障注入未覆盖**：进程级重启打断进行中的生成、浏览器写盘失败，仅有测试替身级别的覆盖。
 - 模型密钥以明文保存在本地 `models.json`（POSIX 下目录 `0700`、文件 `0600`），
   接口响应不返回密钥；这是本地优先的取舍，不是加密存储。
+
+### MiniMax 官方视频适配
+
+```sh
+python -m pytest tests/test_minimax_video.py tests/test_vllm_omni_h3.py tests/test_generation_errors.py -q
+node --test tests/creationParameters.test.ts
+node tests/browser/minimax_h3.mjs
+```
+
+浏览器用例沿用本文的隔离 API／Vite 环境，只验证模型配置、真实图片、首尾帧引用、槽位修改及重载，不调用官方服务。Python 用例使用真实素材和 HTTP 替身验证协议、冻结输入、恢复不重复提交、错误回执和无鉴权 CDN 下载，不能代替真实账户生成验证。
+
+### 提供商与模型设置
+
+```sh
+python -m pytest tests/test_model_configs.py -q
+node --test tests/providerPresets.test.ts
+node tests/browser/provider_settings.mjs
+```
+
+浏览器用例使用隔离服务验证提供商预设、手动添加、逐模型图片输入能力、保存不推理、已有连接复用及取消草稿。不会向外部提供商发送请求或保存真实密钥。

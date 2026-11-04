@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { ModelLogo } from "./ModelLogo";
+import { useState, type ReactNode } from "react";
 import { CanvasIcon } from "./CanvasIcon";
 
 export interface ModelTestResult {
@@ -19,6 +20,8 @@ export function ModelPicker({
   onChange,
   onTest,
   results,
+  renderDetails,
+  fetchLabel,
 }: {
   modelPlaceholder: string;
   available: string[];
@@ -32,6 +35,8 @@ export function ModelPicker({
   onChange: (ids: string[]) => void;
   onTest?: (id: string) => void;
   results: Record<string, ModelTestResult>;
+  renderDetails?: (id: string) => ReactNode;
+  fetchLabel?: string;
 }) {
   const [query, setQuery] = useState("");
   const [onlySelected, setOnlySelected] = useState(false);
@@ -65,7 +70,10 @@ export function ModelPicker({
     setQuery("");
   };
   return (
-    <section className="cw-model-picker" aria-label="选择启用的模型">
+    <section
+      className={`cw-model-picker${renderDetails ? " has-capability-cards" : ""}`}
+      aria-label="选择启用的模型"
+    >
       <div className="cw-model-picker-heading">
         <div>
           <h4>模型</h4>
@@ -91,7 +99,9 @@ export function ModelPicker({
             disabled={disabled || !canFetch}
             onClick={onFetch}
           >
-            {loading ? "获取中…" : loaded ? "刷新列表" : "获取模型"}
+            {loading
+              ? "获取中…"
+              : (fetchLabel ?? (loaded ? "刷新列表" : "获取模型"))}
           </button>
         </div>
       </div>
@@ -147,7 +157,7 @@ export function ModelPicker({
           {error} 可重试或手动添加模型。
         </p>
       )}
-      {ids.length > 0 && (
+      {ids.length > 4 && (
         <>
           <div className="cw-model-filterbar">
             <label className="cw-model-search">
@@ -242,6 +252,7 @@ export function ModelPicker({
                     )
                   }
                 />
+                <ModelLogo modelId={id} />
                 <span title={id}>{id}</span>
               </label>
               {onTest && (
@@ -259,6 +270,7 @@ export function ModelPicker({
                       : "测试"}
                 </button>
               )}
+              {selected.includes(id) && renderDetails?.(id)}
               {results[id]?.status === "failed" && (
                 <p className="cw-model-feedback" role="alert">
                   {results[id].message}

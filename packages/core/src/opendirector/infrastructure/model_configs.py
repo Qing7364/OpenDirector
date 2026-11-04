@@ -24,7 +24,7 @@ def connection_fields(kind, connection_type='api', protocol=None, auth_mode=None
     protocol = protocol or ('openai' if kind == 'agent' or connection_type == 'self_hosted' and kind not in {'video', 'vision'}
                             else 'vllm_omni' if connection_type == 'self_hosted' else 'volcengine')
     allowed = {'agent': {'openai'}, 'image': {'openai', 'volcengine', 'vllm_omni_segmentation'},
-               'video': {'vllm_omni', 'volcengine', 'vllm_omni_segmentation', 'vllm_omni_depth'},
+               'video': {'minimax_video_v2', 'vllm_omni', 'volcengine', 'vllm_omni_segmentation', 'vllm_omni_depth'},
                'audio': {'openai', 'volcengine', 'vllm_omni_music', 'vllm_omni_score'}, 'vision': {'vllm_omni'}}
     auth_mode = auth_mode or ('none' if connection_type == 'self_hosted' else 'bearer')
     if protocol not in allowed.get(kind, set()) or auth_mode not in {'bearer', 'none'}:
@@ -180,9 +180,12 @@ class ModelConfigs:
 
     def save_many(self, kind: str, url: str, model_ids: list[str], api_key: str,
                   config_id: str | None = None, *, connection_type='api', protocol=None,
-                  auth_mode=None, video_adapter=None, video_capabilities=None, input_modalities=None) -> list[dict]:
+                  auth_mode=None, video_adapter=None, video_capabilities=None, input_modalities=None, model_options=None, capabilities_supplied=False) -> list[dict]:
         if kind not in MODEL_KINDS or not 1 <= len(model_ids) <= 200:
             raise ProjectError('请选择 1—200 个模型。')
+        model_options = model_options or {}
+        if set(model_options) - set(model_ids):
+            raise ProjectError('模型能力配置必须属于本次选择的模型。')
         connection = connection_fields(kind, connection_type, protocol, auth_mode)
         fields = [model_fields(url, model_id, api_key) for model_id in model_ids]
         if len({item['modelId'] for item in fields}) != len(fields):
@@ -212,8 +215,12 @@ class ModelConfigs:
                     old = existing
                 item = {'id': old['id'] if old else str(uuid4()), 'kind': kind, **field, **connection,
                         'apiKey': key, 'providerId': provider_id, 'videoAdapter': video_adapter or 'auto'}
-                item['inputModalities'] = agent_input_modalities(kind, input_modalities if input_modalities is not None else (old or {}).get('inputModalities'))
-                item['videoCapabilities'] = check_video_config(kind, connection['protocol'], item['videoAdapter'], video_capabilities)
+                options = model_options.get(field['modelId'], {})
+                item['videoAdapter'] = options.get('videoAdapter') or video_adapter or (old or {}).get('videoAdapter', 'auto')
+                modalities = options.get('inputModalities', input_modalities if input_modalities is not None else (old or {}).get('inputModalities'))
+                item['inputModalities'] = agent_input_modalities(kind, modalities)
+                caps = options.get('videoCapabilities', video_capabilities if capabilities_supplied or video_capabilities is not None else (old or {}).get('videoCapabilities'))
+                item['videoCapabilities'] = check_video_config(kind, connection['protocol'], item['videoAdapter'], caps)
                 profile = input_rules(item)['profile']
                 if item['videoCapabilities'] is not None and profile in {'fasth3-omni', 'vllm-omni-h3'}:
                     check_video_config(kind, 'vllm_omni', 'fasth3' if profile == 'fasth3-omni' else 'minimax_h3', item['videoCapabilities'])

@@ -23,7 +23,7 @@ from opendirector.integrations.providers import GenerationProviders
 from opendirector.integrations.vllm_omni import VllmOmniGeneration, h3_frames
 from opendirector.integrations.volcengine import VolcengineGeneration
 
-H3 = {'kind': 'video', 'url': 'http://gpu-box:8000/v1', 'modelId': 'MiniMaxAI/MiniMax-H3', 'apiKey': 'token'}
+H3 = {'protocol': 'vllm_omni', 'kind': 'video', 'url': 'http://gpu-box:8000/v1', 'modelId': 'MiniMaxAI/MiniMax-H3', 'apiKey': 'token'}
 
 
 def png():
@@ -56,7 +56,8 @@ def test_h3_profile_follows_the_served_model_on_any_host():
     # The continuation source is cached server-side, never uploaded: no video references.
     assert rules['maxVideos'] == 0 and 'video' in rules['allowedKinds']
     assert input_rules({**H3, 'url': 'https://example.test/omni/v1', 'modelId': 'MiniMax-H3'})['profile'] == 'vllm-omni-h3'
-    assert input_rules({**H3, 'modelId': 'MiniMaxAI/MiniMax-H3-Turbo'})['profile'] == 'compatible'
+    assert input_rules({**H3, 'modelId': 'MiniMaxAI/MiniMax-H3-Turbo'})['profile'] == 'standard-video'
+    assert input_rules({**H3, 'protocol': 'volcengine'})['profile'] == 'compatible'
     assert input_rules({**H3, 'kind': 'image'})['profile'] == 'compatible'
     providers = GenerationProviders(None)
     assert providers._profile_adapter(H3) is providers.vllm_omni

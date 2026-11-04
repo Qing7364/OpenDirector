@@ -1,3 +1,5 @@
+import { ModelLogo } from "./ModelLogo";
+import { HarnessLogo } from "./HarnessLogo";
 import "./agent-picker.css";
 import {
   useEffect,
@@ -42,7 +44,14 @@ export function AgentPicker({
   const harnesses = runtimes.filter(
     (item): item is RuntimeInfo & { id: Harness } =>
       item.group === "harness" && item.id !== "default",
-  );
+  ).sort((a, b) => {
+    const order: Harness[] = ["opencode", "deepseek", "jiuwenswarm", "codex", "claude"];
+    const rank = (id: Harness) => {
+      const index = order.indexOf(id);
+      return index < 0 ? order.length : index;
+    };
+    return rank(a.id) - rank(b.id);
+  });
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Harness | null>(null);
   const [setup, setSetup] = useState<Harness | null>(null);
@@ -322,7 +331,6 @@ export function AgentPicker({
           }
         }}
       >
-        <CanvasIcon name="cube" />
         <span>{title}</span>
         <CanvasIcon name="chevron" />
       </button>
@@ -457,7 +465,7 @@ export function AgentPicker({
                       }
                     }}
                   >
-                    <CanvasIcon name="cube" />
+                    <HarnessLogo harness={item.id} />
                     <strong>{item.label}</strong>
                     <small>{harnessDetail(item)}</small>
                     {runtime === item.id && <CanvasIcon name="check" />}
@@ -501,7 +509,7 @@ export function AgentPicker({
                         close();
                       }}
                     >
-                      <CanvasIcon name="model" />
+                      <ModelLogo modelId={item.modelId} />
                       <strong>{item.modelId}</strong>
                       {options.some(
                         (other) =>
@@ -570,6 +578,7 @@ export function AgentPicker({
                         close();
                       }}
                     >
+                      <ModelLogo modelId={item.modelId} />
                       <strong>{item.modelId}</strong>
                       {configuredModel(editingSpec.id)?.id === item.id && (
                         <CanvasIcon name="check" />

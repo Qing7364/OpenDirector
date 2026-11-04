@@ -4897,6 +4897,7 @@
             "enum": [
               "reference",
               "first_frame",
+              "last_frame",
               "continuation"
             ],
             "title": "Role",
@@ -6517,6 +6518,55 @@
             "default": null,
             "description": "Supported video generation capabilities."
           },
+          "aspectRatios": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Supported explicit video output aspect ratios; unset uses existing protocol rules.",
+            "title": "Aspectratios"
+          },
+          "frameRoles": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "first_frame",
+                    "last_frame"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Supported explicit image frame slots.",
+            "title": "Frameroles"
+          },
+          "audioReferenceStandalone": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Whether audio-only references are supported.",
+            "title": "Audioreferencestandalone"
+          },
           "generateAudioOptions": {
             "anyOf": [
               {
@@ -7837,6 +7887,7 @@
             "enum": [
               "openai",
               "volcengine",
+              "minimax_video_v2",
               "vllm_omni",
               "vllm_omni_segmentation",
               "vllm_omni_music",
@@ -7981,6 +8032,7 @@
             "enum": [
               "openai",
               "volcengine",
+              "minimax_video_v2",
               "vllm_omni",
               "vllm_omni_segmentation",
               "vllm_omni_music",
@@ -8114,6 +8166,7 @@
             "enum": [
               "openai",
               "volcengine",
+              "minimax_video_v2",
               "vllm_omni",
               "vllm_omni_segmentation",
               "vllm_omni_music",
@@ -8228,6 +8281,7 @@
             "enum": [
               "openai",
               "volcengine",
+              "minimax_video_v2",
               "vllm_omni",
               "vllm_omni_segmentation",
               "vllm_omni_music",
@@ -8671,6 +8725,7 @@
             "enum": [
               "reference",
               "first_frame",
+              "last_frame",
               "continuation"
             ],
             "title": "Role",
@@ -8726,7 +8781,7 @@
               }
             ],
             "default": null,
-            "description": "Subject media slot used by this reference.",
+            "description": "Subject media slot provenance only; omit for ordinary image references and explicit first_frame/last_frame assets. main does not mean first frame.",
             "title": "Subjectrole"
           }
         },
@@ -9699,6 +9754,7 @@
             "enum": [
               "reference",
               "first_frame",
+              "last_frame",
               "continuation"
             ],
             "title": "Role",
@@ -10028,6 +10084,7 @@
             "enum": [
               "reference",
               "first_frame",
+              "last_frame",
               "continuation"
             ],
             "title": "Role",
@@ -19032,6 +19089,7 @@
             "enum": [
               "reference",
               "first_frame",
+              "last_frame",
               "continuation"
             ],
             "title": "Role",
@@ -20742,6 +20800,55 @@
             "default": null,
             "description": "Supported video generation capabilities."
           },
+          "aspectRatios": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Supported explicit video output aspect ratios; unset uses existing protocol rules.",
+            "title": "Aspectratios"
+          },
+          "frameRoles": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "first_frame",
+                    "last_frame"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Supported explicit image frame slots.",
+            "title": "Frameroles"
+          },
+          "audioReferenceStandalone": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Whether audio-only references are supported.",
+            "title": "Audioreferencestandalone"
+          },
           "generateAudioOptions": {
             "anyOf": [
               {
@@ -22128,6 +22235,7 @@
             "enum": [
               "openai",
               "volcengine",
+              "minimax_video_v2",
               "vllm_omni",
               "vllm_omni_segmentation",
               "vllm_omni_music",
@@ -22261,6 +22369,7 @@
             "enum": [
               "openai",
               "volcengine",
+              "minimax_video_v2",
               "vllm_omni",
               "vllm_omni_segmentation",
               "vllm_omni_music",
@@ -22398,6 +22507,7 @@
             "enum": [
               "openai",
               "volcengine",
+              "minimax_video_v2",
               "vllm_omni",
               "vllm_omni_segmentation",
               "vllm_omni_music",
@@ -22515,6 +22625,7 @@
             "enum": [
               "openai",
               "volcengine",
+              "minimax_video_v2",
               "vllm_omni",
               "vllm_omni_segmentation",
               "vllm_omni_music",
@@ -22968,6 +23079,7 @@
             "enum": [
               "reference",
               "first_frame",
+              "last_frame",
               "continuation"
             ],
             "title": "Role",
@@ -23023,7 +23135,7 @@
               }
             ],
             "default": null,
-            "description": "Subject media slot used by this reference.",
+            "description": "Subject media slot provenance only; omit for ordinary image references and explicit first_frame/last_frame assets. main does not mean first frame.",
             "title": "Subjectrole"
           }
         },
@@ -24033,6 +24145,7 @@
             "enum": [
               "reference",
               "first_frame",
+              "last_frame",
               "continuation"
             ],
             "title": "Role",
@@ -24372,6 +24485,7 @@
             "enum": [
               "reference",
               "first_frame",
+              "last_frame",
               "continuation"
             ],
             "title": "Role",

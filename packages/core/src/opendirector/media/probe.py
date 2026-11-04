@@ -15,15 +15,15 @@ def require_ffprobe():
         raise ProjectError("视频和音频需要 FFmpeg：请安装并确保 ffprobe 在 PATH 中，然后重启服务。", 409)
 
 
-def probe(data: bytes, suffix: str, kind: str):
+def probe(data: bytes, suffix: str, kind: str, *, include_codecs=False):
     require_ffprobe()
     with tempfile.TemporaryDirectory(prefix="opendirector-probe-") as folder:
         file = Path(folder) / ("input" + suffix)
         file.write_bytes(data)
-        return probe_file(file, kind)
+        return probe_file(file, kind, include_codecs=include_codecs)
 
 
-def probe_file(file: Path, kind: str, *, include_container=False):
+def probe_file(file: Path, kind: str, *, include_container=False, include_codecs=False):
     """Inspect an existing staged file without copying it into memory."""
     require_ffprobe()
     try:
@@ -37,6 +37,8 @@ def probe_file(file: Path, kind: str, *, include_container=False):
         if not math.isfinite(duration) or duration <= 0:
             raise ValueError()
         common = {"kind": kind, "durationMs": round(duration * 1000)}
+        if include_codecs:
+            common.update(codec=stream['codec_name'], audioCodecs=[item['codec_name'] for item in value['streams'] if item['codec_type'] == 'audio'])
         if include_container:
             common.update(durationSeconds=duration, container=value['format']['format_name'],
                           majorBrand=value.get('format', {}).get('tags', {}).get('major_brand', '').strip())

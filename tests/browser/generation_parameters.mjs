@@ -1,3 +1,4 @@
+import { chooseGenerationModel } from "./model_picker.mjs";
 /** UI -> saved intent -> frozen request -> real media -> reload, with isolated models. */
 import assert from "node:assert/strict";
 const { chromium } = await import(
@@ -87,9 +88,7 @@ try {
         exact: true,
       })
       .click();
-    await page
-      .getByRole("combobox", { name: "生成模型", exact: true })
-      .selectOption(`config:${config.id}`);
+    await chooseGenerationModel(page, `config:${config.id}`);
     await page
       .getByRole("textbox", {
         name: kind === "audio" ? "朗读文本" : "生成提示词",
@@ -157,7 +156,7 @@ try {
     assert.equal(
       await page
         .getByRole("combobox", { name: "生成模型", exact: true })
-        .inputValue(),
+        .getAttribute("data-value"),
       `config:${config.id}`,
     );
     if (kind === "audio") {

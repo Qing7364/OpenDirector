@@ -123,7 +123,9 @@ def create_app(store: LocalProjects | None = None, chat_provider=None, generatio
                                        str(value.configId) if value.configId else None, connection_type=value.connectionType,
                                        protocol=value.protocol, auth_mode=value.authMode, video_adapter=value.videoAdapter,
                                        video_capabilities=value.videoCapabilities.model_dump(exclude_none=True) if value.videoCapabilities else None,
-                                       input_modalities=value.inputModalities)
+                                       input_modalities=value.inputModalities,
+                                       model_options={key: item.model_dump(exclude_unset=True) for key, item in value.modelOptions.items()},
+                                       capabilities_supplied='videoCapabilities' in value.model_fields_set)
 
     @app.post('/api/model-configs/discover')
     async def discover_models(value: ModelDiscoveryRequest):

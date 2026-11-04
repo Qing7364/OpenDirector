@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from opendirector.domain.projects import ProjectError
+from opendirector.domain.minimax_models import MINIMAX_MODELS, minimax_capabilities
 
 VideoAdapter = Literal['auto', 'fasth3', 'minimax_h3', 'standard']
 Second = Annotated[StrictInt, Field(ge=1, le=60)]
@@ -54,6 +55,9 @@ def preset_capabilities(profile):
         return {'outputs': [{'resolution': label, 'durations': list(range(4, 16)), 'width': width, 'height': height}
                             for label, width, height in [('480P', 832, 480), ('768P', 1344, 768)]],
                 'defaultResolution': 'auto', 'defaultDuration': 5, 'dimensionStep': 32}
+    if profile == 'minimax-h3-official':
+        return {'outputs': [{'resolution': label, 'durations': list(range(4, 16))} for label in ['768P', '2K']],
+                'defaultResolution': '768P', 'defaultDuration': 5, 'dimensionStep': 2}
     if profile == 'seedance-2.0':
         return {'outputs': [{'resolution': label, 'durations': list(range(4, 16))}
                             for label in ['480P', '720P', '1080P', '4K']],
@@ -63,6 +67,15 @@ def preset_capabilities(profile):
 
 def capability_fields(config, rules):
     capabilities = config.get('videoCapabilities') or preset_capabilities(rules['profile'])
+    if rules['profile'] == 'minimax-h3-official' and config['modelId'] in MINIMAX_MODELS:
+        native = minimax_capabilities(config['modelId'])
+        if config.get('videoCapabilities'):
+            allowed = {item['resolution']: item['durations'] for item in native['outputs']}
+            if any(item['resolution'] not in allowed or any(second not in allowed[item['resolution']] for second in item['durations'])
+                   for item in capabilities['outputs']):
+                raise ProjectError('输出规格超出所选 MiniMax 型号支持的范围。')
+        else:
+            capabilities = native
     rules['videoCapabilities'] = capabilities
     rules['outputResolutions'] = [item['resolution'] for item in capabilities['outputs']] if capabilities else []
     return rules
@@ -84,6 +97,12 @@ def check_video_config(kind, protocol, adapter, capabilities):
             capabilities = VideoCapabilities.model_validate(capabilities).model_dump(exclude_none=True)
         except ValueError:
             raise ProjectError('视频输出规格无效，请检查分辨率、尺寸、时长和默认值。') from None
+        if protocol == 'minimax_video_v2':
+            if any(item['resolution'].upper() not in {'480P', '768P', '2K'} or
+                   any(second not in range(4, 16) for second in item['durations']) or
+                   item.get('width') is not None or item.get('height') is not None for item in capabilities['outputs']):
+                raise ProjectError('MiniMax-H3 官方接口支持 480P、768P、2K 和 4—15 秒，具体取决于型号，不接受自定义像素尺寸。')
+            return capabilities
         if adapter in {'fasth3', 'minimax_h3'}:
             if any(not 4 <= second <= 15 for item in capabilities['outputs'] for second in item['durations']):
                 raise ProjectError('当前 H3 适配支持 4–15 秒，不能通过能力配置扩大此范围。')

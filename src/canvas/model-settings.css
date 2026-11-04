@@ -637,3 +637,17 @@
 .cw-model-modalities legend { padding: 0 8px 0 0; font-size: var(--settings-label-size); }
 .cw-model-modalities label { display: flex; align-items: center; gap: 6px; font-size: var(--settings-control-size); }
 .cw-model-modalities .cw-model-note { flex-basis: 100%; margin: 0; }
+
+.cw-provider-reuse { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px; border: 1px solid var(--settings-border); border-radius: 8px; font-size: 12px; }
+.cw-provider-reuse small { width: 100%; opacity: .65; }
+.cw-provider-key { border: 0; padding: 0; margin: 0; min-width: 0; }
+.cw-model-capability-card { flex-basis: 100%; width: 100%; border-top: 1px solid var(--settings-border); margin-top: 8px; padding-top: 10px; }
+.cw-model-capability-card > summary { cursor: pointer; font-size: 12px; color: var(--settings-muted); padding: 2px 0; }
+.cw-model-capability-card fieldset { border: 0; padding: 12px 0 0; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.cw-model-capability-facts { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; }
+.cw-model-capability-facts > span { padding: 5px 8px; border-radius: 5px; background: var(--settings-hover); }
+.cw-model-capability-facts small { flex-basis: 100%; color: var(--settings-muted); }
+.cw-model-picker.has-capability-cards .cw-model-options { max-height: none; }
+
+.cw-model-editor-scroll > .cw-model-connection-details { margin: 0 0 16px; }
+.cw-model-editor-scroll > .cw-provider-key { margin: 0 0 18px; }

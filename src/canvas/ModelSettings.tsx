@@ -1,3 +1,5 @@
+import { ModelLogo } from "./ModelLogo";
+import { providerLabel } from "./providerPresets";
 import { useState } from "react";
 import { errorMessage } from "../backend/api.ts";
 import { MODEL_KINDS, type BackendModels } from "../backend/models.ts";
@@ -148,6 +150,7 @@ export function ModelSettings({ catalog }: { catalog: BackendModels }) {
                           title={item.modelId}
                           key={item.id}
                         >
+                          <ModelLogo modelId={item.modelId} />
                           {item.modelId}
                         </span>
                       ))}
@@ -155,19 +158,7 @@ export function ModelSettings({ catalog }: { catalog: BackendModels }) {
                     </div>
                     <div className="cw-model-service-bottom">
                       <span>
-                        {model.protocol === "volcengine"
-                          ? "火山引擎"
-                          : model.protocol === "vllm_omni_segmentation"
-                            ? "视觉分割"
-                            : model.protocol === "vllm_omni_depth"
-                              ? "视频深度"
-                              : model.protocol === "vllm_omni_score"
-                                ? "音乐扒谱"
-                                : model.protocol === "vllm_omni_music"
-                                  ? "音乐生成"
-                                  : model.protocol === "vllm_omni"
-                                    ? "视频接口"
-                                    : "OpenAI 兼容"}{" "}
+                        {providerLabel(model)}{" "}
                         ·{" "}
                         {model.authMode === "none" ? "无需密钥" : "密钥已配置"}
                       </span>

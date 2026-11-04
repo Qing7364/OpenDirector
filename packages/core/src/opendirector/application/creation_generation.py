@@ -117,6 +117,7 @@ class CreationGeneration(GenerationRuntime):
             kind=spec.kind, status=job.status, phase=job.phase, recovery=job.recovery, resumeAllowed=job.resumeAllowed,
             modelConfigId=str(model.modelConfigId), model=model.modelId, baseURL=model.url, protocol=model.protocol,
             title=spec.prompt[:80] or spec.kind, prompt=spec.prompt, promptContent=content, referenceIds=reference_ids,
+            referenceRoles=[{'assetId': str(r.asset.assetId), 'role': r.role} for r in job.inputSnapshot.references if r.transmission != 'context_only'],
             referenceInputs={'profile': input_rules({**model.model_dump(), 'kind': model.kind})['profile']},
             videoMode=spec.parameters.videoMode if spec.kind == 'video' else 'first_frame', parameters=job.adapterParameters,
             externalTaskId=job.externalTaskId, assetId=str(job.asset.assetId) if job.asset else None,
@@ -180,7 +181,15 @@ class CreationGeneration(GenerationRuntime):
                     raise ProjectError('指定视频比例前，请在模型接入中配置输出规格。', 422)
                 preferred = next((item for item in choices if item['resolution'] == caps.get('defaultResolution')), choices[0])
                 output['resolution'] = preferred['resolution']
-            apply_video_resolution(params, node, records, config, output)
+            if config['protocol'] == 'minimax_video_v2':
+                params['resolution'] = (intent.get('resolution') if intent.get('resolution') != 'auto' else None) or rules['videoCapabilities']['defaultResolution']
+                has_frames = node['videoMode'] == 'first_frame' and any(records[key]['kind'] == 'image' for key in node['referenceIds'])
+                if has_frames:
+                    params['ratio'] = 'adaptive'
+                elif params['ratio'] == 'adaptive' and not any(records[key]['kind'] in {'image', 'video', 'audio'} for key in node['referenceIds']):
+                    params['ratio'] = '16:9'
+            else:
+                apply_video_resolution(params, node, records, config, output)
             if rules['profile'] == 'vllm-omni-h3':
                 from opendirector.integrations.vllm_omni import FPS, h3_frames
                 params.update(fps=FPS, num_frames=h3_frames(params['duration']))

@@ -1,0 +1,174 @@
+{
+  "logos": [
+    {
+      "org": "MiniMaxAI",
+      "name": "MiniMax",
+      "file": "minimax.svg"
+    },
+    {
+      "org": "deepseek-ai",
+      "name": "DeepSeek",
+      "file": "deepseek.svg"
+    },
+    {
+      "org": "moonshotai",
+      "name": "Kimi",
+      "file": "kimi.svg"
+    },
+    {
+      "org": "Qwen",
+      "name": "Qwen",
+      "file": "qwen.svg"
+    },
+    {
+      "org": "zai-org",
+      "name": "GLM",
+      "file": "zai.svg"
+    },
+    {
+      "org": "openai",
+      "name": "OpenAI",
+      "file": "openai.svg"
+    },
+    {
+      "org": "google",
+      "name": "Google",
+      "file": "google.svg"
+    },
+    {
+      "org": "meta-llama",
+      "name": "Meta",
+      "file": "meta.svg"
+    },
+    {
+      "org": "microsoft",
+      "name": "Microsoft",
+      "file": "microsoft.svg"
+    },
+    {
+      "org": "mistralai",
+      "name": "Mistral AI",
+      "file": "mistral.svg"
+    },
+    {
+      "org": "tencent",
+      "name": "Hunyuan",
+      "file": "hunyuan.svg"
+    },
+    {
+      "org": "Wan-AI",
+      "name": "Wan",
+      "file": "alibaba.svg"
+    },
+    {
+      "org": "ByteDance-Seed",
+      "name": "ByteDance",
+      "file": "bytedance.svg"
+    },
+    {
+      "org": "Lightricks",
+      "name": "Lightricks",
+      "file": "lightricks.svg"
+    },
+    {
+      "org": "black-forest-labs",
+      "name": "Black Forest Labs",
+      "file": "bfl.svg"
+    },
+    {
+      "org": "stabilityai",
+      "name": "Stability AI",
+      "file": "stability.svg"
+    },
+    {
+      "org": "anthropic",
+      "name": "Anthropic",
+      "file": "anthropic.svg"
+    },
+    {
+      "org": "arcee-ai",
+      "name": "Arcee AI",
+      "file": "arcee.svg"
+    },
+    {
+      "org": "baidu",
+      "name": "Baidu",
+      "file": "baidu.svg"
+    },
+    {
+      "org": "dots-studio",
+      "name": "Dots",
+      "file": "dotsstudio.svg"
+    },
+    {
+      "org": "fishaudio",
+      "name": "Fish Audio",
+      "file": "fishaudio.svg"
+    },
+    {
+      "org": "ibm-granite",
+      "name": "IBM",
+      "file": "ibm.svg"
+    },
+    {
+      "org": "inclusionAI",
+      "name": "inclusionAI",
+      "file": "antgroup.svg"
+    },
+    {
+      "org": "IndexTeam",
+      "name": "Index",
+      "file": "bilibiliindex.svg"
+    },
+    {
+      "org": "internlm",
+      "name": "InternLM",
+      "file": "internlm.svg"
+    },
+    {
+      "org": "jinaai",
+      "name": "Jina AI",
+      "file": "jina.svg"
+    },
+    {
+      "org": "LiquidAI",
+      "name": "Liquid AI",
+      "file": "liquid.svg"
+    },
+    {
+      "org": "meituan-longcat",
+      "name": "LongCat",
+      "file": "longcat.svg"
+    },
+    {
+      "org": "meta-models",
+      "name": "Muse",
+      "file": "muse.svg"
+    },
+    {
+      "org": "nvidia",
+      "name": "NVIDIA",
+      "file": "nvidia.svg"
+    },
+    {
+      "org": "poolside",
+      "name": "Poolside",
+      "file": "poolside.svg"
+    },
+    {
+      "org": "reflection",
+      "name": "Reflection AI",
+      "file": "reflection.svg"
+    },
+    {
+      "org": "stepfun-ai",
+      "name": "StepFun",
+      "file": "stepfun.svg"
+    },
+    {
+      "org": "XiaomiMiMo",
+      "name": "MiMo",
+      "file": "xiaomimimo.svg"
+    }
+  ]
+}

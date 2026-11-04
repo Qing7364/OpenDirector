@@ -1,3 +1,4 @@
+import { chooseGenerationModel } from "./model_picker.mjs";
 /** Isolated model double + real project storage. Deliberately stalled network reads. */
 import assert from "node:assert/strict";
 const { chromium } = await import(
@@ -81,11 +82,7 @@ async function setup(kind = "image") {
       exact: true,
     })
     .click();
-  await page
-    .getByRole("combobox", { name: "生成模型", exact: true })
-    .selectOption(
-      kind === "video" ? `config:${config.id}` : { label: "fixture-image" },
-    );
+  await chooseGenerationModel(page, kind === "video" ? `config:${config.id}` : { label: "fixture-image" });
   await page
     .getByRole("textbox", { name: "生成提示词", exact: true })
     .fill("Feedback probe");

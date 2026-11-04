@@ -1,3 +1,5 @@
+import { modelDescription } from "./modelDescriptions";
+import { ModelLogo } from "./ModelLogo";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { CanvasIcon as Icon } from "./CanvasIcon";
 import type { ModelConfig, ModelKind } from "../backend/rules";
@@ -24,17 +26,12 @@ function modelOptions(models: ModelConfig[], kind: ModelKind) {
     );
     return {
       id: model.id,
+      modelId: model.modelId,
       label: duplicate ? `${model.modelId} · ${host}` : model.modelId,
-      description: host,
+      description: [modelDescription(model), host].filter(Boolean).join(" · "),
     };
   });
 }
-const icons = {
-  agent: "cube",
-  video: "video",
-  image: "image",
-  audio: "audio",
-} as const;
 interface Option {
   id: string;
   label: string;
@@ -176,7 +173,6 @@ export function ModelPicker({
           }
         }}
       >
-        <Icon name="cube" />
         <span>{includeAgent ? agent?.label ?? "选择模型" : "媒体模型"}</span>
         <Icon name="chevron" />
       </button>
@@ -267,7 +263,7 @@ export function ModelPicker({
                     }}
                   >
                     <span className="model-picker-icon">
-                      <Icon name={icons[kind]} />
+                      <ModelLogo modelId={option.modelId} />
                     </span>
                     <span className="model-picker-copy">
                       <strong>{option.label}</strong>

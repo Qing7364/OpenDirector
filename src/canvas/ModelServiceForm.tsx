@@ -1,23 +1,25 @@
+import { ProviderPicker } from "./ProviderPicker";
 import { useState, type FormEvent } from "react";
 import { errorMessage } from "../backend/api.ts";
 import {
   MODEL_KINDS,
   discoverModels,
-  readModelCapabilities,
   testAgentModel,
   type BackendModels,
   type ModelConfigInput,
+  type ModelOptions,
 } from "../backend/models.ts";
 import {
   isSegmentationModel,
   type ModelConfig,
   type ModelKind,
 } from "../backend/rules.ts";
-import { createVideoCapabilities } from "../backend/videoCapabilities.ts";
+import { ModelCapabilityCard } from "./ModelCapabilityCard";
 import {
-  VideoCapabilitiesEditor,
-  capabilityDraft,
-} from "./VideoCapabilitiesEditor";
+  PROVIDER_PRESETS,
+  matchingConnections,
+  providerPresetFor,
+} from "./providerPresets";
 import { CanvasIcon } from "./CanvasIcon";
 import { ModelPicker, type ModelTestResult } from "./ModelPicker";
 
@@ -34,6 +36,7 @@ const PROTOCOLS: Record<
   ],
   video: [
     ["vllm_omni", "异步 /videos 接口（含 vLLM-Omni）"],
+    ["minimax_video_v2", "MiniMax 官方视频 V2"],
     ["volcengine", "火山方舟 / Agent Plan"],
     ["vllm_omni_segmentation", "vLLM-Omni 分割接口（SAM 3）"],
     ["vllm_omni_depth", "vLLM-Omni 深度接口（Video Depth Anything）"],
@@ -77,6 +80,22 @@ export function ModelServiceForm({
   catalog: BackendModels;
   onClose: () => void;
 }) {
+  const [connection, setConnection] = useState(existing);
+  const [presetId, setPresetId] = useState(
+    existing
+      ? providerPresetFor(existing)
+      : kind === "video"
+        ? "vllm-omni-video"
+        : kind === "image"
+          ? "vllm-omni-image"
+          : kind === "audio"
+            ? "vllm-omni-speech"
+            : "custom",
+  );
+  const [modelOptions, setModelOptions] = useState<
+    Record<string, ModelOptions>
+  >({});
+  const [modelErrors, setModelErrors] = useState<Record<string, string>>({});
   const [value, setValue] = useState<ModelConfigInput>({
     kind,
     url: existing?.url ?? "",
@@ -89,7 +108,8 @@ export function ModelServiceForm({
         : (existing?.protocol ?? PROTOCOLS[kind][0][0]),
     authMode: existing?.authMode ?? "none",
     videoAdapter: existing?.videoAdapter ?? "auto",
-    inputModalities: kind === "agent" ? existing?.inputModalities ?? ["text"] : undefined,
+    inputModalities:
+      kind === "agent" ? (existing?.inputModalities ?? ["text"]) : undefined,
   });
   const [selectedModels, setSelectedModels] = useState<string[]>(() =>
     existing
@@ -113,36 +133,42 @@ export function ModelServiceForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showKey, setShowKey] = useState(false);
-  const [outputDraft, setOutputDraft] = useState(() =>
-    capabilityDraft(
-      existing?.videoCapabilities ?? existing?.inputRules.videoCapabilities,
-      Boolean(existing?.videoCapabilities),
-    ),
-  );
   const [connectionOpen, setConnectionOpen] = useState(!existing);
   const locked = busy || discovering || testing;
   const segmentation = value.protocol === "vllm_omni_segmentation";
   const depth = value.protocol === "vllm_omni_depth";
   const score = value.protocol === "vllm_omni_score";
   const placeholders =
-    value.protocol === "vllm_omni_music"
-      ? MUSIC_PLACEHOLDERS
-      : score
-        ? SCORE_PLACEHOLDERS
-        : depth
-          ? DEPTH_PLACEHOLDERS
-          : PLACEHOLDERS[segmentation ? "vision" : kind];
+    value.protocol === "minimax_video_v2"
+      ? ["https://api.minimax.cn/v2", "MiniMax-H3"]
+      : value.protocol === "vllm_omni_music"
+        ? MUSIC_PLACEHOLDERS
+        : score
+          ? SCORE_PLACEHOLDERS
+          : depth
+            ? DEPTH_PLACEHOLDERS
+            : PLACEHOLDERS[segmentation ? "vision" : kind];
   const hasSavedKey = Boolean(
-    existing &&
-    existing.authMode === "bearer" &&
-    existing.url === value.url.trim(),
+    connection &&
+    connection.authMode === "bearer" &&
+    connection.url === value.url.trim(),
   );
   const canFetch = Boolean(
     value.url.trim() &&
     (value.authMode === "none" || value.apiKey.trim() || hasSavedKey),
   );
   const update = (patch: Partial<ModelConfigInput>) => {
-    setValue((current) => ({ ...current, ...patch }));
+    setValue((current) => ({
+      ...current,
+      ...patch,
+      ...(patch.protocol === "minimax_video_v2"
+        ? ({
+            connectionType: "api",
+            authMode: "bearer",
+            videoAdapter: "auto",
+          } as const)
+        : {}),
+    }));
     if (
       patch.url !== undefined ||
       patch.apiKey !== undefined ||
@@ -155,14 +181,26 @@ export function ModelServiceForm({
       setDiscoveryError("");
       setResults({});
     }
+    if (patch.protocol !== undefined && patch.protocol !== value.protocol) {
+      setModelOptions(
+        Object.fromEntries(
+          selectedModels.map((id) => [
+            id,
+            { videoAdapter: "auto", videoCapabilities: null },
+          ]),
+        ),
+      );
+      setModelErrors({});
+    }
     setError("");
   };
   const loadModels = async () => {
     setDiscovering(true);
     setDiscoveryError("");
     try {
-      const result = await discoverModels(value, existing?.id);
+      const result = await discoverModels(value, connection?.id);
       setModelIds(result.models);
+      if (value.protocol === "minimax_video_v2" && !connection) setSelectedModels(result.models);
       setLoaded(true);
       setConnectionOpen(false);
     } catch (failure) {
@@ -179,8 +217,8 @@ export function ModelServiceForm({
     }));
     try {
       const result = await testAgentModel(
-        { ...value, modelId: id },
-        existing?.id,
+        { ...value, ...modelOptions[id], modelId: id },
+        connection?.id,
       );
       setResults((current) => ({
         ...current,
@@ -200,24 +238,26 @@ export function ModelServiceForm({
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!selectedModels.length || locked) return;
+    if (
+      !selectedModels.length ||
+      locked ||
+      selectedModels.some((id) => modelErrors[id])
+    )
+      return;
     setBusy(true);
     setError("");
     try {
-      const videoCapabilities =
-        kind === "video" && !segmentation && !depth && outputDraft.custom
-          ? createVideoCapabilities(
-              outputDraft.outputs,
-              outputDraft.defaultResolution,
-              Number(outputDraft.defaultDuration),
-              outputDraft.dimensionStep,
-              value.videoAdapter,
-            )
-          : null;
+      const { inputModalities, videoAdapter, videoCapabilities, ...shared } =
+        value;
       await catalog.saveMany(
-        { ...value, videoCapabilities },
+        shared,
         selectedModels,
-        existing?.id,
+        connection?.id,
+        Object.fromEntries(
+          selectedModels
+            .filter((id) => modelOptions[id])
+            .map((id) => [id, modelOptions[id]!]),
+        ),
       );
       onClose();
     } catch (failure) {
@@ -226,26 +266,69 @@ export function ModelServiceForm({
       setBusy(false);
     }
   };
-  const loadCapabilities = async (source: "preset" | "service") => {
-    setBusy(true);
+  const chooseProvider = (id: string) => {
+    const preset = PROVIDER_PRESETS.find((item) => item.id === id);
+    setPresetId(id);
+    setConnection(undefined);
+    const officialModels = ["MiniMax-H3", "MiniMax-H3-Highspeed", "MiniMax-H3-Lite", "MiniMax-H3-Max"];
+    setSelectedModels(id === "minimax-video" ? officialModels : []);
+    setModelIds(id === "minimax-video" ? officialModels : []);
+    setModelOptions({});
+    setModelErrors({});
+    setLoaded(false);
+    setResults({});
+    setDiscoveryError("");
     setError("");
-    try {
-      const result = await readModelCapabilities(
-        { ...value, modelId: selectedModels[0] ?? "" },
-        existing?.id,
-        source,
-      );
-      if (!result.videoCapabilities)
-        throw new Error("未识别到输出预设，请开启自定义输出规格并填写。");
-      setOutputDraft(
-        capabilityDraft(result.videoCapabilities, source === "service"),
-      );
-    } catch (failure) {
-      setError(errorMessage(failure));
-    } finally {
-      setBusy(false);
-    }
+    setConnectionOpen(id === "custom" || !preset || preset.connectionType === "self_hosted");
+    setValue({
+      kind,
+      modelId: "",
+      apiKey: "",
+      videoAdapter: "auto",
+      url: preset?.url ?? "",
+      protocol: preset?.protocol ?? PROTOCOLS[kind][0][0],
+      connectionType: preset?.connectionType ?? "self_hosted",
+      authMode: preset?.authMode ?? "none",
+    });
   };
+  const reuseConnection = (model: ModelConfig) => {
+    setConnection(model);
+    setValue({
+      kind,
+      url: model.url,
+      modelId: model.modelId,
+      connectionType: model.connectionType,
+      inputModalities: model.inputModalities,
+      videoAdapter: model.videoAdapter,
+      videoCapabilities: model.videoCapabilities,
+      protocol: model.protocol ?? PROTOCOLS[kind][0][0],
+      authMode: model.authMode ?? "bearer",
+      apiKey: "",
+    });
+    const peers = catalog.models.filter(
+      (item) =>
+        item.kind === kind &&
+        (model.providerId
+          ? item.providerId === model.providerId
+          : item.id === model.id),
+    );
+    setSelectedModels(peers.map((item) => item.modelId));
+    setModelIds(peers.map((item) => item.modelId));
+    setModelOptions({});
+    setModelErrors({});
+    setResults({});
+    setConnectionOpen(false);
+  };
+  const connections = matchingConnections(catalog.models, kind, value);
+  const savedModel = (id: string) =>
+    catalog.models.find(
+      (model) =>
+        model.modelId === id &&
+        connection &&
+        (connection.providerId
+          ? model.providerId === connection.providerId
+          : model.id === connection.id),
+    );
   return (
     <form
       className="cw-model-editor"
@@ -270,13 +353,35 @@ export function ModelServiceForm({
         </div>
       </header>
       <div className="cw-model-editor-scroll">
+        <ProviderPicker
+          kind={kind}
+          value={presetId}
+          disabled={locked}
+          onChange={chooseProvider}
+        />
+        {!connection && connections.length > 0 && (
+          <div className="cw-provider-reuse">
+            <span>已有相同地址的连接</span>
+            {connections.map((model) => (
+              <button
+                key={model.id}
+                type="button"
+                className="cw-settings-button"
+                onClick={() => reuseConnection(model)}
+              >
+                复用已保存连接 · {model.modelId}
+              </button>
+            ))}
+            <small>不复用则保存为独立连接。</small>
+          </div>
+        )}
         <details
           className="cw-model-connection-details"
           open={connectionOpen}
           onToggle={(event) => setConnectionOpen(event.currentTarget.open)}
         >
           <summary>
-            <span>连接设置</span>
+            <span>高级连接设置</span>
             <span title={value.url}>
               {connectionOpen ? "地址与鉴权" : value.url || "尚未配置"}
             </span>
@@ -287,47 +392,6 @@ export function ModelServiceForm({
             aria-label="连接信息"
             disabled={locked}
           >
-            <div className="cw-model-connection-grid">
-              <label>
-                接口协议
-                <select
-                  value={value.protocol}
-                  onChange={(event) =>
-                    update({
-                      protocol: event.target
-                        .value as ModelConfigInput["protocol"],
-                      videoAdapter: "auto",
-                    })
-                  }
-                >
-                  {PROTOCOLS[kind].map(([id, label]) => (
-                    <option key={id} value={id}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                接入方式
-                <select
-                  value={value.connectionType}
-                  onChange={(event) => {
-                    const connectionType = event.target
-                      .value as ModelConfigInput["connectionType"];
-                    update({
-                      connectionType,
-                      authMode:
-                        connectionType === "self_hosted" ? "none" : "bearer",
-                    });
-                  }}
-                >
-                  <option value="self_hosted">
-                    自部署服务（vLLM / vLLM-Omni）
-                  </option>
-                  <option value="api">服务商 API</option>
-                </select>
-              </label>
-            </div>
             <label>
               服务地址（Base URL）
               <input
@@ -339,61 +403,64 @@ export function ModelServiceForm({
                 onChange={(event) => update({ url: event.target.value })}
               />
             </label>
-            <div className="cw-model-key-heading">
-              <label htmlFor="service-api-key">API Key</label>
-              <label className="cw-model-no-auth">
-                <input
-                  type="checkbox"
-                  checked={value.authMode === "none"}
-                  onChange={(event) =>
-                    update({
-                      authMode: event.target.checked ? "none" : "bearer",
-                    })
-                  }
-                />
-                无需密钥
-              </label>
-            </div>
-            <div className="cw-model-key-input">
-              <input
-                id="service-api-key"
-                type={showKey ? "text" : "password"}
-                disabled={value.authMode === "none"}
-                required={value.authMode === "bearer" && !hasSavedKey}
-                maxLength={8192}
-                value={value.authMode === "none" ? "" : value.apiKey}
-                autoComplete="off"
-                spellCheck={false}
-                placeholder={
-                  value.authMode === "none"
-                    ? "此服务无需鉴权"
-                    : hasSavedKey
-                      ? "已保存密钥，留空保持不变"
-                      : "输入服务提供的 API Key"
-                }
-                onChange={(event) => update({ apiKey: event.target.value })}
-              />
-              <button
-                type="button"
-                disabled={value.authMode === "none"}
-                aria-label={showKey ? "隐藏密钥" : "显示密钥"}
-                onClick={() => setShowKey(!showKey)}
-              >
-                {showKey ? "隐藏" : "显示"}
-              </button>
-            </div>
             <p className="cw-model-note">
               自部署服务通常填写 /v1 地址；通过 SSH 隧道连接时填写本地转发地址。
             </p>
           </fieldset>
         </details>
-        {kind === "agent" && <fieldset className="cw-model-modalities" disabled={locked}>
-          <legend>输入能力</legend>
-          <label><input type="checkbox" checked disabled />文本</label>
-          <label><input type="checkbox" checked={value.inputModalities?.includes("image") ?? false}
-            onChange={event => update({inputModalities: event.target.checked ? ["text", "image"] : ["text"]})} />图片</label>
-          <p className="cw-model-note">应用于本次选中的模型。仅在模型及接口支持图片理解时启用。</p>
-        </fieldset>}
+        <fieldset
+          className="cw-model-connection cw-provider-key"
+          disabled={locked}
+        >
+          <div className="cw-model-key-heading">
+            <label htmlFor="service-api-key">API Key</label>
+            <label className="cw-model-no-auth">
+              <input
+                type="checkbox"
+                checked={value.authMode === "none"}
+                onChange={(event) =>
+                  update({
+                    authMode: event.target.checked ? "none" : "bearer",
+                  })
+                }
+              />
+              无需密钥
+            </label>
+          </div>
+          <div className="cw-model-key-input">
+            <input
+              id="service-api-key"
+              type={showKey ? "text" : "password"}
+              disabled={value.authMode === "none"}
+              required={value.authMode === "bearer" && !hasSavedKey}
+              maxLength={8192}
+              value={value.authMode === "none" ? "" : value.apiKey}
+              autoComplete="off"
+              spellCheck={false}
+              placeholder={
+                value.authMode === "none"
+                  ? "此服务无需鉴权"
+                  : hasSavedKey
+                    ? "已保存密钥，留空保持不变"
+                    : "输入服务提供的 API Key"
+              }
+              onChange={(event) => update({ apiKey: event.target.value })}
+            />
+            <button
+              type="button"
+              disabled={value.authMode === "none"}
+              aria-label={showKey ? "隐藏密钥" : "显示密钥"}
+              onClick={() => setShowKey(!showKey)}
+            >
+              {showKey ? "隐藏" : "显示"}
+            </button>
+          </div>
+        </fieldset>
+        {value.protocol === "minimax_video_v2" && (
+          <p className="cw-model-note">
+            模型列表来自内置声明，载入不验证密钥，也不创建视频任务。
+          </p>
+        )}
         <ModelPicker
           modelPlaceholder={placeholders[1]}
           available={modelIds}
@@ -410,6 +477,29 @@ export function ModelServiceForm({
           }}
           onTest={kind === "agent" ? (id) => void test(id) : undefined}
           results={results}
+          fetchLabel={
+            value.protocol === "minimax_video_v2" ? "载入支持的模型" : undefined
+          }
+          renderDetails={(id) => (
+            <ModelCapabilityCard
+              key={`${connection?.id ?? "new"}:${value.protocol}:${id}`}
+              modelId={id}
+              connection={value}
+              configId={connection?.id}
+              saved={savedModel(id)}
+              options={modelOptions[id] ?? {}}
+              disabled={locked}
+              onChange={(patch) =>
+                setModelOptions((current) => ({
+                  ...current,
+                  [id]: { ...current[id], ...patch },
+                }))
+              }
+              onValidity={(message) =>
+                setModelErrors((current) => ({ ...current, [id]: message }))
+              }
+            />
+          )}
         />
         {segmentation && (
           <p className="cw-model-note">
@@ -426,70 +516,11 @@ export function ModelServiceForm({
             扒谱模型把参照音乐转成乐谱，供 YuE2 参照生成，本身不生成音频。
           </p>
         )}
-        {kind === "video" && !segmentation && !depth && (
-          <details className="cw-video-config">
-            <summary>
-              <span>视频适配方式</span>
-              <CanvasIcon name="chevron" size={16} />
-            </summary>
-            {value.protocol === "vllm_omni" && (
-              <label className="cw-domain-field">
-                视频适配方式
-                <select
-                  value={value.videoAdapter}
-                  onChange={(event) =>
-                    update({
-                      videoAdapter: event.target
-                        .value as ModelConfigInput["videoAdapter"],
-                    })
-                  }
-                >
-                  <option value="auto">
-                    自动识别已知模型；其他使用通用首帧接口
-                  </option>
-                  <option value="fasth3">
-                    FastH3-Omni（8 步、多素材参考）
-                  </option>
-                  <option value="minimax_h3">
-                    原生 MiniMax-H3（首帧、素材参考、接续）
-                  </option>
-                  <option value="standard">
-                    通用 /videos（文本、单张首帧）
-                  </option>
-                </select>
-              </label>
-            )}
-            <div className="cw-capability-actions">
-              <button
-                type="button"
-                className="cw-settings-button"
-                onClick={() => void loadCapabilities("preset")}
-              >
-                载入适配预设
-              </button>
-              <button
-                type="button"
-                className="cw-settings-button"
-                onClick={() => void loadCapabilities("service")}
-              >
-                读取服务声明
-              </button>
-            </div>
-            <p className="cw-capability-help">
-              服务需在 /models 中返回该模型的 videoCapabilities
-              扩展；仅返回模型名称时，请手动配置。
-            </p>
-            <VideoCapabilitiesEditor
-              value={outputDraft}
-              adapter={value.videoAdapter}
-              onChange={setOutputDraft}
-            />
-          </details>
-        )}
       </div>
       <footer className="cw-model-editor-footer">
         <div className="cw-model-save-status" role={error ? "alert" : "status"}>
           {error ||
+            selectedModels.map((id) => modelErrors[id]).find(Boolean) ||
             (selectedModels.length > 200
               ? "每个服务最多启用 200 个模型"
               : selectedModels.length
@@ -511,7 +542,8 @@ export function ModelServiceForm({
             locked ||
             !canFetch ||
             !selectedModels.length ||
-            selectedModels.length > 200
+            selectedModels.length > 200 ||
+            selectedModels.some((id) => modelErrors[id])
           }
         >
           {busy ? "保存中…" : "保存服务"}

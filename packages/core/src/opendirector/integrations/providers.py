@@ -14,6 +14,7 @@ from opendirector.domain.projects import ProjectError
 from opendirector.integrations.reference_inputs import generation_references, references, image_type
 from opendirector.integrations.volcengine import VolcengineGeneration, bounded, endpoint
 from opendirector.integrations.generation_errors import checked, protocol_failure, provider_failure, transport_failure
+from opendirector.integrations.minimax_video import MinimaxVideoGeneration
 from opendirector.integrations.vllm_omni import VllmOmniGeneration
 from opendirector.integrations.vllm_omni_image import VllmOmniImageGeneration
 from opendirector.integrations.model_adapters import OpenAISpeech, VllmOmniMusic, VllmOmniScore
@@ -26,10 +27,13 @@ class GenerationProviders(VolcengineGeneration):
 
     def __init__(self, store, transport=None, poll_interval=3, retry_delays=(0.5, 1.0)):
         super().__init__(store, transport, poll_interval, retry_delays)
+        self.minimax_video = MinimaxVideoGeneration(store, transport, poll_interval)
         self.vllm_omni = VllmOmniGeneration(store, transport, poll_interval)
         self.vllm_omni_image = VllmOmniImageGeneration(store, transport, poll_interval)
 
     def _profile_adapter(self, config):
+        if config and config.get('protocol') == 'minimax_video_v2':
+            return self.minimax_video
         profile = input_rules(config)['profile'] if config else None
         return {'vllm-omni-h3': self.vllm_omni, 'vllm-omni-image': self.vllm_omni_image,
                 'vllm-omni-qwen-image': self.vllm_omni_image}.get(profile)

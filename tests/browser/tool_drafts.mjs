@@ -1,3 +1,4 @@
+import { chooseGenerationModel } from "./model_picker.mjs";
 /** Saved parameters and real PNG mask -> fixed tool input -> editable output. */
 import assert from "node:assert/strict";
 const { chromium } = await import(
@@ -66,9 +67,7 @@ try {
     .getByRole("toolbar", { name: "画布创作工具" })
     .getByRole("button", { name: "添加图片", exact: true })
     .click();
-  await page
-    .getByRole("combobox", { name: "生成模型" })
-    .selectOption({ label: "fixture-image" });
+  await chooseGenerationModel(page, { label: "fixture-image" });
   await page
     .getByRole("textbox", { name: "生成提示词", exact: true })
     .fill("Source pixels for selection");

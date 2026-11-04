@@ -6,6 +6,7 @@ from uuid import UUID
 
 from pydantic import Field, JsonValue, model_validator
 
+from opendirector.domain.minimax_models import MINIMAX_MODELS
 from opendirector.domain.generation import GenerationFailure, ResultCheck
 from .assets import AssetRef, MediaMetadata
 from .base import CanvasItemVersion, Contract, Digest, GenerationKind, NonNegative, ObjectVersion, PositiveInt, ProjectEntity, Revision, digest, unique
@@ -121,7 +122,7 @@ class FollowingSource(Contract):
 
 class ReferenceBase(ProjectEntity):
     targetSpecId: UUID = Field(description='Target generation configuration ID.')
-    role: Literal['reference', 'first_frame', 'continuation'] = Field(default='reference', description='Business role of this binding or reference.')
+    role: Literal['reference', 'first_frame', 'last_frame', 'continuation'] = Field(default='reference', description='Business role of this binding or reference.')
     order: int = Field(default=0, ge=0, strict=True, description='Reference ordering within the target configuration.')
     active: bool = Field(default=True, description='Whether this reference participates in generation.')  # Retained tombstone prevents revision ABA on undo.
 
@@ -132,7 +133,8 @@ class PinnedReference(ReferenceBase):
     # Historical provenance only; execution always uses the pinned asset.
     sourceVersion: CanvasItemVersion | None = Field(default=None, exclude_if=lambda value: value is None,
         description='Source canvas_item version for its connection; omit for asset-only references.')
-    subjectRole: Literal['main', 'auxiliary', 'voice'] | None = Field(default=None, exclude_if=lambda value: value is None, description='Subject media slot used by this reference.')
+    subjectRole: Literal['main', 'auxiliary', 'voice'] | None = Field(default=None, exclude_if=lambda value: value is None,
+        description='Subject media slot provenance only; omit for ordinary image references and explicit first_frame/last_frame assets. main does not mean first frame.')
 
 
 class FollowingReference(ReferenceBase):
@@ -147,7 +149,7 @@ Reference = Annotated[PinnedReference | FollowingReference, Field(discriminator=
 
 class ResolvedReference(Contract):
     referenceId: UUID = Field(description='Generation reference ID.')
-    role: Literal['reference', 'first_frame', 'continuation'] = Field(description='Business role of this binding or reference.')
+    role: Literal['reference', 'first_frame', 'last_frame', 'continuation'] = Field(description='Business role of this binding or reference.')
     asset: AssetRef = Field(description='Immutable asset version.')
     metadata: MediaMetadata = Field(description='Verified media properties.')
     sourceVersion: ObjectVersion | None = Field(default=None, description='Captured source object version.')
@@ -371,6 +373,11 @@ def validate_generation(spec: GenerationSpec, model: ModelConfigPublic, referenc
             raise ValueError('首尾帧和续写参考只能用于视频生成。')
         return
     params = spec.parameters
+    if rules.profile == 'minimax-h3-official':
+        if model.modelId not in MINIMAX_MODELS:
+            raise ValueError('当前官方协议不支持所选型号。')
+        if params.aspectRatio is not None and params.aspectRatio not in rules.aspectRatios:
+            raise ValueError('MiniMax-H3 不支持所选画幅比例。')
     audio_options = rules.generateAudioOptions
     if audio_options is None:
         audio_options = (True, False) if model.protocol == 'volcengine' else (True,)
@@ -388,15 +395,21 @@ def validate_generation(spec: GenerationSpec, model: ModelConfigPublic, referenc
             raise ValueError('视频续写会沿用原视频尺寸，不能修改分辨率。')
     elif any(ref.role == 'continuation' for ref in references):
         raise ValueError('续写参考必须使用续写模式。')
-    if params.videoMode == 'first_frame' and (kinds.count('image') > 1 or any(kind in {'audio', 'video'} for kind in kinds)):
+    if params.videoMode == 'first_frame' and (kinds.count('image') > (2 if rules.frameRoles and 'last_frame' in rules.frameRoles else 1) or any(kind in {'audio', 'video'} for kind in kinds)):
         raise ValueError('首帧模式最多只能连接一个图片参考和文本。')
-    if params.videoMode != 'first_frame' and any(ref.role == 'first_frame' for ref in references):
+    for role in ('first_frame', 'last_frame'):
+        frames = [ref for ref in transmitted if ref.role == role]
+        if len(frames) > 1 or any(ref.asset.kind != 'image' for ref in frames):
+            raise ValueError('每个首尾帧槽位只能使用一张图片。')
+        if role == 'last_frame' and any(ref.role == role for ref in references) and (not rules.frameRoles or role not in rules.frameRoles):
+            raise ValueError('当前模型不支持尾帧。')
+    if params.videoMode != 'first_frame' and any(ref.role in {'first_frame', 'last_frame'} for ref in references):
         raise ValueError('首帧参考必须使用首帧模式。')
-    if kinds.count('audio') and not (kinds.count('image') or kinds.count('video')):
+    if kinds.count('audio') and not rules.audioReferenceStandalone and not (kinds.count('image') or kinds.count('video')):
         raise ValueError('音频参考必须同时连接图片或视频参考。')
     for kind in ('audio', 'video'):
         seconds = [ref.metadata.durationSeconds for ref in transmitted if ref.asset.kind == kind]
-        minimum = 2 if kind == 'audio' else 0
+        minimum = 2 if kind == 'audio' or rules.profile == 'minimax-h3-official' else 0
         if any(value is None or value < minimum or value <= 0 for value in seconds) or sum(seconds) > 15:
             label = '视频' if kind == 'video' else '音频'
             raise ValueError(f'{label}参考的时长必须已知，且总时长不能超过 15 秒。')

@@ -28,12 +28,19 @@ def _adapter_rules(config):
         # a score for music generation and never generates audio itself.
         rules.update(profile='vllm-omni-score', allowedKinds=[], maxImages=0)
         return rules
+    if kind == 'video' and config.get('protocol') == 'minimax_video_v2':
+        rules.update(profile='minimax-h3-official', allowedKinds=['text', 'image', 'video', 'audio'],
+                     maxImages=9, maxVideos=3, maxAudios=3, imageBytes=30 * 1024 * 1024,
+                     requestBytes=64 * 1024 * 1024, videoModes=['first_frame', 'reference'],
+                     frameRoles=['first_frame', 'last_frame'], audioReferenceStandalone=True,
+                     aspectRatios=['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'])
+        return rules
     adapter = config.get('videoAdapter', 'auto')
     name = model.rsplit('/', 1)[-1].lower()
     if adapter == 'auto':
         adapter = ('minimax_h3' if name in {'minimax-h3', 'minimax-h3-ref2va'} else
                    'fasth3' if name in {'fasth3', 'fasth3-omni'} or name.startswith('fasth3-omni-') else 'standard')
-    if kind == 'video' and adapter == 'minimax_h3':
+    if kind == 'video' and config.get('protocol') == 'vllm_omni' and adapter == 'minimax_h3':
         # Self-hosted vLLM-Omni has no fixed host; the served model name selects it.
         # continuation continues one earlier H3 clip of the same server from its
         # cached latents: the source video is never uploaded, so maxVideos (video
