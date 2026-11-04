@@ -461,6 +461,55 @@ def test_public_sources_and_file_paths_cannot_be_forged(api):
     assert client.put(base + '/uploads/' + str(uuid4()), content=png(), headers={'X-Asset-Name': 'wrong.png', 'X-Asset-Kind': 'video'}).status_code == 400
 
 
+def test_copy_stages_another_projects_asset_on_the_server(api):
+    client, base, projects, source_id = api
+    _, _, source_asset = api_upload(client, base)
+    target_id = uuid4()
+    projects.execute(command(target_id, name='Target'))
+    session = client.headers['X-OpenDirector-Session']
+    projects.open(target_id, session)
+    target = f'/api/creation/projects/{target_id}'
+    handle = str(uuid4())
+    fingerprint = client.get(base + '/assets/' + source_asset).json()['fingerprint']
+    source = dict(projectId=str(source_id), assetId=source_asset, fingerprint=fingerprint)
+    response = client.put(target + '/uploads/' + handle + '/copy', json=source)
+    assert response.status_code == 200, response.text
+    info = response.json()
+    assert info['status'] == 'ready' and info['name'] == 'frame.png' and info['kind'] == 'image'
+    # A retry of the same copy answers with the same staged upload.
+    assert client.put(target + '/uploads/' + handle + '/copy', json=source).json() == info
+    body = dict(type='asset.import', commandId=str(uuid4()), projectId=str(target_id),
+                payload=dict(uploadHandle=handle, name=info['name'], expectedKind=info['kind']))
+    receipt = client.post(target + '/commands', json=body).json()
+    assert receipt['status'] == 'applied', receipt
+    copied = client.get(target + '/assets/' + receipt['changed'][0]['id']).json()
+    assert copied['projectId'] == str(target_id) and copied['provenance']['source'] == 'upload'
+    assert copied['fingerprint'] == fingerprint
+    assert client.get(target + '/assets/' + copied['id'] + '/content').content == png()
+    assert len(client.get(base + '/assets').json()) == 1
+
+
+def test_copy_requires_an_existing_source_and_an_open_target(api):
+    client, base, projects, source_id = api
+    _, _, source_asset = api_upload(client, base)
+    _, _, other = api_upload(client, base, data=png()[:-1] + b'\x00', name='other.png')
+    target_id = uuid4()
+    projects.execute(command(target_id, name='Target'))
+    target = f'/api/creation/projects/{target_id}/uploads/'
+    source = dict(projectId=str(source_id), assetId=source_asset)
+    # The target must be open in this session, as for a browser upload.
+    assert client.put(target + str(uuid4()) + '/copy', json=source).status_code == 409
+    projects.open(target_id, client.headers['X-OpenDirector-Session'])
+    missing = dict(projectId=str(source_id), assetId=str(uuid4()))
+    assert client.put(target + str(uuid4()) + '/copy', json=missing).status_code == 404
+    assert client.put(target + str(uuid4()) + '/copy', json={**source, 'path': '/etc/passwd'}).status_code == 422
+    assert client.put(target + str(uuid4()) + '/copy', json={**source, 'fingerprint': 'sha256:' + '0' * 64}).status_code == 409
+    # A handle used for one source cannot be reused for different content.
+    handle = str(uuid4())
+    assert client.put(target + handle + '/copy', json=source).status_code == 200
+    assert client.put(target + handle + '/copy', json=dict(projectId=str(source_id), assetId=other)).status_code == 409
+
+
 def test_upload_response_loss_and_request_retry_keep_same_handle(api, monkeypatch):
     from opendirector.infrastructure import creation_uploads
     client, base, _, _ = api

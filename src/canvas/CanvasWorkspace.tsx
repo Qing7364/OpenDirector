@@ -2273,15 +2273,25 @@ function Workspace() {
     setSelectedEdges([]);
     setMenu(null);
   };
+  const captureMedia = (fragment: CanvasFragment) => {
+    const projectId = historyRef.current.present.id;
+    const client = creationClient(projectId);
+    return captureClipboardMedia(projectId, fragment, {
+      resolve: (src, assetId) => {
+        // A just-imported node may show its upload before it records the asset.
+        const asset = assetId
+          ? client.snapshot.assets.find((asset) => asset.id === assetId)
+          : client.assetForSource(src);
+        return asset && { assetId: asset.id, fingerprint: asset.fingerprint };
+      },
+    });
+  };
   const copy = () => {
     clipboard.current = copySelection(
       historyRef.current.present,
       selectedRef.current,
     );
-    clipboardMedia.current = captureClipboardMedia(
-      historyRef.current.present.id,
-      clipboard.current,
-    );
+    clipboardMedia.current = captureMedia(clipboard.current);
     pasteCount.current = 0;
     notify(`已复制 ${clipboard.current.nodes.length} 个节点`);
   };
@@ -2299,10 +2309,7 @@ function Workspace() {
     const fragment = result.fragment;
     change(() => result.document);
     clipboard.current = fragment;
-    clipboardMedia.current = captureClipboardMedia(
-      historyRef.current.present.id,
-      fragment,
-    );
+    clipboardMedia.current = captureMedia(fragment);
     pasteCount.current = 0;
     setSelected([]);
     setMenu(null);
@@ -2333,16 +2340,19 @@ function Workspace() {
         fragment,
         media,
         projectId,
-        async (blob, title, kind) => {
+        async (blob, title, kind, source) => {
           const client = creationClient(projectId);
-          const ref = await client.importBlob(
-            blob,
-            withMediaSuffix(title, blob.type),
-            kind,
-          );
+          const upload = () =>
+            client.importBlob(blob, withMediaSuffix(title, blob.type), kind);
+          // Saved media is copied on the server. Unsaved media, or a source
+          // that changed or is gone, is uploaded from the bytes captured at copy.
+          const ref = source
+            ? await client.copyAsset(source).catch(upload)
+            : await upload();
+          // The page already holds these bytes; reading them back is not needed.
           return {
             assetId: ref.assetId,
-            src: await client.mediaUrl(ref.assetId),
+            src: await client.adoptMedia(ref.assetId, blob),
           };
         },
       );

@@ -20,7 +20,7 @@ from opendirector.domain.creation.commands import Command, CommandReceipt, Query
 from opendirector.domain.creation.project import ProjectSnapshot, ViewState
 from opendirector.domain.projects import ProjectError
 from opendirector.infrastructure.creation_projects import CreationProjects
-from opendirector_api.models import Session
+from opendirector_api.models import AssetSource, Session
 
 
 def creation_routes(projects: CreationProjects, generation=None):
@@ -193,6 +193,11 @@ def creation_routes(projects: CreationProjects, generation=None):
         finally:
             # Also runs on ClientDisconnect and cancelled request bodies.
             writer.abort()
+
+    @router.put('/projects/{project_id}/uploads/{handle_id}/copy', response_model=UploadInfo)
+    def copy_upload(project_id: UUID, handle_id: UUID, source: AssetSource, x_opendirector_session: UUID = Header()):
+        return assets.stage_copy(project_id, handle_id, str(x_opendirector_session), source.projectId, source.assetId,
+                                 source.fingerprint)
 
     @router.get('/projects/{project_id}/uploads/{handle_id}', response_model=UploadInfo)
     def upload_info(project_id: UUID, handle_id: UUID, x_opendirector_session: UUID = Header()):

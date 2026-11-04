@@ -15,6 +15,13 @@ class Session(Model):
     projectId: UUID
 
 
+class AssetSource(Model):
+    """An asset in another creation project, copied on the server."""
+    projectId: UUID
+    assetId: UUID
+    fingerprint: str | None = Field(default=None, max_length=128, description='Expected source content; a different one is refused.')
+
+
 class ModelConnection(Model):
     connectionType: Literal['api', 'self_hosted'] = 'api'
     protocol: Literal['openai', 'volcengine', 'minimax_video_v2', 'vllm_omni', 'vllm_omni_segmentation', 'vllm_omni_music', 'vllm_omni_depth', 'vllm_omni_score'] | None = None

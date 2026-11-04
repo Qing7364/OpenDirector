@@ -29,6 +29,26 @@ class CreationAssets:
         self._verification_lock = Lock()
         self._thumbnails = OrderedDict()
 
+    def stage_copy(self, project_id, handle, session, source_project_id, source_asset_id, fingerprint=None):
+        """Stage another project's verified asset as an upload; its bytes never leave the server.
+
+        Registration still goes through asset.import, so the copy is an ordinary
+        upload in the target project and keeps none of the source's provenance.
+        A caller that already holds the bytes passes their fingerprint, so a
+        changed source is refused instead of copied.
+        """
+        stream, asset = self.open_media(source_project_id, source_asset_id)
+        with stream:
+            if fingerprint is not None and fingerprint != asset.fingerprint:
+                raise ProjectError('来源素材已变化。', 409)
+            writer = self.uploads.begin(project_id, handle, session, asset.name, expected_kind=asset.kind)
+            try:
+                while chunk := stream.read(1024 * 1024):
+                    writer.write(chunk)
+                return writer.finish()
+            finally:
+                writer.abort()
+
     def reference_available(self, project_id, asset_id, *, snapshot=None):
         stream, asset = self.open_media(project_id, asset_id, snapshot=snapshot)
         with stream:

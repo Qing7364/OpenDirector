@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   captureClipboardMedia,
   transferClipboardMedia,
+  type MediaSource,
   type RegisteredMedia,
 } from "../src/canvas/clipboardMedia.ts";
 import { createNode } from "../src/canvas/model.ts";
@@ -173,12 +174,65 @@ test("repeated pastes reuse registrations and a failed one can be retried", asyn
 
 test("an unreadable copy fails the paste instead of inserting broken nodes", async () => {
   const { fragment } = fixture();
-  const media = captureClipboardMedia("project-a", fragment, async (src) => {
-    if (src === fragment.nodes[1]!.data.src) throw new Error("素材读取失败。");
-    return new Blob(["x"], { type: "image/png" });
+  const media = captureClipboardMedia("project-a", fragment, {
+    read: async (src) => {
+      if (src === fragment.nodes[1]!.data.src)
+        throw new Error("素材读取失败。");
+      return new Blob(["x"], { type: "image/png" });
+    },
   });
   await assert.rejects(
     transferClipboardMedia(fragment, media, "project-b", registrar().register),
     /素材读取失败/,
   );
+});
+
+test("saved source assets are offered for a server-side copy", async () => {
+  const { fragment, clip } = fixture();
+  // A just-imported node shows its upload before it records the asset.
+  delete clip.data.backendAssetId;
+  const byId = new Map([["source-image", "sha256:image"]]);
+  const bySource = new Map([[clip.data.src!, "source-video"]]);
+  const resolved: [string, string | undefined][] = [];
+  const media = captureClipboardMedia("project-a", fragment, {
+    resolve: (src, assetId) => {
+      resolved.push([src, assetId]);
+      const id = assetId ?? bySource.get(src);
+      if (id === "source-image")
+        return { assetId: id, fingerprint: byId.get(id)! };
+      if (id === "source-video")
+        return { assetId: id, fingerprint: "sha256:video" };
+      // The portrait is unknown to the project, so it can only be uploaded.
+      return undefined;
+    },
+  });
+  assert.deepEqual(
+    resolved.map(([, assetId]) => assetId),
+    ["source-image", undefined, "source-portrait"],
+  );
+  const sources: (MediaSource | undefined)[] = [];
+  const pasted = await transferClipboardMedia(
+    fragment,
+    media,
+    "project-b",
+    async (_blob, title, _kind, source) => {
+      sources.push(source);
+      return { assetId: `copy-of-${title}`, src: `blob:target/${title}` };
+    },
+  );
+  assert.deepEqual(sources, [
+    {
+      projectId: "project-a",
+      assetId: "source-image",
+      fingerprint: "sha256:image",
+    },
+    {
+      projectId: "project-a",
+      assetId: "source-video",
+      fingerprint: "sha256:video",
+    },
+    undefined,
+  ]);
+  assert.equal(pasted.nodes[1]!.data.backendAssetId, "copy-of-镜头");
+  assert.equal(pasted.nodes[2]!.data.subject!.main!.assetId, "copy-of-正脸");
 });

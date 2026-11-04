@@ -76,9 +76,20 @@ try {
   await page.locator(".cw-project-name").filter({ hasText: target.name }).waitFor();
   await saved();
   await page.locator(".cw-workspace").focus();
+  // Saved media is copied on the server: no bytes go up or come back down.
+  const transfers = [];
+  const watch = (request) => {
+    const path = new URL(request.url()).pathname;
+    if (/\/uploads\/[^/]+(\/copy)?$/.test(path) && request.method() === "PUT" || path.endsWith("/content"))
+      transfers.push(`${request.method()} ${path.replace(/^.*\/projects\/[^/]+/, "")}`);
+  };
+  page.on("request", watch);
   await page.keyboard.press("Control+v");
   await nodes.nth(1).waitFor();
   await loadedImages(2);
+  page.off("request", watch);
+  assert.deepEqual(transfers.map((entry) => entry.replace(/[0-9a-f-]{36}/g, "<id>")).sort(),
+    ["PUT /uploads/<id>/copy", "PUT /uploads/<id>/copy"]);
   const pasted = await until(async () => {
     const snapshot = await target.state();
     return snapshot.canvasItems.filter((item) => item.visible).length === 2 && snapshot;

@@ -401,6 +401,24 @@ export class CreationClient {
       },
     );
     if (!response.ok) throw new Error("上传素材失败，请检查文件格式和大小。");
+    return this.registerUpload(handle, name, kind);
+  }
+  /** Copies another project's asset on the server; no bytes pass through the page. */
+  async copyAsset(
+    source: { projectId: string; assetId: string; fingerprint?: string },
+    handle: string = crypto.randomUUID(),
+  ) {
+    const info = await storageRequest<{ name: string; kind: Asset["kind"] }>(
+      `${creationPath(this.id)}/uploads/${handle}/copy`,
+      json("PUT", source),
+    );
+    return this.registerUpload(handle, info.name, info.kind);
+  }
+  private async registerUpload(
+    handle: string,
+    name: string,
+    kind: Asset["kind"],
+  ) {
     const receipt = await this.command("asset.import", {
       uploadHandle: handle,
       name,
@@ -413,6 +431,17 @@ export class CreationClient {
     );
     if (!asset) throw new Error("素材登记未返回稳定身份。");
     return assetReference(asset);
+  }
+  /** Previews an asset from bytes the page already holds instead of reading them back. */
+  adoptMedia(assetId: string, blob: Blob) {
+    let pending = this.media.get(assetId);
+    if (!pending) {
+      const url = URL.createObjectURL(blob);
+      this.sourceAssets.set(url, assetId);
+      pending = Promise.resolve(url);
+      this.media.set(assetId, pending);
+    }
+    return pending;
   }
   async writeText(name: string, text: string, previous?: AssetRef) {
     const receipt = await this.command(
