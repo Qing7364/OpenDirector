@@ -29,7 +29,9 @@ def result(req, value): write(dict(id=req['id'], result=value))
 def read(): return json.loads(sys.stdin.readline())
 req=read(); assert req['method']=='initialize'
 result(req, dict(protocolVersion=0 if mode=='bad_version' else 1))
-req=read(); assert req['method']=='session/new'
+req=read(); assert req['method'] in {'session/new','session/resume'}
+resumed=req['method']=='session/resume'
+if resumed: assert req['params']['sessionId']==sid
 servers=req['params']['mcpServers']
 model=dict(id='model',currentValue='route/default',options=[dict(group='route',options=[dict(value='route/default',name='Default model')])])
 if mode=='efforts':
@@ -47,9 +49,17 @@ for line in sys.stdin:
  elif req['method']=='session/cancel':
   Path(os.environ['DEEPSEEK_CANCELLED']).write_text('cancelled') if 'DEEPSEEK_CANCELLED' in os.environ else None
  elif req['method']=='session/prompt':
-  text=req['params']['prompt'][0]['text']
-  assert 'Use OpenDirector' in text and str(Path.cwd()) in text
+  blocks=[block['text'] for block in req['params']['prompt']]
+  if resumed:
+   assert blocks[0].startswith('Execution directory:')
+   assert not any('Conversation history' in block or 'You are OpenDirector' in block for block in blocks)
+   assert 'Continue' in blocks[-1]
+  else:
+   assert blocks[0].startswith('You are OpenDirector') and str(Path.cwd()) in blocks[1]
+   assert 'Continue' not in blocks[-1]
+  text=blocks[-1]
   if mode!='wait':
+   assert text.startswith('Current user request' + chr(10))
    assert 'Summarize the delivered result and material limitations.' in text
    assert 'User model preferences for this turn:' in text and 'selected-image' in text
   patch=json.loads(Path(sys.argv[sys.argv.index('--patch')+1]).read_text())
@@ -127,6 +137,13 @@ def test_acp_shared_write_and_native_trace(cli, tmp_path, monkeypatch, mode):
         trace=next(local.root.rglob('*.deepseek.jsonl')).read_text()
         assert 'owned-session' in trace and 'session/update' in trace
         assert 'OPENDIRECTOR_AGENT_TOKEN' not in trace
+        if mode == 'success':
+            response = client.post(path+'/assistant/turns', json=dict(
+                id=str(uuid4()), runtime='deepseek', runtimeModel='route/default', text='Continue',
+                skills=['example'], modelSelections={'image': 'selected-image'}))
+            events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith('data: ')]
+            assert events[-1]['error'] is None, events
+
 
 
 def test_cancel_acp_before_collecting_child(cli, tmp_path, monkeypatch):

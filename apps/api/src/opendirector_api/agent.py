@@ -282,7 +282,7 @@ def agent_routes(projects, generation, configs, provider=None) -> APIRouter:
                     run = RunContext(runtime=value.runtime, project_id=project_id, turn_id=value.id,
                         session=session, directory=directory, config=config, messages=context,
                         selected_skills=value.skills, thinking=value.thinking, model_selections=model_selections,
-                        runtime_model=value.runtimeModel, skills=available)
+                        runtime_model=value.runtimeModel, skills=available, conversation_id=UUID(saved['conversationId']))
                     async with aclosing(runtimes.stream(run)) as stream:
                         async for event in stream:
                             if event['type'] == 'delta':

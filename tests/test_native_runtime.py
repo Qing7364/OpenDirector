@@ -23,6 +23,11 @@ FAKE = '''import json, os, subprocess, sys
 from pathlib import Path
 prompt = sys.stdin.read()
 assert 'Segment plan' not in prompt
+if 'Continue plan' in prompt:
+ assert 'Save a plan' not in prompt
+ runtime = os.environ['TEST_RUNTIME']
+ resume_args = {'codex': ['resume', 'test-native', '-'], 'claude': ['--resume', 'test-native']}
+ assert sys.argv[1:] == resume_args.get(runtime, ['--session', 'test-native'])
 assert list(Path('.agents/skills').glob('*/SKILL.md'))
 assert str(Path.cwd()) in prompt
 subprocess.run(['sh', '-c', 'printf \"native execution works\" > environment-check.txt'], check=True)
@@ -111,6 +116,10 @@ def test_native_events_real_mcp_and_shared_write(tmp_path, monkeypatch, runtime)
         work = next(local.root.rglob(f'agent-runs/{turn["id"]}/work'))
         assert work.is_dir()
         assert (work / 'environment-check.txt').read_text() == 'native execution works'
+        response = client.post(path + '/assistant/turns', json={**turn, 'id': str(uuid4()), 'text': 'Continue plan'})
+        events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith('data: ')]
+        assert events[-1]['error'] is None, events
+
 
 
 def test_native_commands_keep_auth_and_restrict_tools(tmp_path, monkeypatch):
@@ -191,6 +200,15 @@ def test_real_opencode_native_skill_and_gateway_write(tmp_path, runtime):
         assert len(client.get(path).json()['assets']) == 1
         assert len(requests) == 3
         assert 'server-only-key' not in next(local.root.rglob('*.opencode.jsonl')).read_text()
+        response = client.post(path + '/assistant/turns', json={**turn, 'id': str(uuid4()), 'text': 'Continue the plan.'})
+        events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith('data: ')]
+        assert events[-1]['error'] is None, events
+        assert len(requests) == 4
+        messages = requests[-1]['messages']
+        assert 'OpenCode ready.' in json.dumps(messages[:-1])
+        assert 'Continue the plan.' in json.dumps(messages[-1])
+        assert 'Use the skill and save a plan.' not in json.dumps(messages[-1])
+
 
 
 @pytest.mark.parametrize('runtime', ['default', 'opencode', 'codex', 'claude'])

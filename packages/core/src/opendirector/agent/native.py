@@ -112,6 +112,10 @@ class NativeRuntime:
         directory, config, context = run.directory, run.config, run.messages
         selected, thinking = run.selected_skills, run.thinking
         runtime, runtime_model, catalog = ('opencode' if run.runtime == 'default' else run.runtime), run.runtime_model, run.skills
+        selection = {'model': runtime_model, 'thinking': thinking}
+        if config:
+            selection.update(config=config.get('id'), modelId=config['modelId'])
+        session_id = run.native_session_id(selection)
         queue = asyncio.Queue(maxsize=128)
         pending = set()
         closed = False
@@ -196,12 +200,18 @@ class NativeRuntime:
                     args += ['-c', f'model_reasoning_effort={json.dumps(thinking)}']
                 elif thinking != 'auto' and runtime == 'claude':
                     args += ['--effort', thinking]
-                prompt = (f'Execution directory: {work}\n'
+                if session_id:
+                    if runtime == 'codex':
+                        args += ['resume', session_id, '-']
+                    else:
+                        args += ['--session' if runtime == 'opencode' else '--resume', session_id]
+                execution_context = (f'Execution directory: {work}\n'
                     'Use inherited PATH to discover installed programs with command -v. '
                     'Read source assets at their supplied absolute paths; do not move or modify them. '
                     'Write all intermediate files and outputs into the execution directory. '
-                    'Use OpenDirector business tools for project changes.\n'
-                    + json.dumps(context, ensure_ascii=False))
+                    'Use OpenDirector business tools for project changes.')
+                prompt = execution_context + '\n' + json.dumps(context[-1:] if session_id else context, ensure_ascii=False)
+                skill_instruction = ''
                 if selected:
                     name = selected[0]
                     if runtime == 'codex':
@@ -209,7 +219,7 @@ class NativeRuntime:
                     elif runtime == 'claude':
                         prompt = f'/opendirector:{name}\n' + prompt
                     elif runtime == 'deepseek':
-                        prompt = f'Use the native skill tool to load {name} from {work / ".agents/skills"} before proceeding.\n' + prompt
+                        skill_instruction = f'Use the native skill tool to load {name} from {work / ".agents/skills"} before proceeding.'
                     else:
                         prompt = f'Use the native skill tool to load {name} before proceeding.\n' + prompt
                 try:
@@ -232,13 +242,32 @@ class NativeRuntime:
                     process.stdin.close()
                 async def output():
                     try:
+                        reported_session = None
                         if runtime == 'deepseek':
                             async def observe(raw):
                                 await queue.put({'native': raw})
-                            await deepseek.run(process, work, SYSTEM + '\n' + prompt, runtime_model, thinking, deepseek_server, observe)
+                            session_work = run.native_session_path() or work
+                            session_work.mkdir(parents=True, exist_ok=True)
+                            blocks = [execution_context] if session_id else [SYSTEM, execution_context]
+                            if skill_instruction:
+                                blocks.append(skill_instruction)
+                            if not session_id and context[:-1]:
+                                blocks.append('Conversation history\n' + json.dumps(context[:-1], ensure_ascii=False))
+                            if context:
+                                blocks.append('Current user request\n' + context[-1]['content'])
+                            reported_session = await deepseek.run(process, session_work, blocks, runtime_model, thinking,
+                                                            deepseek_server, observe, session_id)
                         else:
                             while line := await process.stdout.readline():
                                 raw = json.loads(line)
+                                if runtime == 'codex' and raw['type'] == 'thread.started':
+                                    reported_session = raw.get('thread_id')
+                                elif runtime == 'opencode':
+                                    reported_session = raw.get('sessionID') or reported_session
+                                elif runtime == 'claude':
+                                    reported_session = raw.get('session_id') or reported_session
+                                if session_id and reported_session and session_id != reported_session:
+                                    raise ProjectError('Harness 返回了不同的会话 ID。', 502)
                                 await queue.put({'native': raw})
                         if await process.wait():
                             await stderr_task
@@ -247,6 +276,8 @@ class NativeRuntime:
                                 diagnostic = diagnostic.replace(config['apiKey'], '[redacted]')
                             await queue.put({'native': {'type': 'diagnostic', 'stderr': diagnostic}})
                             raise ProjectError(f'{runtime} 进程退出（{process.returncode}），请检查 CLI 登录和配置。', 502)
+                        if reported_session:
+                            run.save_native_session(reported_session, selection)
                     finally:
                         await queue.put(None)
                 pump = asyncio.create_task(output())

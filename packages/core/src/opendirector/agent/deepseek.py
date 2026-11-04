@@ -57,13 +57,18 @@ class Client:
             return record['result']
         raise ProjectError('DeepSeek Harness 在回复完成前退出。', 502)
 
-    async def initialize(self, work, servers):
+    async def initialize(self, work, servers, session_id=None):
         result = await self.request('initialize', {'protocolVersion': 1,
             'clientInfo': {'name': 'opendirector', 'version': '0.1.0'}, 'clientCapabilities': {}})
         if result['protocolVersion'] != 1:
             raise ProjectError('DeepSeek Harness 不支持 ACP v1，请更新 CLI。', 503)
-        result = await self.request('session/new', {'cwd': str(work), 'mcpServers': servers})
-        self.session = result['sessionId']
+        params = {'cwd': str(work), 'mcpServers': servers}
+        if session_id:
+            result = await self.request('session/resume', {**params, 'sessionId': session_id})
+            self.session = session_id
+        else:
+            result = await self.request('session/new', params)
+            self.session = result['sessionId']
         return result.get('configOptions', [])
 
     async def close(self):
@@ -138,19 +143,20 @@ async def model_choices(selected=None):
             await terminate(process, group=True)
 
 
-async def run(process, work, prompt, model, thinking, server, observe):
+async def run(process, work, blocks, model, thinking, server, observe, session_id=None):
     client = Client(process, observe)
     try:
         async with asyncio.timeout(30):
-            await client.initialize(work, [server])
+            await client.initialize(work, [server], session_id)
             if model:
                 await client.request('session/set_config_option', {'sessionId': client.session, 'configId': 'model', 'value': model})
             if thinking != 'auto':
                 await client.request('session/set_config_option', {'sessionId': client.session, 'configId': 'reasoning_effort', 'value': thinking})
         result = await client.request('session/prompt', {'sessionId': client.session,
-            'prompt': [{'type': 'text', 'text': prompt}]})
+            'prompt': [{'type': 'text', 'text': block} for block in blocks]})
         if result['stopReason'] != 'end_turn':
             raise ProjectError(f"DeepSeek Harness 执行未完成（{result['stopReason']}）。", 502)
+        return client.session
     finally:
         async def cleanup():
             if client.session:

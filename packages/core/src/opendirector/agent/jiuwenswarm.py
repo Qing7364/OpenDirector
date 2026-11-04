@@ -141,9 +141,11 @@ class JiuwenSwarmRuntime:
         stopping = False
         emitted_chars = 0
         terminal_written = False
+        selection = {'model': run.runtime_model, 'thinking': run.thinking}
+        session_id = run.native_session_id(selection)
         with TemporaryDirectory(prefix='od-jiuwen-') as temporary:
-            state = Path(temporary)
-            config = state / 'config'
+            state = run.native_session_path() or Path(temporary)
+            config = Path(temporary) / 'config'
             config.mkdir()
             # Keep credentials out of published execution files and native traces.
             home = Path(os.environ.get('JIUWENSWARM_HOME', Path.home()))
@@ -154,10 +156,15 @@ class JiuwenSwarmRuntime:
                     (config / name).chmod(0o600)
             if not (config / 'config.yaml').is_file():
                 raise ProjectError('请先运行 jiuwenswarm-init 并配置模型。', 503)
-            skill_root = state / 'agent/workspace/skills'
-            skill_root.mkdir(parents=True)
+            skill_root = Path(temporary) / 'skills'
+            skill_root.mkdir()
             for root in gateway.roots:
                 shutil.copytree(root, skill_root / root.name)
+            skill_link = state / 'agent/workspace/skills'
+            skill_link.parent.mkdir(parents=True, exist_ok=True)
+            if skill_link.is_symlink():
+                skill_link.unlink()
+            skill_link.symlink_to(skill_root, target_is_directory=True)
             gateway.roots += list(skill_root.iterdir())
             functions = [item['function'] for item in tools()]
             host_tools = [{'name': item['name'], 'description': item['description'],
@@ -168,11 +175,13 @@ class JiuwenSwarmRuntime:
                     'Read source assets at their supplied absolute paths; do not move or modify them. '
                     'Write intermediate files and outputs into the execution directory. '
                     'Use OpenDirector business tools for project changes.\n'
-                    + json.dumps(run.messages, ensure_ascii=False)),
+                    + json.dumps(run.messages[-1:] if session_id else run.messages, ensure_ascii=False)),
                 'agent': {'name': 'opendirector', 'instructions': SYSTEM,
                     'tools': [item['name'] for item in functions] + ['skill_tool', 'list_skill', 'read_file', 'bash']},
                 'skills': run.selected_skills, 'mcp': [], 'host_tools': host_tools,
                 'workspace': {'cwd': str(work), 'project_dir': str(work)}}
+            if session_id:
+                request['session_id'] = session_id
             if run.runtime_model:
                 request['model'] = run.runtime_model
             trace_path = work.parent / f'{run.turn_id}.jiuwenswarm.jsonl'
@@ -234,6 +243,9 @@ class JiuwenSwarmRuntime:
                         if reason:
                             raise ProjectError(f"JiuwenSwarm 执行未完成（{result['status']}）：{reason}", 502)
                         raise ProjectError(f"JiuwenSwarm 执行未完成（{result['status']}），请检查原生轨迹。", 502)
+                    if session_id and session_id != result['session_id']:
+                        raise ProjectError('JiuwenSwarm 返回了不同的会话 ID。', 502)
+                    run.save_native_session(result['session_id'], selection)
                     # The terminal output includes the deltas and any unflushed final tail.
                     remaining = (result.get('output') or '')[emitted_chars:]
                     if remaining:

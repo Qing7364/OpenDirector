@@ -43,13 +43,17 @@ assert not {'mode', 'permissions', 'timeout_seconds'} & request.keys()
 assert 'trusted_dirs' not in request['workspace']
 state = Path(os.environ['JIUWENSWARM_DATA_DIR'])
 assert sorted(p.name for p in (state/'agent/workspace/skills').iterdir()) == ['example']
-assert 'private-test-key' in (state/'config/config.yaml').read_text()
+assert 'private-test-key' in (Path(os.environ['JIUWENSWARM_CONFIG_DIR'])/'config.yaml').read_text()
 assert 'private-test-key' not in json.dumps(request)
 assert '*' not in request['agent']['tools']
 assert 'skill_tool' in request['agent']['tools']
 assert request['mcp'] == []
 assert request['skills'] == ['example']
 sid='native-session'
+if 'Continue plan' in request['input']:
+ assert request['session_id']==sid and 'Save plan' not in request['input']
+else:
+ assert 'session_id' not in request
 if mode == 'quota':
  emit('result',status='failed',exit_code=1,error={'code':'RUNTIME_ERROR','message':'HTTP 429: Token Plan quota exceeded (2056)'},output=None)
  raise SystemExit(1)
@@ -139,6 +143,12 @@ def test_project_write_and_trace(cli, tmp_path, monkeypatch, mode, expected):
         assert 'native-session' in trace
         assert 'private-test-key' not in trace
         assert not list(local.root.rglob('config.yaml'))
+        if mode == 'success':
+            response = client.post(path+'/assistant/turns', json={
+                'id':str(uuid4()), 'runtime':'jiuwenswarm', 'text':'Continue plan', 'skills':['example']})
+            events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith('data: ')]
+            assert events[-1]['error'] is None, events
+
 
 
 def test_cancel_collects_child(cli, tmp_path, monkeypatch):
