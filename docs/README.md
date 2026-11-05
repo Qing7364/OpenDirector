@@ -16,7 +16,7 @@
 | [业务 CLI](guides/cli.md) | 如何通过终端或 Agent Shell 查询、编辑和执行生成任务？ | 命令、授权或回执语义变化时 |
 | [视频模型能力配置](guides/video-model-capabilities.md) | 如何声明服务实际支持的输出规格？ | 配置字段或模型能力接入行为改变时 |
 
-产品启动和常用操作见根目录 [README](../README.md)。根目录 README 仅面向使用者，维护安装、启动、配置、创作与问题处理，不包含架构实现、开发测试、研究来源或迭代历史。源码及自动生成契约说明实际实现；架构与路线描述目标，不能据此推断某项能力已经可用。
+根目录 [README](../README.md) 提供产品介绍、示例、快速开始和文档导航。详细安装见[安装与更新](guides/installation.zh-CN.md)（[English](guides/installation.md)），配置、创作与问题处理见[使用指南](guides/user-guide.zh-CN.md)（[English](guides/user-guide.md)）。README 不展开完整操作手册、架构实现、开发测试、研究来源或迭代历史。源码及自动生成契约说明实际实现；架构与路线描述目标，不能据此推断某项能力已经可用。
 
 ## 目录约定
 
