@@ -47,6 +47,16 @@ https://github.com/user-attachments/assets/11babc03-e35c-40e7-b5f6-7d476b6bf11a
 
 ## Quick start
 
+### Install with AI
+
+Send this prompt to your AI assistant:
+
+```text
+Install and start OpenDirector for me by following this skill: https://github.com/ThinkFlowLab/OpenDirector/blob/main/.agents/skills/install-opendirector/SKILL.md
+```
+
+### Manual installation
+
 Source installation requires Python **3.11+**, Node.js **24.22.1+** with npm, Git, and FFmpeg/ffprobe with `libx264`. We recommend a virtual environment to avoid dependency conflicts.
 
 For macOS/Linux, using a `python3` that meets the version requirement:

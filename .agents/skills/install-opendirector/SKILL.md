@@ -30,11 +30,17 @@ to create or discuss this skill does not authorize installing the application.
    For another OS, report the unsupported installation path instead of applying
    a recipe for a different platform.
 4. In the target source, read `README.md` or `README.zh-CN.md`, `.nvmrc`,
-   `package.json` (including `engines`), both `pyproject.toml` files,
+   `package.json` (including `engines`), the root `pyproject.toml`,
    `requirements.txt`, and the launcher. These files govern the selected revision;
    bundled commands are starting points, not permission to change its manifests.
 
 ## Check and install prerequisites
+
+Complete system prerequisite installation and user PATH setup before creating
+the project venv or installing application dependencies. Reuse compatible
+installed tools; install missing Git, Node.js/npm, Python, FFmpeg and ffprobe
+through the platform package manager or supported user-level installer. Python
+application packages still belong in the project venv.
 
 - Check actual paths, versions, and successful execution of Node.js, npm,
   Python, `ffmpeg`, and `ffprobe`; require FFmpeg's **exact** `libx264` encoder.
@@ -62,9 +68,19 @@ to create or discuss this skill does not authorize installing the application.
   the relevant platform reference. Recheck after changes. Select an existing
   suitable executable before installing another version. Use a project venv for
   Python packages, never `sudo pip` or an upgrade of the system Python.
-- Carry required PATH changes into subsequent tool calls. Before final delivery,
-  ensure the launch instructions work in a fresh terminal too. For a private
-  toolchain, include its exact PATH setup in those instructions.
+- Make prerequisite tools discoverable on the user's PATH, not only through
+  absolute paths or a temporary agent export. Inspect the user's shell and
+  existing startup configuration, then add only the missing package-manager
+  initialization or tool directories to the appropriate user configuration.
+  Preserve existing entries and avoid duplicate additions. On Windows, use the
+  installer-managed PATH or append missing directories to the user PATH without
+  overwriting it. Carry these changes into the current process too.
+- Verify discovery and versions in a fresh instance of the user's normal shell
+  without inheriting the agent's temporary PATH additions. Check `git`, `node`,
+  `npm` (`npm.cmd` on Windows), the selected Python command, `ffmpeg`, and
+  `ffprobe`; versioned Python commands such as `python3.12` are acceptable.
+  If this fails, finish PATH setup before proceeding. Do not globally add the
+  project's `.venv/bin` or `Scripts` directory to PATH.
 - Respect the execution environment's network and privilege approvals. Continue
   authorized ordinary installation without extra conversational confirmations.
   If an installer requires user interaction, report the precise pending action
@@ -95,6 +111,10 @@ py -3 -m venv .venv
 ```
 
 The pip build backend runs npm ci, the frontend build, and the bundled OpenCode version check. Do not run these stages separately during installation. Wheel installs contain these resources and do not require Node.js; source installs do.
+
+If pip or npm downloads are slow or time out, follow
+[download troubleshooting](references/download-mirrors.md) for an
+installation-scoped retry with a user-specified or trusted alternative registry. Keep the unified pip build entrypoint.
 
 Skip the venv creation command when reusing one. Do not skip dependency
 installation solely because `node_modules` or `.venv` exists. `npm ci` requires

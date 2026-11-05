@@ -10,6 +10,7 @@ import "./welcome-screen.css";
 export function WelcomeScreen({ catalog, onSkip }: { catalog: BackendModels; onSkip: () => void }) {
   const { t, locale, setLocale } = useI18n();
   const dialog = useRef<HTMLDialogElement>(null);
+  const configureButton = useRef<HTMLButtonElement>(null);
   const [configuring, setConfiguring] = useState(false);
   const [completed, setCompleted] = useState(false);
   function finishSetup() { setCompleted(true); }
@@ -44,6 +45,7 @@ export function WelcomeScreen({ catalog, onSkip }: { catalog: BackendModels; onS
   useLayoutEffect(() => {
     const element = dialog.current!;
     element.showModal();
+    configureButton.current?.focus({ preventScroll: true });
     return () => element.close();
   }, []);
   return <dialog ref={dialog} className={`cw-welcome${configuring ? " is-configuring" : ""}`} aria-labelledby="welcome-title" onCancel={event => { event.preventDefault(); if (configuring && !completed) finishSetup(); else onSkip(); }}>
@@ -59,12 +61,12 @@ export function WelcomeScreen({ catalog, onSkip }: { catalog: BackendModels; onS
         <img className="cw-welcome-animation" src={animatedLogo} alt="" />
         <img className="cw-welcome-static" src={staticLogo} alt="" />
       </div>
-      <h1 data-welcome-shared id="welcome-title" tabIndex={-1} autoFocus>{t("modelSetup.welcomeTitle")}</h1>
+      <h1 data-welcome-shared id="welcome-title">{t("modelSetup.welcomeTitle")}</h1>
       <p data-welcome-shared className="cw-welcome-description">{t("modelSetup.welcomeDescription")}</p>
       </header>
       {!configuring && <div className="cw-welcome-intro-actions">
       <div className="cw-welcome-actions">
-        <button className="cw-welcome-primary" onClick={beginSetup}>{t("modelSetup.welcomeConfigure")}</button>
+        <button ref={configureButton} className="cw-welcome-primary" onClick={beginSetup}>{t("modelSetup.welcomeConfigure")}</button>
         <button className="cw-welcome-secondary" onClick={onSkip}>{t("modelSetup.welcomeSkip")}</button>
       </div>
       <p className="cw-welcome-note">{t("modelSetup.welcomeNote")}</p>

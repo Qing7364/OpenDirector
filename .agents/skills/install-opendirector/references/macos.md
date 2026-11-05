@@ -31,9 +31,12 @@ Node, resolve its prefix, then prepend its `bin` directory to PATH:
 brew --prefix node@24
 ```
 
-Include the resolved path in subsequent commands and in the user's fresh
-terminal launch instructions; do not assume an export in one tool call survives
-the next. Use the selected Python's absolute path for venv creation.
+Persist the resolved PATH setup in the user's actual shell configuration,
+reusing any existing Homebrew or runtime-manager initialization. For zsh, choose
+`.zprofile` for login initialization or `.zshrc` for interactive shell setup
+according to the existing configuration. Add missing entries once, preserve the
+rest, and apply the same setup to the current process. Verify in a fresh normal
+terminal shell that does not inherit temporary agent PATH entries. Use the selected Python's absolute path for venv creation.
 
 If Homebrew is missing, follow its current official installation procedure
 within granted privileges, then apply its printed `shellenv` instructions.

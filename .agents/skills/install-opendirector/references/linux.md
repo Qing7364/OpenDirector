@@ -50,8 +50,10 @@ official Node binary archive matching the chosen version and architecture
 when valid. Resolve actual archive availability from the official release
 directory; verify its SHA-256 against that release's `SHASUMS256.txt` before
 extracting into a new user-owned toolchain directory. Keep other installations
-intact and explicitly prepend the extracted `bin` to PATH. Include that PATH
-in final fresh-terminal instructions. On musl/Alpine or an unsupported CPU,
+intact and persist the extracted `bin` on the user's PATH in the shell's
+appropriate startup file, or reuse existing runtime-manager initialization.
+Apply it to the current process and verify tool discovery in a fresh normal
+shell without temporary agent PATH additions. On musl/Alpine or an unsupported CPU,
 do not assume glibc binaries work; resolve an official supported alternative
 or report the precise limitation.
 

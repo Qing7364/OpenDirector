@@ -25,6 +25,11 @@ installer actually supports it. Handle installer prompts under existing user
 authorization and environment permissions. After installation, refresh the
 process PATH from the installed locations or use absolute executable paths;
 restarting the user's terminal does not refresh the agent's running environment.
+Ensure installer-managed entries persist for the user. If adding an archive
+installation manually, append only missing directories to the user PATH while
+preserving its existing entries; do not replace it with the merged process PATH.
+Verify with a fresh PowerShell using refreshed user/system environment values,
+not only the agent's temporary process PATH.
 
 If WinGet or administrative access is unavailable, prefer user-local installers
 and archives: the official Node ZIP contains both Node and npm, and the standard
