@@ -47,6 +47,16 @@ https://github.com/user-attachments/assets/11babc03-e35c-40e7-b5f6-7d476b6bf11a
 
 ## 快速开始
 
+### 一句话安装
+
+把下面这句话发给你正在使用的 AI：
+
+```text
+请按照这个 skill 帮我安装并启动 OpenDirector：https://github.com/ThinkFlowLab/OpenDirector/blob/main/.agents/skills/install-opendirector/SKILL.md
+```
+
+### 手动安装
+
 源码安装需要 Python **3.11+**、Node.js **24.22.1+**（含 npm）、Git，以及可运行的 FFmpeg/ffprobe（含 `libx264`）。推荐使用虚拟环境，避免依赖冲突。
 
 以下为 macOS/Linux 示例，`python3` 需满足上述版本要求：
