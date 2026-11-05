@@ -1,3 +1,4 @@
+import { modelSetup } from "./modelSetup.ts";
 import { api } from "./api.ts";
 import { assistant } from "./assistant.ts";
 import { canvas } from "./canvas.ts";
@@ -18,6 +19,7 @@ import { tools } from "./tools.ts";
 export const zhCN = {
   ...common,
   ...settings,
+  ...modelSetup,
   ...canvas,
   ...canvasShell,
   ...canvasNodes,

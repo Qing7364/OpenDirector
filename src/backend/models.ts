@@ -84,6 +84,7 @@ export function useBackendModels() {
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [settings, setSettings] = useState<GeneralSettings | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const refresh = useCallback(async () => {
     try {
@@ -98,6 +99,8 @@ export function useBackendModels() {
     } catch (failure) {
       setConnected(false);
       setError(errorMessage(failure));
+    } finally {
+      setLoading(false);
     }
   }, []);
   useEffect(() => {
@@ -155,6 +158,7 @@ export function useBackendModels() {
     settings,
     error,
     connected,
+    loading,
     refresh,
     save,
     saveMany,

@@ -1,0 +1,73 @@
+.cw-welcome { position: fixed; inset: 0; box-sizing: border-box; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: var(--settings-background); color: var(--settings-text); font: 14px Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; overflow-y: auto; }
+.cw-welcome::backdrop { background: var(--settings-background); }
+.cw-welcome-language { position: absolute; top: 28px; right: 36px; display: flex; align-items: center; gap: 12px; color: var(--settings-muted); font-size: 12px; }
+.cw-welcome-language select { color: var(--settings-text); background: var(--settings-input); border: 1px solid var(--settings-border); border-radius: 8px; padding: 8px 12px; font: inherit; }
+.cw-welcome-content { box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; min-height: 100%; padding: 100px 24px 110px; }
+.cw-welcome-logo { width: 144px; height: 144px; margin-bottom: 32px; }
+.cw-welcome-logo img { width: 100%; height: 100%; object-fit: contain; }
+.cw-welcome-static { display: none; }
+.cw-welcome h1 { margin: 0; font-size: clamp(30px, 4vw, 48px); line-height: 1.2; letter-spacing: -.035em; font-weight: 600; outline: none; }
+.cw-welcome-description { margin: 20px 0 0; color: var(--settings-muted); font-size: 16px; line-height: 1.8; max-width: 480px; }
+.cw-welcome-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 36px; width: min(260px, 100%); }
+.cw-welcome-actions button { cursor: pointer; min-height: 46px; padding: 12px 24px; font: inherit; border-radius: 10px; }
+.cw-welcome-primary { border: 1px solid var(--cw-control-accent); background: var(--cw-control-accent); color: var(--cw-control-on-accent); font-weight: 600 !important; }
+.cw-welcome-primary:hover { background: var(--cw-control-accent-hover); }
+.cw-welcome-secondary { border: 1px solid transparent; background: transparent; color: var(--settings-muted); }
+.cw-welcome-secondary:hover { color: var(--settings-text); background: var(--settings-hover); }
+.cw-welcome :is(button, select):focus-visible { outline: 2px solid var(--cw-control-accent); outline-offset: 4px; }
+.cw-welcome-note { margin: 16px 0 0; font-size: 12px; line-height: 1.7; color: var(--settings-muted); max-width: 400px; }
+.cw-welcome-footer { position: absolute; bottom: 28px; left: 0; width: 100%; text-align: center; color: var(--settings-muted); font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { .cw-welcome-animation { display: none; } .cw-welcome-static { display: block; } }
+@media (max-width: 600px) { .cw-welcome-language { top: 20px; right: 20px; } .cw-welcome-logo { width: 112px; height: 112px; } }
+
+.cw-welcome-hero { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
+.cw-welcome-intro-actions { display: flex; flex-direction: column; align-items: center; width: 100%; }
+.cw-welcome.is-configuring .cw-welcome-content { justify-content: flex-start; padding: 54px 24px 72px; }
+.cw-welcome.is-configuring .cw-welcome-logo { width: 56px; height: 56px; margin-bottom: 14px; }
+.cw-welcome.is-configuring h1 { font-size: 28px; letter-spacing: -.025em; }
+.cw-welcome.is-configuring .cw-welcome-description { font-size: 14px; margin-top: 10px; }
+.cw-welcome .cw-welcome-setup { position: relative; box-sizing: border-box; width: min(680px, 100%); height: auto; max-height: none; margin: 28px auto 0; padding: 0; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; text-align: left; outline: none; animation: welcome-setup-reveal 650ms 180ms cubic-bezier(.22,1,.36,1) both; }
+.cw-welcome-setup .cw-settings-body { padding: 0; overflow: visible; }
+.cw-welcome-setup .cw-model-settings { overflow: visible; }
+.cw-welcome-setup .cw-model-setup-language { display: none; }
+.cw-welcome-setup .cw-model-setup-intro { padding-top: 0; }
+.cw-welcome.is-configuring .cw-welcome-footer { position: static; margin-top: -40px; padding-bottom: 20px; }
+@keyframes welcome-setup-reveal { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 600px) { .cw-welcome.is-configuring .cw-welcome-content { padding-top: 90px; } .cw-welcome.is-configuring h1 { font-size: 24px; } }
+@media (prefers-reduced-motion: reduce) { .cw-welcome .cw-welcome-setup { animation: none; } }
+
+/* The full-screen setup shares one continuous page surface. */
+.cw-welcome-setup .cw-model-editor-footer {
+  background: transparent;
+  border-top: 0;
+  padding: 20px 0 0;
+}
+
+.cw-model-guide-progress { margin-bottom: 20px; color: var(--settings-muted); font-size: 12px; }
+.cw-model-guide-progress p { margin: 6px 0 0; line-height: 1.6; }
+.cw-model-guide-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; padding-bottom: 4px; }
+.cw-welcome-footer { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.cw-welcome.is-configuring .cw-welcome-footer { margin-top: 0; }
+.cw-welcome-skip-all { border: 0; background: transparent; padding: 8px 14px; color: var(--settings-muted); cursor: pointer; font: inherit; border-radius: 8px; }
+.cw-welcome-skip-all:hover { color: var(--settings-text); background: var(--settings-hover); }
+
+/* Keep the global exit visible independently of setup content height. */
+.cw-welcome.is-configuring .cw-welcome-content { padding-bottom: 120px; }
+.cw-welcome.is-configuring .cw-welcome-footer {
+  position: fixed;
+  inset: auto 0 0;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 12px 24px 20px;
+  gap: 8px;
+  background: var(--settings-background);
+  z-index: 2;
+}
+.cw-welcome-complete { margin: 64px auto 0; max-width: 420px; text-align: center; animation: welcome-setup-reveal 450ms ease-out both; }
+.cw-welcome-complete-check { display: grid; place-items: center; width: 52px; height: 52px; margin: 0 auto 22px; border-radius: 50%; color: #75d69a; background: #75d69a15; font-size: 26px; }
+:root[data-theme="light"] .cw-welcome-complete-check { color: #237544; background: #23754415; }
+.cw-welcome-complete h2 { margin: 0; font-size: 24px; font-weight: 600; }
+.cw-welcome-complete p { margin: 14px 0 28px; color: var(--settings-muted); font-size: 14px; line-height: 1.8; }
+.cw-welcome-complete button { min-width: 180px; min-height: 44px; border-radius: 10px; padding: 10px 24px; font: inherit; cursor: pointer; }
+@media (prefers-reduced-motion: reduce) { .cw-welcome-complete { animation: none; } }

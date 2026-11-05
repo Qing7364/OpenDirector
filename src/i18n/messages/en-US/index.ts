@@ -1,3 +1,4 @@
+import { modelSetup } from "./modelSetup.ts";
 import type { MessageEntry } from "../../types.ts";
 import { api } from "./api.ts";
 import { assistant } from "./assistant.ts";
@@ -21,6 +22,7 @@ type ZhCatalog = typeof import("../zh-CN/index.ts").zhCN;
 export const enUS: Record<keyof ZhCatalog, MessageEntry> = {
   ...common,
   ...settings,
+  ...modelSetup,
   ...canvas,
   ...canvasShell,
   ...canvasNodes,

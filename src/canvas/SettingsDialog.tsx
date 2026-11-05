@@ -8,8 +8,8 @@ import { useI18n, useT } from "../i18n/I18nProvider";
 import type { Locale } from "../i18n/types";
 
 const categories = [
-  { id: "general", labelKey: "settings.general", icon: "settings" },
   { id: "models", labelKey: "settings.models", icon: "model" },
+  { id: "general", labelKey: "settings.general", icon: "settings" },
 ] as const;
 
 function GeneralSettings({
@@ -230,7 +230,7 @@ export function SettingsDialog({
             {category === "general" ? (
               <GeneralSettings catalog={catalog} theme={theme} />
             ) : (
-              <ModelSettings catalog={catalog} />
+              <ModelSettings catalog={catalog} onClose={onClose} />
             )}
           </div>
         </section>

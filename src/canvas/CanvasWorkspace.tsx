@@ -259,6 +259,8 @@ import { ProjectNameDialog } from "./ProjectNameDialog";
 import { ProjectSelector } from "./ProjectSelector";
 import { referencePresentation, referenceSnapshot } from "./referenceEvidence";
 import "./settings.css";
+import { modelSetupMissing, dismissModelSetup, shouldShowModelSetup } from "./ModelSetup";
+import { WelcomeScreen } from "./WelcomeScreen";
 import { SettingsDialog } from "./SettingsDialog";
 import { alignNodes, type Alignment } from "./snapping";
 import { StackEditor } from "./StackEditor";
@@ -675,6 +677,19 @@ function Workspace() {
   const [settingsCategory, setSettingsCategory] = useState<
     "general" | "models"
   >("general");
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const setupChecked = useRef(false);
+  useEffect(() => {
+    if (setupChecked.current || !backendCatalog.connected) return;
+    setupChecked.current = true;
+    const preview = new URLSearchParams(window.location.search).get("setup");
+    if (preview === "models") {
+      setSettingsCategory("models");
+      setSettingsOpen(true);
+    } else if (preview === "welcome" || (shouldShowModelSetup() && modelSetupMissing(backendCatalog.models).length > 0)) {
+      setWelcomeOpen(true);
+    }
+  }, [backendCatalog.connected, backendCatalog.models]);
   const theme = useTheme();
   const serviceRuns = useRef(new Map<string, ServiceRun>());
   const [activeGenerations, setActiveGenerations] = useState<
@@ -6565,12 +6580,16 @@ function Workspace() {
             onClose={closeEditor}
           />
         )}
+      {welcomeOpen && <WelcomeScreen
+        catalog={backendCatalog}
+        onSkip={() => { dismissModelSetup(); setWelcomeOpen(false); }}
+      />}
       {settingsOpen && (
         <SettingsDialog
           catalog={backendCatalog}
           theme={theme}
           initialCategory={settingsCategory}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => { dismissModelSetup(); setSettingsOpen(false); }}
         />
       )}
       {help && (
