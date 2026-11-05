@@ -7,6 +7,12 @@
       "ArtifactPublish": {
         "additionalProperties": false,
         "description": "Publish a file from a server-owned execution context without generating media.",
+        "examples": [
+          {
+            "name": "片段 01",
+            "path": "clips/segment-01.mp4"
+          }
+        ],
         "properties": {
           "path": {
             "description": "Artifact path relative to the server-owned execution directory.",
@@ -675,7 +681,7 @@
         "additionalProperties": false,
         "properties": {
           "assetId": {
-            "description": "Asset ID.",
+            "description": "ID of a registered project asset from project.assets[].id or a successful asset command result.",
             "format": "uuid",
             "title": "Assetid",
             "type": "string"
@@ -1216,7 +1222,7 @@
               }
             ],
             "default": null,
-            "description": "Selected model configuration ID.",
+            "description": "Model configuration ID from the model catalog or user model selections.",
             "title": "Modelconfigid"
           },
           "prompt": {
@@ -4679,6 +4685,7 @@
       },
       "EmptyBinding": {
         "additionalProperties": false,
+        "description": "An empty canvas item with optional editable draft or manual text.",
         "properties": {
           "role": {
             "const": "empty",
@@ -4984,6 +4991,7 @@
       },
       "GenerationBinding": {
         "additionalProperties": false,
+        "description": "Displays a generation configuration and its adopted result.",
         "properties": {
           "role": {
             "const": "generation",
@@ -5177,7 +5185,7 @@
               }
             ],
             "default": null,
-            "description": "Selected model configuration ID.",
+            "description": "Model configuration ID from the model catalog or user model selections.",
             "title": "Modelconfigid"
           },
           "prompt": {
@@ -6090,7 +6098,7 @@
               }
             ],
             "default": null,
-            "description": "Selected model configuration ID.",
+            "description": "Model configuration ID from the model catalog or user model selections.",
             "title": "Modelconfigid"
           },
           "prompt": {
@@ -7336,6 +7344,7 @@
       },
       "MaterialBinding": {
         "additionalProperties": false,
+        "description": "Displays a registered project asset through objectRef.",
         "properties": {
           "role": {
             "const": "material",
@@ -8246,7 +8255,7 @@
         "additionalProperties": false,
         "properties": {
           "modelConfigId": {
-            "description": "Selected model configuration ID.",
+            "description": "Model configuration ID from the model catalog or user model selections.",
             "format": "uuid",
             "title": "Modelconfigid",
             "type": "string"
@@ -11717,7 +11726,7 @@
               }
             ],
             "default": null,
-            "description": "Selected model configuration ID.",
+            "description": "Model configuration ID from the model catalog or user model selections.",
             "title": "Modelconfigid"
           },
           "prompt": {
@@ -13268,7 +13277,7 @@
               }
             ],
             "default": null,
-            "description": "Selected model configuration ID.",
+            "description": "Model configuration ID from the model catalog or user model selections.",
             "title": "Modelconfigid"
           },
           "prompt": {
@@ -14039,6 +14048,12 @@
       "ArtifactPublish": {
         "additionalProperties": false,
         "description": "Publish a file from a server-owned execution context without generating media.",
+        "examples": [
+          {
+            "name": "片段 01",
+            "path": "clips/segment-01.mp4"
+          }
+        ],
         "properties": {
           "path": {
             "description": "Artifact path relative to the server-owned execution directory.",
@@ -14730,7 +14745,7 @@
         "additionalProperties": false,
         "properties": {
           "assetId": {
-            "description": "Asset ID.",
+            "description": "ID of a registered project asset from project.assets[].id or a successful asset command result.",
             "format": "uuid",
             "title": "Assetid",
             "type": "string"
@@ -15294,7 +15309,7 @@
               }
             ],
             "default": null,
-            "description": "Selected model configuration ID.",
+            "description": "Model configuration ID from the model catalog or user model selections.",
             "title": "Modelconfigid"
           },
           "prompt": {
@@ -18860,6 +18875,7 @@
       },
       "EmptyBinding": {
         "additionalProperties": false,
+        "description": "An empty canvas item with optional editable draft or manual text.",
         "properties": {
           "role": {
             "const": "empty",
@@ -19184,6 +19200,7 @@
       },
       "GenerationBinding": {
         "additionalProperties": false,
+        "description": "Displays a generation configuration and its adopted result.",
         "properties": {
           "role": {
             "const": "generation",
@@ -19378,7 +19395,7 @@
               }
             ],
             "default": null,
-            "description": "Selected model configuration ID.",
+            "description": "Model configuration ID from the model catalog or user model selections.",
             "title": "Modelconfigid"
           },
           "prompt": {
@@ -20351,7 +20368,7 @@
               }
             ],
             "default": null,
-            "description": "Selected model configuration ID.",
+            "description": "Model configuration ID from the model catalog or user model selections.",
             "title": "Modelconfigid"
           },
           "prompt": {
@@ -21658,6 +21675,7 @@
       },
       "MaterialBinding": {
         "additionalProperties": false,
+        "description": "Displays a registered project asset through objectRef.",
         "properties": {
           "role": {
             "const": "material",
@@ -22592,7 +22610,7 @@
         "additionalProperties": false,
         "properties": {
           "modelConfigId": {
-            "description": "Selected model configuration ID.",
+            "description": "Model configuration ID from the model catalog or user model selections.",
             "format": "uuid",
             "title": "Modelconfigid",
             "type": "string"
@@ -26192,7 +26210,7 @@
               }
             ],
             "default": null,
-            "description": "Selected model configuration ID.",
+            "description": "Model configuration ID from the model catalog or user model selections.",
             "title": "Modelconfigid"
           },
           "prompt": {
@@ -27825,7 +27843,7 @@
               }
             ],
             "default": null,
-            "description": "Selected model configuration ID.",
+            "description": "Model configuration ID from the model catalog or user model selections.",
             "title": "Modelconfigid"
           },
           "prompt": {

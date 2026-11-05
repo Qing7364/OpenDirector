@@ -9,7 +9,7 @@ from uuid import UUID, uuid5
 
 from anyio import CancelScope
 from fastapi import APIRouter, Header
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from opendirector.agent.catalog import model_choices
@@ -153,6 +153,27 @@ def agent_routes(projects, generation, configs, provider=None) -> APIRouter:
     router = APIRouter(prefix='/api/creation/projects/{project_id}/assistant')
     conversations = Conversations(projects)
     runtimes = AgentRuntimes(projects, generation, configs, provider)
+
+    @router.get('/traces/{turn_id}/input')
+    def trace_input(project_id: UUID, turn_id: UUID):
+        file = child(child(conversations.path(project_id), 'agent-runs'), 'conversation.json')
+        with projects.local.transaction():
+            conversation = read_json(file) if file.is_file() else {}
+        for item in [conversation, *conversation.get('archivedConversations', [])]:
+            for message in item.get('messages', []):
+                if message['role'] == 'user' and message['id'] == str(turn_id):
+                    return {'text': message['text']}
+        raise ProjectError('该轮用户消息不存在。', 404)
+
+    @router.get('/traces/{turn_id}/{source}')
+    def trace(project_id: UUID, turn_id: UUID,
+              source: Literal['opencode', 'codex', 'claude', 'jiuwenswarm', 'deepseek', 'model']):
+        folder = child(conversations.path(project_id), 'agent-runs')
+        file = child(folder, f'{turn_id}.{source}.jsonl')
+        if not file.is_file():
+            raise ProjectError('轨迹文件不存在。', 404)
+        return FileResponse(file, media_type='text/plain', headers={'Cache-Control': 'no-store'})
+
     active: dict[UUID, tuple[UUID, asyncio.Task]] = {}
     admission: dict[UUID, asyncio.Lock] = {}
 

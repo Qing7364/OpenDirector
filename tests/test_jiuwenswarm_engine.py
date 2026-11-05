@@ -26,9 +26,9 @@ def test_real_engine_shared_business_loop(tmp_path, monkeypatch):
     monkeypatch.setenv('JIUWENSWARM_CONFIG_DIR', str(tmp_path / 'swarm-data/config'))
     requests = []
     steps = [
-        ('read_project', {}),
-        ('command_schema', {'type': 'asset.writeText'}),
-        ('execute_command', {'type': 'asset.writeText', 'payload': {'name': 'engine.md', 'text': 'Real engine, local model fixture'}}),
+        ('bash', {'command': 'opendirector project show'}),
+        ('bash', {'command': 'opendirector asset write-text --help'}),
+        ('bash', {'command': "opendirector asset write-text --name engine.md --text 'Real engine, local model fixture'"}),
     ]
     class Model(BaseHTTPRequestHandler):
         def log_message(self, *args):

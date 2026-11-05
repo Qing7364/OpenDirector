@@ -1,16 +1,11 @@
 """A bound port must name the real remedy instead of blaming dependencies."""
-import importlib.util
-from pathlib import Path
 import socket
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "opendirector.py"
+from opendirector import launcher as launcher_module
 
 
 def launcher():
-    spec = importlib.util.spec_from_file_location("opendirector_launcher", SCRIPT)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return launcher_module
 
 
 def bound_port():

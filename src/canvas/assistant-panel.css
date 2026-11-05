@@ -838,3 +838,19 @@
 .cw-assistant-panel .cw-skill-status > button { padding: 5px 8px; border: 1px solid var(--chat-border); border-radius: 6px; font-size: 12px; }
 
 .cw-chat-skill-token { display: inline-block; padding: 0 8px; margin-right: 5px; border: 0; border-radius: 6px; background: #2c2c3a; color: #cfcfe6; font-size: inherit; font-weight: 600; line-height: 1.65; vertical-align: baseline; white-space: nowrap; user-select: all; }
+
+.cw-assistant-trace-link {
+  display: inline-block;
+  text-decoration: none;
+}
+.cw-assistant-trace-link:hover,
+.cw-assistant-trace-link:focus-visible {
+  text-decoration: underline;
+}
+
+.cw-assistant-footnote:has(.cw-assistant-live-trace) { position: relative; }
+.cw-assistant-live-trace {
+  position: absolute;
+  inset-inline-end: 12px;
+  color: inherit;
+}

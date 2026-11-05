@@ -34,6 +34,7 @@ export const assistant = {
   "assistant.panel.log": "对话消息",
   "assistant.panel.welcomeTitle": "从一个想法开始",
   "assistant.panel.welcomeLead": "和 OpenDirector 一起构思你的下一部作品。",
+  "assistant.panel.trace": "轨迹",
   "assistant.panel.welcomeBody":
     "描述故事，或输入 @ 添加图片、视频、音频与文本参考。",
   "assistant.panel.composer": "聊天输入框",
@@ -255,7 +256,7 @@ export const assistant = {
   },
   "assistant.activity.thinking": "正在思考…",
   "assistant.activity.plan": "正在执行计划：{step}",
-  "assistant.activity.replying": "正在回复…",
+  "assistant.activity.replying": "思考中…",
 
   // Agent tool names, kept separate from tool arguments and results.
   "assistant.tool.query": "查询工程",

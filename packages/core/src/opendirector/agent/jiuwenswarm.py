@@ -11,7 +11,8 @@ from uuid import uuid4
 from opendirector.agent.context import RunContext
 from opendirector.agent.gateway import ToolGateway
 from opendirector.agent.skill_snapshot import prepare_skills
-from opendirector.agent.tools import SYSTEM, tools
+from opendirector.agent.tools import SYSTEM
+from opendirector.agent import cli_transport
 from opendirector.agent.process import terminate
 from opendirector.domain.projects import ProjectError
 
@@ -123,7 +124,7 @@ async def query(operation: str) -> dict:
         raise ProjectError('JiuwenSwarm 查询失败，请检查本机配置。', 503)
     if operation == 'protocol.capabilities':
         data = result['data']
-        if data['schema_version'] != '0.1' or not all(data['features'].get(name) for name in ('host_tools', 'cancel', 'run_skills', 'custom_agent')):
+        if data['schema_version'] != '0.1' or not all(data['features'].get(name) for name in ('cancel', 'run_skills', 'custom_agent')):
             raise ProjectError('JiuwenSwarm CLI 协议不支持所需能力，请更新 CLI。', 503)
     return result['data']
 
@@ -144,126 +145,117 @@ class JiuwenSwarmRuntime:
         selection = {'model': run.runtime_model, 'thinking': run.thinking}
         session_id = run.native_session_id(selection)
         with TemporaryDirectory(prefix='od-jiuwen-') as temporary:
-            state = run.native_session_path() or Path(temporary)
-            config = Path(temporary) / 'config'
-            config.mkdir()
-            # Keep credentials out of published execution files and native traces.
-            home = Path(os.environ.get('JIUWENSWARM_HOME', Path.home()))
-            source = Path(os.environ.get('JIUWENSWARM_DATA_DIR', home / '.jiuwenswarm')) / 'config'
-            for name in ('config.yaml', '.env'):
-                if (source / name).is_file():
-                    shutil.copyfile(source / name, config / name)
-                    (config / name).chmod(0o600)
-            if not (config / 'config.yaml').is_file():
-                raise ProjectError('请先运行 jiuwenswarm-init 并配置模型。', 503)
-            skill_root = Path(temporary) / 'skills'
-            skill_root.mkdir()
-            for root in gateway.roots:
-                shutil.copytree(root, skill_root / root.name)
-            skill_link = state / 'agent/workspace/skills'
-            skill_link.parent.mkdir(parents=True, exist_ok=True)
-            if skill_link.is_symlink():
-                skill_link.unlink()
-            skill_link.symlink_to(skill_root, target_is_directory=True)
-            gateway.roots += list(skill_root.iterdir())
-            functions = [item['function'] for item in tools()]
-            host_tools = [{'name': item['name'], 'description': item['description'],
-                           'input_schema': item['parameters']} for item in functions]
-            request = {'schema_version': '0.1', 'type': 'run', 'request_id': str(run.turn_id),
-                'input': (f'Execution directory: {work}\n'
-                    'Use inherited PATH to discover installed programs with command -v. '
-                    'Read source assets at their supplied absolute paths; do not move or modify them. '
-                    'Write intermediate files and outputs into the execution directory. '
-                    'Use OpenDirector business tools for project changes.\n'
-                    + json.dumps(run.messages[-1:] if session_id else run.messages, ensure_ascii=False)),
-                'agent': {'name': 'opendirector', 'instructions': SYSTEM,
-                    'tools': [item['name'] for item in functions] + ['skill_tool', 'list_skill', 'read_file', 'bash']},
-                'skills': run.selected_skills, 'mcp': [], 'host_tools': host_tools,
-                'workspace': {'cwd': str(work), 'project_dir': str(work)}}
-            if session_id:
-                request['session_id'] = session_id
-            if run.runtime_model:
-                request['model'] = run.runtime_model
-            trace_path = work.parent / f'{run.turn_id}.jiuwenswarm.jsonl'
-            with trace_path.open('a', encoding='utf-8') as trace:
-                async def emit(event):
-                    if not stopping:
-                        await queue.put(event)
+            async with cli_transport.turn_environment(work, gateway, queue, temporary) as cli_env:
+                state = run.native_session_path() or Path(temporary)
+                config = Path(temporary) / 'config'
+                config.mkdir()
+                # Native model execution resolves DATA_DIR/config, unlike the
+                # catalog which also honors CONFIG_DIR. Use one temporary root
+                # with persistent agent state so both read the same config.
+                runtime_root = Path(temporary)
+                (state / 'agent').mkdir(parents=True, exist_ok=True)
+                if state != runtime_root:
+                    (runtime_root / 'agent').symlink_to(state / 'agent', target_is_directory=True)
+                # Keep credentials out of published execution files and native traces.
+                home = Path(os.environ.get('JIUWENSWARM_HOME', Path.home()))
+                source = Path(os.environ.get('JIUWENSWARM_DATA_DIR', home / '.jiuwenswarm')) / 'config'
+                for name in ('config.yaml', '.env'):
+                    if (source / name).is_file():
+                        shutil.copyfile(source / name, config / name)
+                        (config / name).chmod(0o600)
+                if not (config / 'config.yaml').is_file():
+                    raise ProjectError('请先运行 jiuwenswarm-init 并配置模型。', 503)
+                skill_root = Path(temporary) / 'skills'
+                skill_root.mkdir()
+                for root in gateway.roots:
+                    shutil.copytree(root, skill_root / root.name)
+                skill_link = state / 'agent/workspace/skills'
+                skill_link.parent.mkdir(parents=True, exist_ok=True)
+                if skill_link.is_symlink():
+                    skill_link.unlink()
+                skill_link.symlink_to(skill_root, target_is_directory=True)
+                gateway.roots += list(skill_root.iterdir())
+                request = {'schema_version': '0.1', 'type': 'run', 'request_id': str(run.turn_id),
+                    'input': (f'Execution directory: {work}\n'
+                        'Use inherited PATH to discover installed programs with command -v. '
+                        'Read source assets at their supplied absolute paths; do not move or modify them. '
+                        'Write intermediate files and outputs into the execution directory. '
+                        'Use opendirector --help to discover project commands and use opendirector for project changes.\n'
+                        + json.dumps(run.messages[-1:] if session_id else run.messages, ensure_ascii=False)),
+                    'agent': {'name': 'opendirector', 'instructions': SYSTEM,
+                        'tools': ['skill_tool', 'list_skill', 'read_file', 'bash']},
+                    'skills': run.selected_skills, 'mcp': [], 'host_tools': [],
+                    'workspace': {'cwd': str(work), 'project_dir': str(work)}}
+                if session_id:
+                    request['session_id'] = session_id
+                if run.runtime_model:
+                    request['model'] = run.runtime_model
+                trace_path = work.parent / f'{run.turn_id}.jiuwenswarm.jsonl'
+                with trace_path.open('a', encoding='utf-8') as trace:
+                    async def emit(event):
+                        if not stopping:
+                            await queue.put(event)
 
-                async def observe(record):
-                    nonlocal emitted_chars
-                    trace.write(json.dumps({'native': record}, ensure_ascii=False) + '\n')
-                    trace.flush()
-                    if record['event_type'] == 'chat.delta':
-                        text = record['payload']['text']
-                        emitted_chars += len(text)
-                        if text:
-                            await emit({'type': 'delta', 'text': text})
-                    elif record['event_type'] in {'chat.tool_call', 'chat.tool_result'}:
-                        tool = record['payload']['tool']
-                        if tool['name'] not in gateway.names:
-                            detail = json.dumps(tool['result'], ensure_ascii=False)
-                            await emit({'type': 'tool', 'id': 'native:' + tool['call_id'], 'name': tool['name'],
-                                'status': {'started': 'running', 'completed': 'complete', 'failed': 'failed'}[tool['status']],
-                                'arguments': tool['arguments'], 'result': detail[:65536],
-                                'resultTruncated': len(detail) > 65536})
+                    async def observe(record):
+                        nonlocal emitted_chars
+                        trace.write(json.dumps({'native': record}, ensure_ascii=False) + '\n')
+                        trace.flush()
+                        if record['event_type'] == 'chat.delta':
+                            text = record['payload']['text']
+                            emitted_chars += len(text)
+                            if text:
+                                await emit({'type': 'delta', 'text': text})
+                        elif record['event_type'] in {'chat.tool_call', 'chat.tool_result'}:
+                            tool = record['payload']['tool']
+                            if tool['name'] not in gateway.names:
+                                detail = json.dumps(tool['result'], ensure_ascii=False)
+                                await emit({'type': 'tool', 'id': 'native:' + tool['call_id'], 'name': tool['name'],
+                                    'status': {'started': 'running', 'completed': 'complete', 'failed': 'failed'}[tool['status']],
+                                    'arguments': tool['arguments'], 'result': detail[:65536],
+                                    'resultTruncated': len(detail) > 65536})
 
-                async def call(record):
-                    payload = record['payload']
-                    name, arguments = payload['name'], payload['arguments']
-                    call_id = payload['call_id']
-                    await emit({'type': 'tool', 'id': call_id, 'name': name, 'status': 'running', 'arguments': arguments})
-                    outcome = await gateway.call(call_id, name, arguments)
-                    detail = json.dumps(outcome.value, ensure_ascii=False, indent=2)
-                    event = {**outcome.event(name), 'id': call_id, 'arguments': arguments,
-                        'result': detail[:65536], 'resultTruncated': len(detail) > 65536}
-                    trace.write(json.dumps(event, ensure_ascii=False) + '\n')
-                    trace.flush()
-                    await emit(event)
-                    return outcome.value
-
-                task = asyncio.create_task(execute(request, cwd=str(work), env={'JIUWENSWARM_DATA_DIR': str(state),
-                    'JIUWENSWARM_CONFIG_DIR': str(config)}, on_event=observe, on_tool_call=call, cancel=cancel))
-                pending = None
-                try:
-                    while True:
-                        pending = asyncio.create_task(queue.get())
-                        done, _ = await asyncio.wait((task, pending), return_when=asyncio.FIRST_COMPLETED)
-                        if pending in done:
-                            yield pending.result()
-                        if task in done:
-                            break
-                    while not queue.empty():
-                        yield queue.get_nowait()
-                    result = task.result()
-                    trace.write(json.dumps({'native': result}, ensure_ascii=False) + '\n')
-                    terminal_written = True
-                    if result['status'] != 'completed':
-                        reason = (result.get('error') or {}).get('message')
-                        if reason:
-                            raise ProjectError(f"JiuwenSwarm 执行未完成（{result['status']}）：{reason}", 502)
-                        raise ProjectError(f"JiuwenSwarm 执行未完成（{result['status']}），请检查原生轨迹。", 502)
-                    if session_id and session_id != result['session_id']:
-                        raise ProjectError('JiuwenSwarm 返回了不同的会话 ID。', 502)
-                    run.save_native_session(result['session_id'], selection)
-                    # The terminal output includes the deltas and any unflushed final tail.
-                    remaining = (result.get('output') or '')[emitted_chars:]
-                    if remaining:
-                        yield {'type': 'delta', 'text': remaining}
-                except (ValueError, KeyError, TypeError, TimeoutError, OSError) as error:
-                    raise ProjectError('JiuwenSwarm 执行失败或需要尚未支持的用户交互，请检查原生轨迹。', 502) from error
-                finally:
-                    stopping = True
-                    if pending is not None:
-                        pending.cancel()
-                        await asyncio.gather(pending, return_exceptions=True)
-                    cancel.set()
-                    if not task.done():
-                        try:
-                            await asyncio.wait_for(asyncio.shield(task), 10)
-                        except (TimeoutError, ValueError, KeyError, TypeError, OSError):
-                            task.cancel()
-                    with suppress(asyncio.CancelledError, ValueError, KeyError, TypeError, OSError):
-                        result = await task
-                        if not terminal_written:
-                            trace.write(json.dumps({'native': result}, ensure_ascii=False) + '\n')
+                    task = asyncio.create_task(execute(request, cwd=str(work), env={**cli_env, 'JIUWENSWARM_DATA_DIR': str(runtime_root),
+                        'JIUWENSWARM_CONFIG_DIR': str(config)}, on_event=observe, cancel=cancel))
+                    pending = None
+                    try:
+                        while True:
+                            pending = asyncio.create_task(queue.get())
+                            done, _ = await asyncio.wait((task, pending), return_when=asyncio.FIRST_COMPLETED)
+                            if pending in done:
+                                yield pending.result()
+                            if task in done:
+                                break
+                        while not queue.empty():
+                            yield queue.get_nowait()
+                        result = task.result()
+                        trace.write(json.dumps({'native': result}, ensure_ascii=False) + '\n')
+                        terminal_written = True
+                        if result['status'] != 'completed':
+                            reason = (result.get('error') or {}).get('message')
+                            if reason:
+                                raise ProjectError(f"JiuwenSwarm 执行未完成（{result['status']}）：{reason}", 502)
+                            raise ProjectError(f"JiuwenSwarm 执行未完成（{result['status']}），请检查原生轨迹。", 502)
+                        if session_id and session_id != result['session_id']:
+                            raise ProjectError('JiuwenSwarm 返回了不同的会话 ID。', 502)
+                        run.save_native_session(result['session_id'], selection)
+                        # The terminal output includes the deltas and any unflushed final tail.
+                        remaining = (result.get('output') or '')[emitted_chars:]
+                        if remaining:
+                            yield {'type': 'delta', 'text': remaining}
+                    except (ValueError, KeyError, TypeError, TimeoutError, OSError) as error:
+                        raise ProjectError('JiuwenSwarm 执行失败或需要尚未支持的用户交互，请检查原生轨迹。', 502) from error
+                    finally:
+                        stopping = True
+                        if pending is not None:
+                            pending.cancel()
+                            await asyncio.gather(pending, return_exceptions=True)
+                        cancel.set()
+                        if not task.done():
+                            try:
+                                await asyncio.wait_for(asyncio.shield(task), 10)
+                            except (TimeoutError, ValueError, KeyError, TypeError, OSError):
+                                task.cancel()
+                        with suppress(asyncio.CancelledError, ValueError, KeyError, TypeError, OSError):
+                            result = await task
+                            if not terminal_written:
+                                trace.write(json.dumps({'native': result}, ensure_ascii=False) + '\n')

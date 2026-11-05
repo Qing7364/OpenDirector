@@ -1,0 +1,212 @@
+"""CLI entry points against the real API and persistent project store."""
+import json
+from pathlib import Path
+import shlex
+import subprocess
+import sys
+from uuid import uuid4
+
+from fastapi.testclient import TestClient
+import httpx
+import pytest
+from typer.testing import CliRunner
+
+from opendirector import cli
+from opendirector.infrastructure.local_projects import LocalProjects
+from opendirector.infrastructure.model_configs import ModelConfigs
+from opendirector_api.main import create_app
+
+
+def test_cli_project_write_replay_and_lock(tmp_path, monkeypatch):
+    api = TestClient(create_app(LocalProjects(tmp_path)), headers={"X-OpenDirector-Request": "1"})
+    original_client = httpx.Client
+    fail_geometry_read = False
+
+    def forward(request):
+        if fail_geometry_read and request.url.path.endswith("/queries"):
+            return httpx.Response(503, json={"detail": "Geometry query temporarily unavailable"})
+        response = api.request(request.method, request.url.path, headers=dict(request.headers),
+                               content=request.read())
+        return httpx.Response(response.status_code, headers=response.headers, content=response.content)
+
+    monkeypatch.setattr(cli.httpx, "Client", lambda **kwargs:
+                        original_client(**kwargs, transport=httpx.MockTransport(forward)))
+    runner = CliRunner()
+    project, operation = uuid4(), uuid4()
+    prefix = ["--project", str(project)]
+
+    def invoke(arguments):
+        result = runner.invoke(cli.app, prefix + arguments)
+        assert result.exit_code == 0, result.output
+        return json.loads(result.output)
+
+    invoke(["project", "create", "--name", "CLI test"])
+    command = ["--operation-id", str(operation), "asset", "write-text",
+               "--name", "plan.txt", "--text", "Plan"]
+    first = invoke(command)
+    assert first["status"] == "applied"
+    assert invoke(command) == first
+    snapshot = invoke(["project", "show"])
+    assert len(snapshot["assets"]) == 1
+    asset = snapshot["assets"][0]
+    shown = invoke(["canvas", "add-material", "--asset", asset["id"], "--x", "20", "--y", "40"])
+    assert shown["status"] == "applied"
+    assert shown["canvasItems"][0]["position"] == {"x": 20, "y": 40}
+    assert shown["canvasItems"][0]["width"] == 352
+    item = invoke(["project", "show"])["canvasItems"][0]
+    assert item["binding"]["objectRef"]["assetId"] == asset["id"]
+
+    file = tmp_path / "upload.txt"
+    file.write_text("Imported text")
+    import_operation = str(uuid4())
+    imported = invoke(["--operation-id", import_operation, "asset", "import", str(file), "--kind", "text"])
+    assert imported["status"] == "applied"
+    assert invoke(["--operation-id", import_operation, "asset", "import", str(file), "--kind", "text"]) == imported
+    assert len(invoke(["project", "show"])["assets"]) == 2
+
+    model = ModelConfigs(tmp_path).save("video", "http://127.0.0.1:9999/v1",
+        "FastVideo/FastVideo-FastH3-Omni-8-Step-V1", "",
+        connection_type="self_hosted", protocol="vllm_omni", auth_mode="none", video_adapter="fasth3")
+    found = invoke(["model", "list", "--kind", "video", "--search", "fasth3"])
+    assert [entry["id"] for entry in found] == [model["id"]]
+    assert invoke(["model", "show", model["modelId"]])["id"] == model["id"]
+    assert invoke(["model", "show", model["id"]])["modelId"] == model["modelId"]
+    created = invoke(["video", "create", "--model", model["modelId"], "--prompt", "A calm scene",
+                      "--duration", "5", "--x", "450", "--y", "40", "--reference-item", item["id"]])
+    spec = next(value for value in invoke(["project", "show"])["generationSpecs"]
+                if value["id"] == created["specId"])
+    assert spec["purpose"] == "generation" and spec["modelConfigId"] == model["id"]
+    assert spec["parameters"]["durationSeconds"] == 5
+    video = next(value for value in invoke(["project", "show"])["canvasItems"]
+                 if value["id"] == created["itemId"])
+    assert video["position"] == {"x": 450, "y": 40}
+    assert created["canvasItems"][0]["position"] == video["position"]
+    assert created["canvasItems"][0]["revision"] == video["revision"]
+    submit = shlex.split(created["next"]["command"])
+    assert submit[:3] == ["opendirector", "--project", str(project)]
+    assert submit[3] == "--operation-id"
+    assert submit[5:7] == ["generation", "submit"]
+    assert f"generation_spec:{spec['id']}:{spec['revision']}" in submit
+    assert "--expected-spec-revision" in submit
+    references = invoke(["project", "show"])["references"]
+    assert references[0]["source"]["id"] == item["id"]
+
+    # Generic canvas commands and atomic batches use the same geometry receipt.
+    moved = invoke(["canvas", "move", "--items",
+        json.dumps([{"itemId": item["id"], "position": {"x": 60, "y": 80}}]),
+        "--expected-version", f"canvas_item:{item['id']}:{item['revision']}"])
+    geometry = moved["canvasItems"][0]
+    assert geometry["position"] == {"x": 60, "y": 80}
+    assert geometry["coordinateSpace"] == "canvas"
+    unchanged = invoke(["canvas", "move", "--items",
+        json.dumps([{"itemId": item["id"], "position": geometry["position"]}]),
+        "--expected-version", f"canvas_item:{item['id']}:{geometry['revision']}"])
+    assert unchanged["canvasItems"][0]["position"] == geometry["position"]
+    batch = invoke(["creation", "batch", "--operations",
+        json.dumps([{"type": "canvas.hide", "payload": {"itemId": item["id"]}}]),
+        "--expected-version", f"canvas_item:{item['id']}:{unchanged['canvasItems'][0]['revision']}"])
+    assert batch["canvasItems"][0]["visible"] is False
+    assert batch["canvasItems"][0]["position"] == geometry["position"]
+
+    fail_geometry_read = True
+    readback_failed = invoke(["canvas", "add-material", "--asset", asset["id"], "--x", "900", "--y", "40"])
+    assert readback_failed["status"] == "applied"
+    assert "Geometry query temporarily unavailable" in readback_failed["geometryReadError"]
+    fail_geometry_read = False
+    assert any(value["id"] == readback_failed["itemId"]
+               for value in invoke(["project", "show"])["canvasItems"])
+
+    other_session = str(uuid4())
+    assert api.post(f"/api/creation/projects/{project}/open",
+                    headers={"X-OpenDirector-Session": other_session}).status_code == 200
+    blocked = runner.invoke(cli.app, prefix + ["asset", "write-text", "--name", "blocked.txt", "--text", "Blocked"])
+    # app exceptions are formatted by main in a real process. The lock remains authoritative.
+    assert blocked.exit_code != 0
+    assert len(invoke(["project", "show"])["assets"]) == 2
+
+
+def test_all_cli_business_commands_have_help():
+    runner = CliRunner()
+    for kind in cli.COMMANDS:
+        namespace, action = kind.split(".", 1)
+        result = runner.invoke(cli.app, [cli.kebab(namespace), cli.kebab(action), "--help"])
+        assert result.exit_code == 0, (kind, result.output)
+        assert "--file" in result.output
+
+
+def test_parser_error_shows_specific_command_help():
+    script = Path(__file__).resolve().parents[1] / "scripts/opendirector.py"
+    result = subprocess.run([sys.executable, str(script), "video", "create", "--asset", "unknown"],
+                            text=True, capture_output=True)
+    assert result.returncode == 2
+    assert "No such option: --asset" in result.stderr
+    for option in ("--model", "--prompt", "--duration", "--first-frame", "--reference-item"):
+        assert option in result.stderr
+
+
+
+def test_model_selector_requires_a_unique_exact_name():
+    identity = str(uuid4())
+    model = {"id": identity, "modelId": "Example-Lite", "kind": "video", "url": "http://localhost:9000"}
+    other = {**model, "id": str(uuid4()), "url": "http://localhost:9001"}
+    assert cli.select_model([model, other], identity.upper()) == model
+    assert cli.select_model([model], "Example-Lite") == model
+    with pytest.raises(cli.ProjectError, match="not found"):
+        cli.select_model([model], "Example")
+    with pytest.raises(cli.ProjectError, match="Multiple model configurations") as error:
+        cli.select_model([model, other], "Example-Lite")
+    assert identity in str(error.value) and other["id"] in str(error.value)
+
+
+def test_accepted_cli_receipt_provides_wait_commands(monkeypatch):
+    project = str(uuid4())
+    jobs = [str(uuid4()), str(uuid4())]
+    monkeypatch.setenv("OPENDIRECTOR_AGENT_SOCKET", "/test-only.sock")
+    client = cli.Client(None, "http://localhost:18765", None, None)
+    receipt = {"status": "accepted", "projectId": project, "jobIds": jobs, "changed": []}
+    monkeypatch.setattr(client, "call", lambda *args, **kwargs: receipt)
+    try:
+        result = client.execute("generation.submit", {})
+        commands = result["next"]["commands"]
+        assert len(commands) == 2
+        for job_id, command in zip(jobs, commands):
+            assert shlex.split(command) == ["opendirector", "--url", "http://localhost:18765",
+                "--project", project, "job", "wait", job_id, "--timeout", "60"]
+        assert "next" not in receipt
+    finally:
+        client.http.close()
+
+
+@pytest.mark.parametrize('adopted', [False, True])
+def test_completed_job_inspection_reuses_registered_result(monkeypatch, tmp_path, adopted):
+    from copy import deepcopy
+    asset, result_id, spec_id, item_id = [str(uuid4()) for _ in range(4)]
+    ref = {'assetId': asset, 'revision': 1, 'kind': 'video', 'fingerprint': 'sha256:' + 'a' * 64}
+    job = {'status': 'succeeded', 'asset': ref}
+    snapshot = {'assets': [{'id': asset}], 'results': [{'id': result_id, 'asset': ref}],
+        'generationSpecs': [{'id': spec_id, 'currentResultId': result_id if adopted else None}],
+        'canvasItems': [{'id': item_id, 'revision': 2, 'visible': True,
+            'position': {'x': 400, 'y': 0}, 'width': 352, 'height': 352,
+            'binding': {'role': 'generation', 'objectRef': {'id': spec_id}}}]}
+    before = deepcopy(snapshot)
+    monkeypatch.setenv('OPENDIRECTOR_AGENT_SOCKET', '/test-only.sock')
+    client = cli.Client(None, 'http://localhost:18765', None, None)
+    calls = []
+    def call(name, arguments, **kwargs):
+        calls.append(name)
+        assert name == 'query'
+        return job
+    monkeypatch.setattr(client, 'call', call)
+    monkeypatch.setattr(client, 'snapshot', lambda: snapshot)
+    try:
+        for _ in range(2):
+            response = client.query('job.get', objectId=str(uuid4()))
+            delivery = response['delivery']
+            assert delivery['registered'] and delivery['asset'] == ref
+            assert delivery['adopted'] == adopted
+            assert [item['id'] for item in delivery['canvasItems']] == ([item_id] if adopted else [])
+        assert snapshot == before
+        assert calls == ['query', 'query']
+        assert 'delivery' not in job
+    finally:
+        client.http.close()

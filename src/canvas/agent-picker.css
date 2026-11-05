@@ -1,6 +1,6 @@
 .cw-agent-menu {
   position: absolute; z-index: 90; left: 0; bottom: calc(100% + 10px);
-  width: min(330px, calc(100cqw - 96px)); max-height: min(480px, 65dvh); overflow: visible;
+  width: min(330px, calc(100cqw - 96px)); max-height: min(480px, 65dvh); overflow-y: auto;
   padding: 10px; border: 1px solid var(--chat-border); border-radius: 14px;
   background: var(--chat-background); color: var(--chat-text); box-shadow: 0 10px 36px #0005;
 }

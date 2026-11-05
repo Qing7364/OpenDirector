@@ -695,8 +695,14 @@ class CreationProjects:
                     self.local._conflict(self.root, snapshot.project.name, path)
             except ContractError as error:
                 issue = error.issue
-            except (ValidationError, ValueError, ProjectError):
-                issue = dict(code='invalid_input', message='工程修改未通过校验，原对象未修改。')
+            except ValidationError as error:
+                failures = error.errors(include_input=False, include_url=False, include_context=False)
+                paths = ['.'.join(str(part) for part in failure['loc']) for failure in failures]
+                issue = dict(code='invalid_input', field=paths[0][:200] or None,
+                             message='; '.join(f"{path}: {failure['msg']}" if path else failure['msg']
+                                               for path, failure in zip(paths, failures))[:500])
+            except (ValueError, ProjectError) as error:
+                issue = dict(code='invalid_input', message=str(error)[:500])
             if issue is not None:
                 snapshot, changed = before, []
             elif changed:

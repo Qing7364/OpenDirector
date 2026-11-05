@@ -77,7 +77,7 @@ Runtime 适配层 → 原生 harness Loop、工具与 Skill
 | `packages/core/src/opendirector/agent/skills.py`、`packages/agent/skills/` | 技能发现与内置技能资源 |
 | `packages/core/src/opendirector/agent/model_gateway.py` | Default 的模型请求代理 |
 | `apps/api/src/opendirector_api/agent.py` | 会话、运行入口、停止及回复持久化 |
-| `scripts/agent-mcp.py` | 原生 harness 与本轮业务工具的通信桥接 |
+| `scripts/opendirector.py` | Typer CLI 源码入口，通过 HTTP 或本轮受限连接调用共用服务 |
 | `src/canvas/AgentPicker.tsx`、`SkillPicker.tsx`、`ChatReferenceEditor.tsx` | 模型和技能选择、输入引用 |
 | `src/canvas/AssistantPanel.tsx`、`AssistantReply.tsx`、`AssistantMedia.tsx` | 对话、工具详情与素材预览 |
 | `src/canvas/useAssistantChat.ts`、`agentPreferences.ts`、`src/backend/chat.ts` | 运行事件、选择偏好和会话接口 |

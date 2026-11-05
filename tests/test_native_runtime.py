@@ -31,21 +31,19 @@ if 'Continue plan' in prompt:
 assert list(Path('.agents/skills').glob('*/SKILL.md'))
 assert str(Path.cwd()) in prompt
 subprocess.run(['sh', '-c', 'printf \"native execution works\" > environment-check.txt'], check=True)
-bridge = subprocess.Popen([sys.executable, os.environ['BRIDGE']], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
-def rpc(value):
- bridge.stdin.write(json.dumps(value)+'\\n'); bridge.stdin.flush()
- response = json.loads(bridge.stdout.readline())
- assert 'error' not in response, response
- return response['result']
-rpc({'id':1, 'method':'initialize'})
-assert len(rpc({'id':2, 'method':'tools/list'})['tools']) == 5
-result = rpc({'id':3, 'method':'tools/call', 'params':{'name':'execute_command', 'arguments':{'type':'asset.writeText','payload':{'name':'native.md','text':'Native plan'}}}})
-assert not result['isError'], result
-assert rpc({'id':3, 'method':'tools/call', 'params':{'name':'execute_command', 'arguments':{'type':'asset.writeText','payload':{'name':'native.md','text':'Native plan'}}}}) == result
-preview = rpc({'id':4, 'method':'tools/call', 'params':{'name':'query', 'arguments':{'type':'asset.preview','objectId':'00000000-0000-0000-0000-000000000001'}}})
-assert not preview['isError'], preview
-assert preview['content'][1] == {'type':'image','data':'cHJldmlldw==','mimeType':'image/webp'}, preview
-bridge.stdin.close(); bridge.wait()
+cli = [sys.executable, os.environ['OD']]
+def invoke(*arguments):
+ response = subprocess.check_output([*cli, *arguments], text=True)
+ return json.loads(response)
+assert 'project' in subprocess.check_output([*cli, '--help'], text=True)
+assert 'Asset ID' in subprocess.check_output([*cli, 'asset', 'write-text', '--help'], text=True) or 'name' in subprocess.check_output([*cli, 'asset', 'write-text', '--help'], text=True)
+payload = '{"name":"native.md","text":"Native plan"}'
+operation = '00000000-0000-0000-0000-000000000003'
+result = invoke('--operation-id', operation, 'asset', 'write-text', '--name', 'native.md', '--text', 'Native plan')
+assert result['status'] == 'applied', result
+assert invoke('--operation-id', operation, 'asset', 'write-text', '--name', 'native.md', '--text', 'Native plan') == result
+preview = invoke('query', 'asset.preview', '--object-id', '00000000-0000-0000-0000-000000000001')
+assert preview['preview']['mimeType'] == 'image/webp', preview
 runtime = os.environ['TEST_RUNTIME']
 if runtime == 'codex':
  print(json.dumps({'type':'thread.started','thread_id':'test-native'}))
@@ -74,7 +72,7 @@ def project(client):
 
 
 @pytest.mark.parametrize('runtime', ['default', 'opencode', 'codex', 'claude'])
-def test_native_events_real_mcp_and_shared_write(tmp_path, monkeypatch, runtime):
+def test_native_events_real_cli_and_shared_write(tmp_path, monkeypatch, runtime):
     local = LocalProjects(tmp_path)
     config = ModelConfigs(tmp_path).save('agent','http://localhost:9999/v1','test','',auth_mode='none')
     script = tmp_path / 'fake_cli.py'
@@ -85,8 +83,8 @@ def test_native_events_real_mcp_and_shared_write(tmp_path, monkeypatch, runtime)
         {'preview': {'path': str(preview), 'mimeType': 'image/webp'}})
     def command(kind, work, socket, token, model, model_url, catalog, **kwargs):
         return [sys.executable, str(script)], {**os.environ, 'TEST_RUNTIME':kind,
-            'OPENDIRECTOR_AGENT_SOCKET':socket,'OPENDIRECTOR_AGENT_TOKEN':token,
-            'BRIDGE':str(native.ROOT / 'scripts/agent-mcp.py')}
+            'OPENDIRECTOR_AGENT_SOCKET':socket,
+            'OD':str(native.ROOT / 'scripts/opendirector.py')}
     monkeypatch.setattr(native, 'command', command)
     monkeypatch.setattr(native, 'executable', lambda _: sys.executable)
     with TestClient(create_app(local), headers={'X-OpenDirector-Request':'1','X-OpenDirector-Session':str(uuid4())}) as client:
@@ -100,7 +98,8 @@ def test_native_events_real_mcp_and_shared_write(tmp_path, monkeypatch, runtime)
         assert events[-1]['conversation']['messages'][-1]['text'] == 'Native saved.'
         snapshot = client.get(path).json()
         assert len(snapshot['assets']) == 1
-        activity = events[-1]['conversation']['messages'][-1]['tools'][0]
+        activity = next(tool for tool in events[-1]['conversation']['messages'][-1]['tools']
+                        if tool['name'] == 'opendirector asset write-text')
         assert activity['arguments']['type'] == 'asset.writeText'
         assert json.loads(activity['result'])['status'] == 'applied'
         assert activity['resultTruncated'] is False
@@ -133,7 +132,7 @@ def test_native_commands_keep_auth_and_restrict_tools(tmp_path, monkeypatch):
             assert '--ignore-user-config' in args
             assert 'features.shell_tool=true' in args
             assert args[args.index('--sandbox') + 1] == 'workspace-write'
-            assert 'mcp_servers.opendirector.default_tools_approval_mode="approve"' in args
+            assert not any('mcp_servers.' in item for item in args)
             assert '--dangerously-bypass-approvals-and-sandbox' not in args
         elif runtime == 'claude':
             assert '--max-turns' not in args
@@ -147,7 +146,8 @@ def test_native_commands_keep_auth_and_restrict_tools(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("runtime", ["default"])
-def test_real_opencode_native_skill_and_gateway_write(tmp_path, runtime):
+@pytest.mark.parametrize("resume", [False, True])
+def test_real_opencode_native_skill_and_gateway_write(tmp_path, runtime, resume):
     if native.executable('default') is None:
         pytest.skip('Bundled OpenCode is not installed')
     requests = []
@@ -164,8 +164,10 @@ def test_real_opencode_native_skill_and_gateway_write(tmp_path, runtime):
             call = {'name':'skill','arguments':json.dumps({'name':'character-replacement'})}
         elif count == 2:
             assert 'Create a 24-FPS constant-frame-rate working copy' in json.dumps(payload['messages'])
-            name = next(tool['function']['name'] for tool in payload['tools'] if tool['function']['name'].endswith('execute_command'))
-            call = {'name':name,'arguments':json.dumps({'type':'asset.writeText','payload':{'name':'real-native.md','text':'Real OpenCode plan'}})}
+            assert not any('opendirector_' in tool['function']['name'] for tool in payload['tools'])
+            call = {'name': 'bash', 'arguments': json.dumps({
+                'command': "opendirector asset write-text --name real-native.md --text 'Real OpenCode plan'",
+                'description': 'Register the plan in the project'})}
         else:
             call = None
         delta = {'tool_calls':[{'index':0,'id':f'call-{count}','type':'function','function':call}]} if call else {'content':'OpenCode ready.'}
@@ -200,6 +202,8 @@ def test_real_opencode_native_skill_and_gateway_write(tmp_path, runtime):
         assert len(client.get(path).json()['assets']) == 1
         assert len(requests) == 3
         assert 'server-only-key' not in next(local.root.rglob('*.opencode.jsonl')).read_text()
+        if not resume:
+            return
         response = client.post(path + '/assistant/turns', json={**turn, 'id': str(uuid4()), 'text': 'Continue the plan.'})
         events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith('data: ')]
         assert events[-1]['error'] is None, events

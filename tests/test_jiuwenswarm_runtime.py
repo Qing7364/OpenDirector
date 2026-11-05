@@ -17,7 +17,7 @@ from opendirector.infrastructure.local_projects import LocalProjects
 from opendirector_api.main import create_app
 
 
-FAKE = r'''import json, os, sys, time
+FAKE = r'''import json, os, subprocess, sys, time
 from pathlib import Path
 request = json.loads(sys.stdin.readline())
 assert request['schema_version'] == '0.1'
@@ -67,10 +67,9 @@ if mode == 'wait':
  assert control['type']=='cancel'
  emit('result',status='cancelled',exit_code=130,error={'code':'CANCELLED'},output='Waiting')
  raise SystemExit(130)
-emit('event',event_type='host_tool.requested',payload={'call_id':'write-1','name':'execute_command','arguments':{'type':'asset.writeText','payload':{'name':'plan.md','text':'Native plan'}}})
-control=json.loads(sys.stdin.readline())
-assert control['type']=='tool_result'
-assert control['result']['status']=='applied',control
+assert request['host_tools'] == []
+outcome = json.loads(subprocess.check_output(['opendirector', 'asset', 'write-text', '--name', 'plan.md', '--text', 'Native plan'], text=True))
+assert outcome['status'] == 'applied', outcome
 emit('event',event_type='chat.tool_call',payload={'tool':{'call_id':'skill-1','name':'skill_tool','arguments':{'skill_name':'example'},'status':'started','result':None}})
 emit('event',event_type='chat.tool_result',payload={'tool':{'call_id':'skill-1','name':'skill_tool','arguments':None,'status':'completed','result':'Skill body'}})
 delta = '' if mode == 'final_only' else 'Saved.'

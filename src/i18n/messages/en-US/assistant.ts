@@ -35,6 +35,7 @@ export const assistant = {
   "assistant.panel.log": "Conversation messages",
   "assistant.panel.welcomeTitle": "Start from an idea",
   "assistant.panel.welcomeLead": "Shape your next work with OpenDirector.",
+  "assistant.panel.trace": "Trace",
   "assistant.panel.welcomeBody":
     "Describe a story, or type @ to add image, video, audio and text references.",
   "assistant.panel.composer": "Chat input",
@@ -264,7 +265,7 @@ export const assistant = {
   },
   "assistant.activity.thinking": "Thinking…",
   "assistant.activity.plan": "Running plan: {step}",
-  "assistant.activity.replying": "Replying…",
+  "assistant.activity.replying": "Thinking…",
 
   // Agent tool names, kept separate from tool arguments and results.
   "assistant.tool.query": "Query the project",

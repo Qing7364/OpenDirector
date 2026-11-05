@@ -437,3 +437,33 @@ def test_canvas_reference_sources_create_a_connected_video_node(project, binding
     assert canvas.item_status(pid, target_id)['referenceSources'] is None
     if pinned is not None:
         assert pinned == asset_ref(asset)
+
+
+@pytest.mark.parametrize('size', [(600, 600), (600, 900), (900, 600)])
+@pytest.mark.parametrize('explicit', [False, True])
+def test_material_show_uses_media_ratio_unless_size_authored(project, size, explicit):
+    store, pid, session = project
+    image = BytesIO()
+    Image.new('RGB', size, 'blue').save(image, 'PNG')
+    handle = uuid4()
+    writer = CreationAssets(store).uploads.begin(pid, handle, session, 'image.png', expected_kind='image')
+    writer.write(image.getvalue())
+    writer.finish()
+    assert send(store, pid, 'asset.import', session=session, uploadHandle=handle,
+        name='image.png', expectedKind='image').status == 'applied'
+    asset = store.snapshot(pid).assets[-1]
+    item_id = uuid4()
+    item = dict(id=item_id, projectId=pid, kind='image', binding=dict(role='material', objectRef=asset_ref(asset)))
+    if explicit:
+        item.update(width=400, height=200)
+    assert send(store, pid, 'canvas.show', session=session, item=item).status == 'applied'
+    saved = next(item for item in store.snapshot(pid).canvasItems if item.id == item_id)
+    if explicit:
+        assert (saved.width, saved.height) == (400, 200)
+    else:
+        assert saved.width / saved.height == pytest.approx(size[0] / size[1], abs=.005)
+        assert max(saved.width, saved.height) == 352
+    reloaded = CreationProjects(LocalProjects(store.local.repository))
+    restored = next(item for item in reloaded.snapshot(pid).canvasItems if item.id == item_id)
+    assert (restored.width, restored.height) == (saved.width, saved.height)
+    assert restored.binding.objectRef == asset_ref(asset)

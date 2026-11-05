@@ -2,7 +2,7 @@
 from typing import Annotated, Literal, Union
 from uuid import UUID
 
-from pydantic import Field, TypeAdapter, create_model, model_validator
+from pydantic import ConfigDict, Field, TypeAdapter, create_model, model_validator
 
 from .assets import AssetRef, MediaMetadata
 from .base import Contract, Digest, GenerationKind, MediaKind, ObjectVersion, Point, Positive, Revision, digest, unique
@@ -27,6 +27,10 @@ class AssetImport(Contract):
 
 class ArtifactPublish(Contract):
     """Publish a file from a server-owned execution context without generating media."""
+    model_config = ConfigDict(json_schema_extra={'examples': [
+        {'path': 'clips/segment-01.mp4', 'name': '片段 01'},
+    ]})
+
     path: str = Field(min_length=1, max_length=4096, description='Artifact path relative to the server-owned execution directory.')
     name: str = Field(min_length=1, max_length=255, description='User-visible name.')
     expectedKind: MediaKind | None = Field(default=None, description='Required media kind, when specified.')
@@ -255,6 +259,25 @@ class CommandBase(Contract):
         owned = getattr(payload, 'item', None) or getattr(payload, 'spec', None) or getattr(payload, 'reference', None) or getattr(payload, 'document', None)
         if owned and owned.projectId != self.projectId:
             raise ValueError('Command payload belongs to a different project')
+        required = self.required_versions()
+        if self.type == 'asset.delete' and self.expectedPreview is None:
+            raise ValueError('Asset deletion requires an impact preview fingerprint')
+        versions = {(version.objectType, version.id): version.revision for version in self.expectedVersions}
+        missing = [f'{kind}:{identity}' for kind, identity in required if (kind, identity) not in versions]
+        if missing:
+            raise ValueError('expectedVersions missing current versions for ' + ', '.join(missing))
+        if self.type == 'generation.submit' and versions[('generation_spec', payload.specId)] != payload.expectedSpecRevision:
+            raise ValueError('Submission version differs from expected spec version')
+        if self.type in {'generationSpec.update', 'editor.save', 'reference.update', 'reference.restore'}:
+            obj = (payload.spec if self.type == 'generationSpec.update' else
+                   payload.document if self.type == 'editor.save' else payload.reference)
+            if versions[required[0]] != obj.revision:
+                raise ValueError('Payload version differs from its expected version')
+        return self
+
+
+    def required_versions(self) -> list[tuple[str, UUID]]:
+        payload = self.payload
         required = []
         if self.type in {'project.rename', 'project.trash', 'project.restore'}:
             required = [('project', self.projectId)]
@@ -274,8 +297,6 @@ class CommandBase(Contract):
             required = [('asset', payload.previousAsset.assetId)]
         elif self.type == 'asset.delete':
             required = [('asset', asset_id) for asset_id in payload.assetIds]
-            if self.expectedPreview is None:
-                raise ValueError('Asset deletion requires an impact preview fingerprint')
         elif self.type == 'generationSpec.update':
             required = [('generation_spec', payload.spec.id)]
         elif self.type in {'reference.update', 'reference.restore', 'reference.remove'}:
@@ -288,18 +309,7 @@ class CommandBase(Contract):
             required = [('generation_spec', payload.specId)]
         elif self.type == 'editor.save':
             required = [('editor_document', payload.document.id)]
-        versions = {(version.objectType, version.id): version.revision for version in self.expectedVersions}
-        missing = [f'{kind}:{identity}' for kind, identity in required if (kind, identity) not in versions]
-        if missing:
-            raise ValueError('expectedVersions missing current versions for ' + ', '.join(missing))
-        if self.type == 'generation.submit' and versions[('generation_spec', payload.specId)] != payload.expectedSpecRevision:
-            raise ValueError('Submission version differs from expected spec version')
-        if self.type in {'generationSpec.update', 'editor.save', 'reference.update', 'reference.restore'}:
-            obj = (payload.spec if self.type == 'generationSpec.update' else
-                   payload.document if self.type == 'editor.save' else payload.reference)
-            if versions[required[0]] != obj.revision:
-                raise ValueError('Payload version differs from its expected version')
-        return self
+        return required
 
 
 # HTTP/application contracts; Agent tool registration is a separate boundary.

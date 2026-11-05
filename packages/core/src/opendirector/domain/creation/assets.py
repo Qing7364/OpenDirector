@@ -9,7 +9,7 @@ from .models import ModelSnapshot
 
 
 class AssetRef(Contract):
-    assetId: UUID = Field(description='Asset ID.')
+    assetId: UUID = Field(description='ID of a registered project asset from project.assets[].id or a successful asset command result.')
     revision: Revision = Field(description='Referenced immutable asset revision.')
     fingerprint: Fingerprint = Field(description='Immutable content fingerprint.')
     kind: MediaKind = Field(description='Business object or media type.')

@@ -342,6 +342,16 @@ export function AssistantPanel({
   }
   const hoveredAsset = mediaPreview && displayedAssets.find(item => item.id === mediaPreview.assetId);
 
+  const latestReply = value.messages.at(-1);
+  const latestUser = value.messages.at(-2);
+  const latestTrace = latestReply?.role === "assistant" && latestUser?.role === "user" &&
+    new URLSearchParams({
+      traceProject: documentId,
+      turn: latestUser.id,
+      runtime: latestReply.runtime === "default" ? "opencode" : latestReply.runtime ?? "opencode",
+      ...(latestReply.status === "streaming" ? { live: "1" } : {}),
+    });
+
   return (
     <aside
       id="canvas-assistant"
@@ -424,7 +434,15 @@ export function AssistantPanel({
             </p>
           </div>
         )}
-        {value.messages.map((message) => (
+        {value.messages.map((message, index) => {
+          const previous = value.messages[index - 1];
+          const trace = message.role === "assistant" && message !== latestReply && message.status !== "streaming" &&
+            previous?.role === "user" && new URLSearchParams({
+              traceProject: documentId,
+              turn: previous.id,
+              runtime: message.runtime === "default" ? "opencode" : message.runtime ?? "opencode",
+            });
+          return (
           <article
             key={message.id}
             className={`cw-assistant-message is-${message.role}`}
@@ -484,6 +502,12 @@ export function AssistantPanel({
                   : t("assistant.reply.empty"))
               )}
             </div>
+            {trace && (
+              <a className="cw-assistant-message-status cw-assistant-trace-link"
+                href={`/?${trace}`} target="_blank" rel="noopener noreferrer">
+                {t("assistant.panel.trace")} ↗
+              </a>
+            )}
             {message.role === "user" && !!message.assets?.length && <AttachmentStrip projectId={documentId} assets={message.assets.map(resolveAsset)} />}
             {(message.status === "stopped" ||
               message.status === "interrupted") && (
@@ -494,7 +518,8 @@ export function AssistantPanel({
               </small>
             )}
           </article>
-        ))}
+        );
+        })}
       </div>
       <div className="cw-assistant-composer-area">
         {chat.error && (
@@ -767,7 +792,7 @@ export function AssistantPanel({
             )}
           </div>
         </form>
-        <p className="cw-assistant-footnote">
+        <div className="cw-assistant-footnote">
           {!chat.loaded ? (
             chat.changing
               ? t("assistant.panel.switching")
@@ -781,7 +806,13 @@ export function AssistantPanel({
           ) : (
             `${chat.runtimes.find((item) => item.id === (value.runtime ?? "default"))?.label ?? t("assistant.panel.chooseAgent")}`
           )}
-        </p>
+        {latestTrace && (
+            <a className="cw-assistant-trace-link cw-assistant-live-trace"
+              href={`/?${latestTrace}`} target="_blank" rel="noopener noreferrer">
+              {t("assistant.panel.trace")} ↗
+            </a>
+          )}
+        </div>
       </div>
       {!layout.mobile && (
         <div

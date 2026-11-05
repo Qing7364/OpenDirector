@@ -71,34 +71,54 @@ async def test_model_schema_exposes_supported_video_inputs_without_changing_cont
     business = AgentTools(None, None, configs)
     async def schema(arguments):
         return await business.execute(uuid4(), uuid4(), '', 'schema', 'command_schema', arguments, [], None)
-    full = await schema({'type': 'canvas.createGeneration'})
-    compact = await schema({'type': 'canvas.createGeneration', 'modelConfigId': config['id']})
-    assert len(json.dumps(compact)) < len(json.dumps(full)) * .65
-    defs = compact['$defs']
-    assert 'ImageCanvasItem' not in defs and 'AudioGenerationSpec' not in defs
-    fields = defs['VideoParameters']['properties']
-    assert fields['videoMode']['enum'] == ['reference']
-    assert 'default' not in fields['videoMode']
-    assert 'videoMode' in defs['VideoParameters']['required']
-    assert 'parameters' in defs['VideoGenerationSpec']['required']
-    assert fields['generateAudio']['enum'] == [True]
-    assert 'PinnedReference' in defs and 'FollowingReference' in defs
-    assert full['$defs']['VideoParameters']['properties']['videoMode']['default'] == 'first_frame'
-    assert COMMANDS['canvas.createGeneration'].model_json_schema()['$defs']['VideoParameters'] == full['$defs']['VideoParameters']
+    async def parameters(**options):
+        return await schema({'type': 'canvas.createGeneration', **options})
+
+    example = (await parameters(modelConfigId=config['id']))['example']
+    assert example['payload']['spec']['kind'] == 'video'
+    assert example['payload']['spec']['parameters']['videoMode'] == 'reference'
+    spec = await parameters(path='payload.spec', modelConfigId=config['id'])
+    assert 'parameters' in spec['required']
+    compact = await parameters(path='payload.spec.parameters', modelConfigId=config['id'])
+    assert compact['fields']['videoMode']['enum'] == ['reference']
+    assert 'default' not in compact['fields']['videoMode']
+    assert 'videoMode' in compact['required']
+    assert compact['fields']['generateAudio']['enum'] == [True]
+    full = await parameters(path='payload.spec@video.parameters')
+    assert full['fields']['videoMode']['default'] == 'first_frame'
 
 
 @pytest.mark.anyio
-async def test_command_schemas_keep_every_reference_resolvable():
+async def test_command_help_expands_canvas_fields_on_demand():
     business = AgentTools(None, None, None)
-    for kind in COMMANDS:
-        schema = await business.execute(uuid4(), uuid4(), '', kind, 'command_schema', {'type': kind}, [], None)
-        def check(value: JsonValue) -> None:
-            if isinstance(value, dict):
-                if '$ref' in value:
-                    assert value['$ref'].rsplit('/', 1)[1] in schema['$defs'], kind
-                for child in value.values():
-                    check(child)
-            elif isinstance(value, list):
-                for child in value:
-                    check(child)
-        check(schema)
+
+    async def help_at(path=''):
+        return await business.execute(uuid4(), uuid4(), '', 'help', 'command_schema',
+                                      {'type': 'canvas.show', 'path': path}, [], None)
+
+    root = await help_at()
+    assert set(root) == {'command', 'description', 'example', 'fields'}
+    assert root['fields']['payload']['path'] == 'payload'
+    payload = await help_at('payload')
+    assert payload['required'] == ['item']
+    image = await help_at(payload['fields']['item']['branches']['image']['path'])
+    assert image['fields']['width']['type'] == 'number'
+    position = await help_at(image['fields']['position']['path'])
+    assert position['fields']['x']['type'] == 'number'
+    binding = await help_at('payload.item@image.binding')
+    material = binding['branches']['material']
+    assert material['description'] == 'Displays a registered project asset through objectRef.'
+    assert material['required'] == ['role', 'objectRef']
+    asset = await help_at(material['path'] + '.objectRef')
+    assert asset['fields']['revision']['type'] == 'integer'
+    for result in (root, payload, image, position, asset):
+        assert len(json.dumps(result)) < 4096
+
+@pytest.mark.anyio
+async def test_command_help_examples_validate_for_all_exposed_commands():
+    business = AgentTools(None, None, None)
+    project_id = uuid4()
+    for name, model in COMMANDS.items():
+        help_result = await business.execute(project_id, uuid4(), '', 'help', 'command_schema',
+                                             {'type': name}, [], None)
+        model.model_validate({**help_result['example'], 'projectId': project_id, 'commandId': uuid4()})

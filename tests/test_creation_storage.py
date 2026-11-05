@@ -718,3 +718,30 @@ def test_unversioned_internal_writes_and_unknown_schema_versions_preserve_prior_
     file.write_text(json.dumps(raw))
     with pytest.raises(ProjectError, match='缺失或损坏'):
         projects.snapshot(created.projectId)
+
+
+@pytest.mark.parametrize('failure', ['validation', 'value', 'project'])
+def test_rejected_commit_reports_reason_and_preserves_snapshot(projects, failure):
+    created = create(projects)
+    before = projects.snapshot(created.projectId)
+    command = rename(created)
+
+    def reject(snapshot):
+        if failure == 'validation':
+            return snapshot.model_copy(update={'project': snapshot.project.model_copy(update={'revision': 0})})
+        if failure == 'value':
+            raise ValueError('Generation requires a configured model')
+        raise ProjectError('Selected model is unavailable')
+
+    receipt = projects.commit(command, reject, source='background')
+    assert receipt.status == 'rejected'
+    issue = receipt.issues[0]
+    if failure == 'validation':
+        assert issue.field == 'project.revision'
+        assert 'project.revision' in issue.message
+        assert 'greater than or equal to 1' in issue.message
+    else:
+        assert issue.message == ('Generation requires a configured model' if failure == 'value'
+                                 else 'Selected model is unavailable')
+    assert projects.snapshot(created.projectId) == before
+    assert projects.commit(command, reject, source='background') == receipt

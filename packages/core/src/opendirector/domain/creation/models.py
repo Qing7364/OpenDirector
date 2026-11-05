@@ -137,7 +137,7 @@ class ModelConfigWrite(ModelConnection):
 
 
 class ModelSnapshot(Contract):
-    modelConfigId: UUID = Field(description='Selected model configuration ID.')
+    modelConfigId: UUID = Field(description='Model configuration ID from the model catalog or user model selections.')
     kind: ModelKind = Field(description='Business object or media type.')
     modelId: str = Field(min_length=1, max_length=200, description='Provider-native model identifier.')
     url: str = Field(min_length=1, max_length=2048, description='Provider API base URL.')

@@ -62,17 +62,20 @@ class EditorRef(Contract):
 
 
 class EmptyBinding(Contract):
+    """An empty canvas item with optional editable draft or manual text."""
     role: Literal['empty'] = Field(description='Business role of this binding or reference.')
     draftSpec: GenerationSpecRef | None = Field(default=None, description='Editable generation draft associated with an empty item.')
     manualText: str | None = Field(default=None, max_length=1024 * 1024, description='Manually entered text for an empty text item.')
 
 
 class MaterialBinding(Contract):
+    """Displays a registered project asset through objectRef."""
     role: Literal['material'] = Field(description='Business role of this binding or reference.')
     objectRef: AssetRef = Field(description='Stable reference to the bound business object.')
 
 
 class GenerationBinding(Contract):
+    """Displays a generation configuration and its adopted result."""
     role: Literal['generation'] = Field(description='Business role of this binding or reference.')
     objectRef: GenerationSpecRef = Field(description='Stable reference to the bound business object.')
     materialOverride: AssetRef | None = Field(default=None, description='Adopted material that overrides the current generated result.')

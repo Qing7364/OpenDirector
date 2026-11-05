@@ -1,6 +1,5 @@
-"""CLI runtimes use native skills and one turn-scoped MCP business gateway."""
+"""CLI runtimes use native skills and a turn-scoped business CLI."""
 import asyncio
-import base64
 import json
 import os
 from pathlib import Path
@@ -10,11 +9,11 @@ import sys
 from tempfile import TemporaryDirectory
 
 from opendirector.agent.model_gateway import ModelGateway
-from opendirector.agent import deepseek
+from opendirector.agent import cli_transport, deepseek
 from opendirector.agent.context import RunContext
 from opendirector.agent.gateway import ToolGateway
 from opendirector.agent.process import terminate
-from opendirector.agent.tools import ROOT, SYSTEM, tools
+from opendirector.agent.tools import ROOT, SYSTEM
 from opendirector.agent.skill_snapshot import prepare_skills
 from opendirector.domain.projects import ProjectError
 from opendirector.integrations.chat_completions import ChatCompletions
@@ -42,35 +41,31 @@ def command(runtime: str, work: Path, socket: str, token: str, model: str | None
     bundled = runtime == 'default'
     if bundled:
         runtime = 'opencode'
-    # Windows CPython has no AF_UNIX support, so the caller may pass a loopback address instead.
-    bridge = {'command': sys.executable, 'args': [str(ROOT / 'scripts/agent-mcp.py')],
-              'env': {**(bridge_env or {'OPENDIRECTOR_AGENT_SOCKET': socket}), 'OPENDIRECTOR_AGENT_TOKEN': token}}
-    env = dict(os.environ)
+    env = cli_transport.environment(work, socket, bridge_env)
     if runtime == 'opencode':
         config = {'autoupdate': False, 'default_agent': 'opendirector',
             'agent': {'opendirector': {'mode': 'primary', 'prompt': SYSTEM}},
             'skills': {'paths': [str(work / '.agents/skills')]},
-            'permission': {'*': 'deny', 'opendirector_*': 'allow', 'bash': 'allow', 'read': 'allow',
+            'permission': {'*': 'deny', 'bash': 'allow', 'read': 'allow',
                 'external_directory': 'allow',
                 'skill': {'*': 'deny', **{item['name']: 'allow' for item in catalog}}},
-            'mcp': {'opendirector': {'type': 'local', 'command': [bridge['command'], *bridge['args']], 'environment': bridge['env']}}}
+            'mcp': {}}
         if bundled:
             config['provider'] = {'opendirector': {'npm': '@ai-sdk/openai-compatible', 'name': 'OpenDirector',
                 'options': {'baseURL': model_url, 'apiKey': '{env:OPENDIRECTOR_MODEL_KEY}'},
                 'models': {model: {'name': model, 'modalities': {'input': input_modalities or ['text'], 'output': ['text']}}}}}
             env.update(XDG_CONFIG_HOME=str(work), OPENDIRECTOR_MODEL_KEY=token)
         env.update(OPENCODE_DISABLE_EXTERNAL_SKILLS='1', OPENCODE_DISABLE_CLAUDE_CODE_SKILLS='1', OPENCODE_CONFIG_CONTENT=json.dumps(config))
-        args = [binary, 'run', '--pure', '--format', 'json', '--agent', 'opendirector']
+        # OpenCode uses inherited PWD when resolving its local directory.
+        env['PWD'] = str(work)
+        args = [binary, 'run', '--dir', str(work), '--pure', '--format', 'json', '--agent', 'opendirector']
         if model:
             args += ['--model', f'opendirector/{model}' if bundled else model]
         return args, env
     if runtime == 'codex':
-        settings = [f'mcp_servers.opendirector.command={json.dumps(bridge["command"])}',
-            f'mcp_servers.opendirector.args={json.dumps(bridge["args"])}', 'mcp_servers.opendirector.required=true',
-            'mcp_servers.opendirector.default_tools_approval_mode="approve"',
-            'features.shell_tool=true', 'features.apply_patch_freeform=false', 'web_search="disabled"',
+        settings = ['features.shell_tool=true', 'features.apply_patch_freeform=false', 'web_search="disabled"',
+            'sandbox_workspace_write.network_access=true',
             'skills.bundled.enabled=false', f'developer_instructions={json.dumps(SYSTEM)}']
-        settings += [f'mcp_servers.opendirector.env.{key}={json.dumps(value)}' for key, value in bridge['env'].items()]
         args = [binary, 'exec', '--json', '--skip-git-repo-check', '--ignore-user-config', '--ignore-rules', '--sandbox', 'workspace-write']
         for setting in settings:
             args += ['-c', setting]
@@ -81,8 +76,8 @@ def command(runtime: str, work: Path, socket: str, token: str, model: str | None
         (plugin / 'skills').symlink_to(work / '.agents/skills', target_is_directory=True)
         args = [binary, '-p', '--verbose', '--system-prompt', SYSTEM,
             '--output-format', 'stream-json', '--plugin-dir', str(plugin), '--tools', 'Skill,Bash,Read',
-            '--strict-mcp-config', '--mcp-config', json.dumps({'mcpServers': {'opendirector': bridge}}),
-            '--allowedTools', 'mcp__opendirector__*', 'Skill(opendirector:*)', 'Bash', 'Read',
+            '--strict-mcp-config', '--mcp-config', json.dumps({'mcpServers': {}}),
+            '--allowedTools', 'Skill(opendirector:*)', 'Bash', 'Read',
             '--permission-mode', 'dontAsk', '--setting-sources', '']
     if model:
         args += ['--model', model]
@@ -118,80 +113,38 @@ class NativeRuntime:
         session_id = run.native_session_id(selection)
         queue = asyncio.Queue(maxsize=128)
         pending = set()
-        closed = False
         token = secrets.token_urlsafe(32)
         process = pump = stderr_task = None
         with TemporaryDirectory(prefix='od-agent-', dir=None if os.name == 'nt' else '/tmp') as temporary:
             work = (directory / 'agent-runs' / str(turn_id) / 'work').resolve()
             work.mkdir(parents=True, exist_ok=False)
+            if runtime == 'opencode':
+                # Keep OpenCode's workspace discovery inside the canvas execution directory.
+                git = await asyncio.create_subprocess_exec(
+                    'git', 'init', '--quiet', '--template=', cwd=work,
+                    stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
+                )
+                _, error = await git.communicate()
+                if git.returncode:
+                    raise ProjectError(f'无法初始化画布执行目录：{error.decode(errors="replace").strip()}', 503)
             roots = prepare_skills(work, catalog)
             roots += [Path(item['filePath']).resolve().parent for item in catalog]
             gateway.roots = roots
-            async def connection(reader, writer):
-                task = asyncio.current_task()
-                pending.add(task)
-                request = {}
-                try:
-                    envelope = json.loads(await asyncio.wait_for(reader.readline(), 15))
-                    request = envelope['request']
-                    if not secrets.compare_digest(envelope['token'], token):
-                        raise ProjectError('Invalid gateway token', 403)
-                    if closed:
-                        raise ProjectError('Agent run is closed', 409)
-                    method = request['method']
-                    if method == 'initialize':
-                        result = {'protocolVersion': '2024-11-05', 'capabilities': {'tools': {}}, 'serverInfo': {'name': 'opendirector', 'version': '0.1.0'}}
-                    elif method == 'tools/list':
-                        result = {'tools': [{'name': item['function']['name'], 'description': item['function']['description'],
-                            'inputSchema': item['function']['parameters'],
-                            'annotations': {'readOnlyHint': item['function']['name'] != 'execute_command'}} for item in tools()]}
-                    elif method == 'tools/call':
-                        params = request['params']
-                        key = str(request['id'])
-                        await queue.put({'type': 'tool', 'id': 'mcp:' + key, 'name': params['name'], 'status': 'running',
-                            'arguments': params.get('arguments', {})})
-                        outcome = await gateway.call('mcp:' + key, params['name'], params.get('arguments', {}))
-                        result = {'content': [{'type': 'text', 'text': json.dumps(outcome.value, ensure_ascii=False)}],
-                                  'isError': bool(outcome.error)}
-                        if params['name'] == 'query' and params.get('arguments', {}).get('type') == 'asset.preview' and not outcome.error:
-                            preview = outcome.value.get('preview')
-                            if preview:
-                                content = base64.b64encode(await asyncio.to_thread(Path(preview['path']).read_bytes)).decode()
-                                media_type = 'image' if preview['mimeType'].startswith('image/') else 'audio'
-                                result['content'].append({'type': media_type, 'data': content, 'mimeType': preview['mimeType']})
-                        detail = json.dumps(outcome.value, ensure_ascii=False, indent=2)
-                        await queue.put({**outcome.event(params['name']), 'id': 'mcp:' + key,
-                            'arguments': params.get('arguments', {}), 'result': detail[:65536],
-                            'resultTruncated': len(detail) > 65536})
-                    elif method == 'ping':
-                        result = {}
-                    else:
-                        raise ProjectError('Unsupported MCP method')
-                    response = {'jsonrpc': '2.0', 'id': request['id'], 'result': result}
-                except (ProjectError, ValueError, KeyError, OSError, TimeoutError) as failure:
-                    response = {'jsonrpc': '2.0', 'id': request.get('id'), 'error': {'code': -32000, 'message': str(failure)}}
-                try:
-                    writer.write(json.dumps(response, ensure_ascii=False).encode() + b'\n')
-                    await writer.drain()
-                finally:
-                    writer.close()
-                    await writer.wait_closed()
-                    pending.discard(task)
-            endpoint = str(Path(temporary) / 'mcp.sock')
-            bridge_env = None
-            if hasattr(asyncio, 'start_unix_server'):
-                server = await asyncio.start_unix_server(connection, endpoint, limit=4 * 1024 * 1024)
-            else:
-                server = await asyncio.start_server(connection, '127.0.0.1', 0, limit=4 * 1024 * 1024)
-                host, port = server.sockets[0].getsockname()[:2]
-                bridge_env = {'OPENDIRECTOR_AGENT_HOST': str(host), 'OPENDIRECTOR_AGENT_PORT': str(port)}
-            model = ModelGateway(config, thinking, token, str(project_id), str(turn_id), self.transport) if run.runtime == 'default' else None
+            endpoint = str(Path(temporary) / 'cli.sock')
+            server, bridge_env = await cli_transport.start_server(gateway, queue, endpoint, pending)
+            model = None
+            if run.runtime == 'default':
+                model = ModelGateway(
+                    config, thinking, token, str(project_id), str(turn_id), self.transport,
+                    trace_path=work.parent.with_suffix('.model.jsonl'),
+                )
             model_server = await asyncio.start_server(model.connect, '127.0.0.1', 0) if model else None
             try:
                 model_url = f'http://127.0.0.1:{model_server.sockets[0].getsockname()[1]}' if model_server else ''
                 deepseek_server = None
                 if runtime == 'deepseek':
-                    args, env, deepseek_server = deepseek.command(work, endpoint, token, bridge_env)
+                    env = cli_transport.environment(work, endpoint, bridge_env)
+                    args, _, deepseek_server = deepseek.command(work, endpoint, token, bridge_env)
                 else:
                     args, env = command(run.runtime, work, endpoint, token,
                         config['modelId'] if config else runtime_model, model_url, catalog, bridge_env=bridge_env,
@@ -209,7 +162,7 @@ class NativeRuntime:
                     'Use inherited PATH to discover installed programs with command -v. '
                     'Read source assets at their supplied absolute paths; do not move or modify them. '
                     'Write all intermediate files and outputs into the execution directory. '
-                    'Use OpenDirector business tools for project changes.')
+                    'Use opendirector --help to discover OpenDirector commands and opendirector <group> <command> --help for usage. Use opendirector for project changes.')
                 prompt = execution_context + '\n' + json.dumps(context[-1:] if session_id else context, ensure_ascii=False)
                 skill_instruction = ''
                 if selected:
@@ -222,6 +175,7 @@ class NativeRuntime:
                         skill_instruction = f'Use the native skill tool to load {name} from {work / ".agents/skills"} before proceeding.'
                     else:
                         prompt = f'Use the native skill tool to load {name} before proceeding.\n' + prompt
+                env['OPENDIRECTOR_PROJECT_ID'] = str(run.project_id)
                 try:
                     process = await asyncio.create_subprocess_exec(*args, cwd=work, env=env,
                         stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
@@ -246,8 +200,6 @@ class NativeRuntime:
                         if runtime == 'deepseek':
                             async def observe(raw):
                                 await queue.put({'native': raw})
-                            session_work = run.native_session_path() or work
-                            session_work.mkdir(parents=True, exist_ok=True)
                             blocks = [execution_context] if session_id else [SYSTEM, execution_context]
                             if skill_instruction:
                                 blocks.append(skill_instruction)
@@ -255,7 +207,7 @@ class NativeRuntime:
                                 blocks.append('Conversation history\n' + json.dumps(context[:-1], ensure_ascii=False))
                             if context:
                                 blocks.append('Current user request\n' + context[-1]['content'])
-                            reported_session = await deepseek.run(process, session_work, blocks, runtime_model, thinking,
+                            reported_session = await deepseek.run(process, work, blocks, runtime_model, thinking,
                                                             deepseek_server, observe, session_id)
                         else:
                             while line := await process.stdout.readline():
@@ -295,7 +247,6 @@ class NativeRuntime:
                             yield event
                     await pump
             finally:
-                closed = True
                 await gateway.close()
                 server.close()
                 await server.wait_closed()

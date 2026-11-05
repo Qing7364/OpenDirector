@@ -12,6 +12,7 @@
 | [验证指南](development/validation.md) | 如何复现检查，什么证据能够支持结论？ | 工具、运行要求或验证入口改变时 |
 | [macOS 安装验证](development/macos-install-validation.md) | Apple Silicon Mac 上实际验证了哪些安装与使用场景？ | 重新执行对应安装验收时 |
 | [中英双语界面](development/i18n.md) | 语言如何选择，词条如何组织，新增文案和检查怎么做？ | 语言策略、词条结构或检查方式改变时 |
+| [业务 CLI](guides/cli.md) | 如何通过终端或 Agent Shell 查询、编辑和执行生成任务？ | 命令、授权或回执语义变化时 |
 | [视频模型能力配置](guides/video-model-capabilities.md) | 如何声明服务实际支持的输出规格？ | 配置字段或模型能力接入行为改变时 |
 
 产品启动和常用操作见根目录 [README](../README.md)。根目录 README 仅面向使用者，维护安装、启动、配置、创作与问题处理，不包含架构实现、开发测试、研究来源或迭代历史。源码及自动生成契约说明实际实现；架构与路线描述目标，不能据此推断某项能力已经可用。

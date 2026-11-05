@@ -117,6 +117,19 @@ def test_native_skill_media_publication_and_project_reopen(tmp_path, monkeypatch
         if index == len(steps):
             return None
         name, arguments = steps[index]
+        arguments = arguments() if callable(arguments) else arguments
+        if name == 'read_project':
+            name, arguments = 'bash', {'command': 'opendirector project show'}
+        elif name == 'command_schema':
+            namespace, action = arguments['type'].split('.', 1)
+            from opendirector.cli import kebab
+            name, arguments = 'bash', {'command': f'opendirector {kebab(namespace)} {kebab(action)} --help'}
+        elif name == 'execute_command':
+            namespace, action = arguments['type'].split('.', 1)
+            from opendirector.cli import kebab
+            body = json.dumps(arguments)
+            name, arguments = 'bash', {'command': 'printf %s ' + shlex.quote(body) +
+                f' | opendirector {kebab(namespace)} {kebab(action)} --file -'}
         names = {tool['function']['name'] for tool in request['tools']}
         assert name in names, (name, names)
         return name, arguments() if callable(arguments) else arguments
@@ -232,9 +245,9 @@ def test_native_skill_media_publication_and_project_reopen(tmp_path, monkeypatch
             assert sha256(source_path.read_bytes()).hexdigest() == original_hash
             assert {p.name:sha256(p.read_bytes()).hexdigest() for p in skill.iterdir()} == skill_hashes
             activities = events[-1]['conversation']['messages'][-1]['tools']
-            assert {'read_file', 'bash', 'execute_command'} <= {item['name'] for item in activities}
+            assert {'read_file', 'bash'} <= {item['name'] for item in activities}
             assert any(item['name'] == 'bash' and item['status'] == 'failed' for item in activities)
-            assert sum(item['name'] == 'execute_command' for item in activities) == 4
+            assert sum(item['name'] in {'opendirector artifact publish', 'opendirector canvas show'} for item in activities) == 4
             assert client.delete('/api/creation/sessions/' + session).status_code == 200
         # New backend objects and a new edit session must recover persisted facts.
         with TestClient(create_app(LocalProjects(local.repository)), headers={**headers, 'X-OpenDirector-Session':str(uuid4())}) as reopened:

@@ -106,11 +106,7 @@ def arguments(private, skill_root=None):
 
 def command(work, socket, token, bridge_env=None):
     args = arguments(Path(socket).parent, work / '.agents/skills')
-    server = {'name': 'opendirector', 'command': sys.executable,
-        'args': [str(ROOT / 'scripts/agent-mcp.py')],
-        'env': [{'name': key, 'value': value} for key, value in
-            {**(bridge_env or {'OPENDIRECTOR_AGENT_SOCKET': socket}), 'OPENDIRECTOR_AGENT_TOKEN': token}.items()]}
-    return args, dict(os.environ), server
+    return args, dict(os.environ), None
 
 
 async def model_choices(selected=None):
@@ -147,7 +143,7 @@ async def run(process, work, blocks, model, thinking, server, observe, session_i
     client = Client(process, observe)
     try:
         async with asyncio.timeout(30):
-            await client.initialize(work, [server], session_id)
+            await client.initialize(work, [], session_id)
             if model:
                 await client.request('session/set_config_option', {'sessionId': client.session, 'configId': 'model', 'value': model})
             if thinking != 'auto':
@@ -191,5 +187,4 @@ def events(record, calls):
             'completed': 'complete', 'failed': 'failed'}[update.get('status', 'in_progress')],
         'result': detail[:65536], 'resultTruncated': len(detail) > 65536}
     calls[identity] = event
-    # Shared business activity is reported from authoritative gateway receipts.
-    return [] if any(name in {f'opendirector.{tool}', f'mcp__opendirector__{tool}'} for tool in ('read_project', 'query', 'read', 'command_schema', 'execute_command')) else [event]
+    return [event]

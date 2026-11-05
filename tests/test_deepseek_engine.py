@@ -17,8 +17,8 @@ def test_real_cli_native_skill_and_shared_project_write(tmp_path, monkeypatch):
     calls, failures = [], []
     steps = [('skill', {'name': 'example'}),
         ('bash', {'command': "printf 'native bash' > native-check.txt", 'description':'Write a native execution marker'}),
-        ('mcp__opendirector__read_project', {}),
-        ('mcp__opendirector__execute_command', {'type':'asset.writeText','payload':{'name':'deepseek.md','text':'Real CLI, local model'}})]
+        ('bash', {'command': 'opendirector project show', 'description': 'Read project'}),
+        ('bash', {'command': "opendirector asset write-text --name deepseek.md --text 'Real CLI, local model'", 'description': 'Register a plan'})]
     class Model(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass

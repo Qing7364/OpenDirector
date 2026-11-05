@@ -33,6 +33,7 @@ req=read(); assert req['method'] in {'session/new','session/resume'}
 resumed=req['method']=='session/resume'
 if resumed: assert req['params']['sessionId']==sid
 servers=req['params']['mcpServers']
+assert Path(req['params']['cwd']).resolve() == Path.cwd(), req['params']['cwd']
 model=dict(id='model',currentValue='route/default',options=[dict(group='route',options=[dict(value='route/default',name='Default model')])])
 if mode=='efforts':
  model['options'][0]['options'].append(dict(value='route/other',name='Other model'))
@@ -49,6 +50,7 @@ for line in sys.stdin:
  elif req['method']=='session/cancel':
   Path(os.environ['DEEPSEEK_CANCELLED']).write_text('cancelled') if 'DEEPSEEK_CANCELLED' in os.environ else None
  elif req['method']=='session/prompt':
+  assert os.environ['PWD'] == str(Path.cwd())
   blocks=[block['text'] for block in req['params']['prompt']]
   if resumed:
    assert blocks[0].startswith('Execution directory:')
@@ -74,20 +76,13 @@ for line in sys.stdin:
    write(dict(id='approval-1',method='session/request_permission',params=dict(sessionId=sid,options=[dict(optionId='allow',kind='allow_once'),dict(optionId='reject',kind='reject_once')])))
    answer=read()
    assert answer['result']['outcome']==dict(outcome='selected',optionId='reject')
-  server=servers[0]
-  env={**os.environ,**{item['name']:item['value'] for item in server['env']}}
-  bridge=subprocess.Popen([server['command'],*server['args']],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True,env=env)
-  def rpc(value):
-   bridge.stdin.write(json.dumps(value)+'\n');bridge.stdin.flush()
-   response=json.loads(bridge.stdout.readline());assert 'error' not in response,response
-   return response['result']
-  rpc({'id':1,'method':'initialize'})
-  assert len(rpc({'id':2,'method':'tools/list'})['tools'])==5
-  context=rpc({'id':20,'method':'tools/call','params':{'name':'read_project','arguments':{}}})
-  assert 'selected-image' in json.dumps(context),context
-  outcome=rpc({'id':3,'method':'tools/call','params':{'name':'execute_command','arguments':{'type':'asset.writeText','payload':{'name':'deepseek.md','text':'CLI saved'}}}})
-  assert not outcome['isError'],outcome
-  bridge.stdin.close();bridge.wait()
+  assert servers == []
+  assert 'OPENDIRECTOR_AGENT_TOKEN' not in os.environ
+  assert 'OPENDIRECTOR_AGENT_CONTEXT' not in os.environ
+  context = json.loads(subprocess.check_output(['opendirector', 'project', 'show'], text=True))
+  assert context['project']['id']
+  outcome = json.loads(subprocess.check_output(['opendirector', 'asset', 'write-text', '--name', 'deepseek.md', '--text', 'CLI saved'], text=True))
+  assert outcome['status'] == 'applied', outcome
   write(dict(method='session/update',params=dict(sessionId=sid,update=dict(sessionUpdate='tool_call',toolCallId='native-read',title='read',rawInput={'path':'file'},status='in_progress'))))
   write(dict(method='session/update',params=dict(sessionId=sid,update=dict(sessionUpdate='tool_call_update',toolCallId='native-read',status='completed',content=[]))))
   write(dict(method='session/update',params=dict(sessionId=sid,update=dict(sessionUpdate='plan',entries=[dict(content='Save the plan',priority='medium',status='completed')]))))
@@ -130,8 +125,9 @@ def test_acp_shared_write_and_native_trace(cli, tmp_path, monkeypatch, mode):
         assert 'Test native thought' not in response.text
         assert message['plan'] == [{'content': 'Save the plan', 'status': 'completed'}]
         assert client.get(path + '/assistant').json()['messages'][-1]['plan'] == message['plan']
-        assert any(tool['name']=='execute_command' and tool['status']=='complete' for tool in message['tools'])
+        assert any(tool['name']=='opendirector asset write-text' and tool['status']=='complete' for tool in message['tools'])
         assert any(tool['name']=='read' and tool['status']=='complete' for tool in message['tools'])
+        assert not list(local.root.rglob('.opendirector-bin/context.json'))
         snapshot=client.get(path).json()
         assert snapshot['assets'][0]['provenance']['agentRuntime']=='deepseek'
         trace=next(local.root.rglob('*.deepseek.jsonl')).read_text()

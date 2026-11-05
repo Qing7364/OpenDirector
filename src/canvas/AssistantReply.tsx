@@ -4,7 +4,7 @@ import type { ChatMessage, ChatTool } from "../backend/chat";
 import type { Translate } from "../i18n/I18nProvider.tsx";
 import type { MessageKey } from "../i18n/types.ts";
 import { CanvasIcon } from "./CanvasIcon";
-import { activityProgress, replyParts, toolLabel } from "./assistantActivity.ts";
+import { activityProgress, replySections, toolLabel } from "./assistantActivity.ts";
 import { assistantToolText } from "./assistantToolText.ts";
 import { defaultTranslate } from "./assistantTranslate.ts";
 
@@ -117,6 +117,10 @@ export const AssistantReply = memo(function AssistantReply({
         {text}
       </Streamdown>
     );
+  const sections = replySections(message);
+  const renderPart = (part: ReturnType<typeof replySections>["reply"][number]) => part.type === "text"
+    ? markdown(part.text, part.id)
+    : <ToolGroup key={part.id} tools={part.tools} t={t} />;
   return (
     <>
       {!!message.plan?.length && <details className="cw-chat-plan cw-chat-activity">
@@ -130,9 +134,16 @@ export const AssistantReply = memo(function AssistantReply({
           {step.content}
         </li>)}</ol>
       </details>}
-      {replyParts(message).map((part) => part.type === "text"
-        ? markdown(part.text, part.id)
-        : <ToolGroup key={part.id} tools={part.tools} t={t} />)}
+      {sections.activity.length > 0 && <details className="cw-chat-activity cw-chat-execution-history">
+        <summary>
+          <CanvasIcon name="sparkle" size={15} />
+          <span>{t("assistant.reply.tools", { count: message.tools?.length ?? 0 })}</span>
+          <small>{t("assistant.reply.progress", { done: message.tools?.filter((tool) => tool.status === "complete").length ?? 0, total: message.tools?.length ?? 0 })}{message.tools?.some((tool) => tool.status === "failed") && ` · ${t("assistant.reply.failedCount", { count: message.tools.filter((tool) => tool.status === "failed").length })}`}</small>
+          <CanvasIcon name="chevronRight" size={14} />
+        </summary>
+        <div className="cw-chat-activity-detail">{sections.activity.map(renderPart)}</div>
+      </details>}
+      {sections.reply.map(renderPart)}
       {message.status === "streaming" && (
         <div className="cw-chat-progress" role="status" aria-live="polite">
           <span className="cw-chat-waiting" aria-hidden="true"><i /><i /><i /></span>

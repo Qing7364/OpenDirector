@@ -1,0 +1,70 @@
+.cw-trace-page {
+  min-height: 100vh;
+  background: #222;
+  color: #e8e8e8;
+  font: 14px/1.5 system-ui, sans-serif;
+}
+.cw-trace-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 12px 20px;
+  border-bottom: 1px solid #3c3c3c;
+  background: #272727;
+}
+.cw-trace-header h1 { margin: 0; font-size: 17px; }
+.cw-trace-header p { margin: 2px 0 8px; color: #aaa; overflow-wrap: anywhere; }
+.cw-trace-page > p { padding: 0 20px; }
+.cw-trace-row { border-bottom: 1px solid #333; }
+.cw-trace-row > summary {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 6px 20px;
+  cursor: pointer;
+}
+.cw-trace-row > summary:hover, .cw-trace-row[open] > summary { background: #2c2c2c; }
+.cw-trace-page summary:focus-visible { outline: 2px solid #8eb7fa; outline-offset: -2px; }
+.cw-trace-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-trace-badge {
+  justify-self: end;
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: #393939;
+  color: #ddd;
+  font-size: 12px;
+  font-weight: 600;
+}
+.cw-trace-badge.is-system { background: #393939; color: #ddd; }
+.cw-trace-badge.is-event { background: #393939; color: #ddd; }
+.cw-trace-badge.is-user { background: #30415c; color: #a6c7ff; }
+.cw-trace-badge.is-context { background: #254034; color: #91d6ab; }
+.cw-trace-badge.is-assistant { background: #3e334d; color: #c9a9ef; }
+.cw-trace-badge.is-tool { background: #473829; color: #f0c38b; }
+.cw-trace-badge.is-model { background: #303c48; color: #a7c9e6; }
+.cw-trace-row pre {
+  margin: 0;
+  padding: 12px 20px;
+  background: #1c1c1c;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cw-trace-tabs { display: flex; gap: 8px; }
+.cw-trace-tabs button {
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 4px 10px;
+  background: transparent;
+  color: #bbb;
+  font: inherit;
+  cursor: pointer;
+}
+.cw-trace-tabs button:hover { background: #303030; }
+.cw-trace-tabs button[aria-pressed="true"] {
+  border-color: #4d5d6d;
+  background: #303c48;
+  color: #d6e8f7;
+}
+
+.cw-trace-badge.is-reasoning { background: #3d3650; color: #c8b6e5; }

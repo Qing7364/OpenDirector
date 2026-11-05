@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ChatMessage, ChatTool } from "../src/backend/chat.ts";
-import { activityProgress, replyParts } from "../src/canvas/assistantActivity.ts";
+import { activityProgress, replyParts, replySections } from "../src/canvas/assistantActivity.ts";
 
 const tool = (id: string, offset: number, status: ChatTool["status"] = "complete"): ChatTool => ({
   id, textOffset: offset, name: "web_fetch", status,
@@ -49,6 +49,18 @@ test("activity progress follows running calls, thinking and plan state", () => {
   assert.equal(activityProgress(reply, true), "正在执行：读取网页（2 项进行中）");
   reply.tools = [tool("a", 0, "complete")];
   assert.equal(activityProgress(reply, true), "正在思考…");
-  assert.equal(activityProgress(reply, false), "正在回复…");
+  assert.equal(activityProgress(reply, false), "思考中…");
   assert.equal(activityProgress({ ...reply, plan: [{ content: "检查结果", status: "in_progress" }] }, false), "正在执行计划：检查结果");
+});
+
+
+test("folds intermediate narration and calls while keeping final reply outside", () => {
+  const input = message([tool("a", 3), tool("b", 6)], "准备中处理中完成");
+  const live = replySections(input);
+  assert.equal(live.reply.length, 0);
+  assert.equal(live.activity.length, 5);
+  const done = replySections({ ...input, status: "complete" });
+  assert.deepEqual(done.reply, [{ type: "text", id: "tail", text: "完成" }]);
+  assert.equal(done.activity.length, 4);
+  assert.equal(replySections({ ...message([], "直接回复"), status: "complete" }).activity.length, 0);
 });

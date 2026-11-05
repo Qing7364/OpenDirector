@@ -74,3 +74,15 @@ export function activityProgress(
     ? t("assistant.activity.plan", { step: step.content })
     : t("assistant.activity.replying");
 }
+
+/** Intermediate narration belongs to execution history; only the final tail is public reply. */
+export function replySections(message: Pick<ChatMessage, "text" | "tools" | "status">) {
+  const parts = replyParts(message);
+  if (!message.tools?.length) return { activity: [], reply: parts };
+  const tail = parts.at(-1);
+  const hasReply = message.status !== "streaming" && tail?.type === "text";
+  return {
+    activity: hasReply ? parts.slice(0, -1) : parts,
+    reply: hasReply ? [tail] : [],
+  };
+}

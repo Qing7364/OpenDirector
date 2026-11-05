@@ -484,6 +484,11 @@ class CreationCanvas:
                     parent['visible'] = True
                     parent_id = parent['parentId']
             else:
+                if obj['binding']['role'] == 'material' and not ({'width', 'height'} & payload.item.model_fields_set):
+                    asset = self._get(data, 'asset', obj['binding']['objectRef']['assetId'])
+                    metadata = asset.get('metadata') or {}
+                    obj['width'], obj['height'] = media_card_size(obj['kind'], metadata.get('width'),
+                        metadata.get('height'), obj['width'], obj['height'])
                 obj['visible'] = True
                 data['canvasItems'].append(obj)
         elif kind == 'canvas.move':

@@ -194,10 +194,14 @@ async def test_clear_canvas_preserves_contents_and_respects_locks(gateway):
 
 @pytest.mark.anyio
 async def test_batch_schema_and_rejection_preserve_agent_scope(gateway):
-    schema = (await gateway.call('schema', 'command_schema', {'type': 'creation.batch'})).value
-    choices = schema['$defs']['BatchPayload']['properties']['operations']['items']
-    assert 'canvas.hide' in choices['discriminator']['mapping']
-    assert 'canvas.applyEdit' not in choices['discriminator']['mapping']
+    schema = (await gateway.call('schema', 'command_schema', {'type': 'creation.batch', 'path': 'payload.operations'})).value
+    choices = schema['items']['branches']
+    assert 'canvas.hide' in choices
+    assert 'canvas.applyEdit' not in choices
+    branch = choices['canvas.hide']
+    expanded = (await gateway.call('expand', 'command_schema',
+        {'type': 'creation.batch', 'path': branch['path']})).value
+    assert expanded['fields']['type']['const'] == 'canvas.hide'
     rejected = await gateway.call('restricted', 'execute_command', {'type': 'creation.batch',
         'payload': {'operations': [{'type': 'canvas.applyEdit', 'payload': {
             'itemId': str(uuid4()), 'source': {'assetId': str(uuid4()), 'revision': 1,
@@ -305,3 +309,20 @@ async def test_close_cancels_pending_canvas_status_wait(gateway, monkeypatch):
     assert cancelled.is_set()
     with pytest.raises(asyncio.CancelledError):
         await waiter
+
+
+@pytest.mark.anyio
+async def test_default_runtime_accepts_cli_command_without_help_state(gateway, monkeypatch):
+    from dataclasses import replace
+
+    gateway.run = replace(gateway.run, runtime='default')
+    calls = []
+
+    async def execute(*args):
+        calls.append(args[4])
+        return {'status': 'ok'}
+
+    monkeypatch.setattr(gateway.business, 'execute', execute)
+    arguments = {'type': 'canvas.show', 'payload': {}}
+    assert not (await gateway.call('first', 'execute_command', arguments)).error
+    assert calls == ['execute_command']

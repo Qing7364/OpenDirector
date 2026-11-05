@@ -85,7 +85,7 @@ PromptPart = Annotated[PromptText | PromptReference, Field(discriminator='type')
 
 class GenerationSpecBase(ProjectEntity):
     purpose: Literal['draft', 'generation'] = Field(default='draft', description='Draft settings or executable generation configuration.')
-    modelConfigId: UUID | None = Field(default=None, description='Selected model configuration ID.')  # Drafts can exist before choosing a model.
+    modelConfigId: UUID | None = Field(default=None, description='Model configuration ID from the model catalog or user model selections.')  # Drafts can exist before choosing a model.
     prompt: str = Field(default='', max_length=20000, description='Generation prompt text.')
     promptContent: tuple[PromptPart, ...] | None = Field(default=None, description='Structured prompt text and reference tokens.')
     currentResultId: UUID | None = Field(default=None, description='Currently adopted result ID.')
