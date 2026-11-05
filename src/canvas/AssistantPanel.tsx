@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import openDirectorLogo from "../assets/open_director_logo.png";
-import { runtimeModels, type ChatAsset, type ModelSelections, type Thinking } from "../backend/chat";
+import { runtimeModels, type ChatAsset, type ModelSelections } from "../backend/chat";
 import { creationClient } from "../backend/creationClient.ts";
 import { fingerprint } from "../backend/generation.ts";
 import type { BackendModels } from "../backend/models";
@@ -11,7 +11,7 @@ import { AttachmentStrip, AttachmentHover } from "./AssistantMedia";
 import { AssistantReply } from "./AssistantReply";
 import { AssistantConversations } from "./AssistantConversations";
 import { AgentPicker } from "./AgentPicker";
-import { ChoicePicker, ModelPicker } from "./AssistantPickers";
+import { ModelPicker } from "./AssistantPickers";
 import { SkillPicker } from "./SkillPicker";
 import { CanvasIcon } from "./CanvasIcon";
 import {
@@ -40,33 +40,6 @@ import { useProjectMentionAssets } from "./useProjectMentionAssets";
 import { useReferenceUploads } from "./useReferenceUploads.tsx";
 import { useT } from "../i18n/I18nProvider.tsx";
 import type { MessageKey } from "../i18n/types.ts";
-
-const THINKING = [
-  {
-    id: "auto",
-    labelKey: "assistant.thinking.auto",
-    descriptionKey: "assistant.thinking.auto.description",
-  },
-  {
-    id: "low",
-    labelKey: "assistant.thinking.low",
-    descriptionKey: "assistant.thinking.low.description",
-  },
-  {
-    id: "medium",
-    labelKey: "assistant.thinking.medium",
-    descriptionKey: "assistant.thinking.medium.description",
-  },
-  {
-    id: "high",
-    labelKey: "assistant.thinking.high",
-    descriptionKey: "assistant.thinking.high.description",
-  },
-] as const satisfies readonly {
-  id: Thinking;
-  labelKey: MessageKey;
-  descriptionKey: MessageKey;
-}[];
 
 function kindOf(asset: ChatAsset) {
   return asset.type.startsWith("image/")
@@ -751,23 +724,6 @@ export function AssistantPanel({
               onConfigure={onOpenSettings}
             />
             <div className="cw-assistant-toolbar-spacer" />
-            <ChoicePicker
-              label={t("assistant.thinking.label")}
-              icon="thinking"
-              options={THINKING.map((option) => ({
-                id: option.id,
-                label: t(option.labelKey),
-                description: t(option.descriptionKey),
-              }))}
-              value={value.thinking}
-              disabled={!chat.loaded || chat.sending}
-              onChange={(thinking) =>
-                setValue((previous) => ({
-                  ...previous,
-                  thinking: thinking as Thinking,
-                }))
-              }
-            />
             {chat.sending ? (
               <button
                 type="button"

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {rememberAgentSelection, restoreAgentSelection} from "../src/canvas/agentPreferences.ts";
+import {rememberAgentSelection, restoreAgentSelection, builtinThinking} from "../src/canvas/agentPreferences.ts";
 import type {Conversation} from "../src/backend/chat.ts";
 
 function storage() {
@@ -72,4 +72,18 @@ test("DeepSeek Harness selection and native model survive refresh", () => {
   rememberAgentSelection("project", value, local);
   assert.deepEqual(restoreAgentSelection("project", draft(), local).harnessModels, value.harnessModels);
   assert.equal(restoreAgentSelection("project", draft(), local).runtime, "deepseek");
+});
+
+
+test("bundled model effort stays per model across refresh and preserves external harness settings", () => {
+  const local = storage();
+  const value: Conversation = { ...draft(), runtime: "default", thinking: "high",
+    builtinModelThinking: { first: "low", second: "high" } };
+  rememberAgentSelection("project", value, local);
+  const restored = restoreAgentSelection("project", draft(), local);
+  assert.equal(builtinThinking(restored, "first"), "low");
+  assert.equal(builtinThinking(restored, "second"), "high");
+  assert.equal(builtinThinking(restored, "new"), "auto");
+  for (const runtime of ["opencode", "deepseek", "claude", "codex", "jiuwenswarm"] as const)
+    assert.equal(builtinThinking({ ...restored, runtime, thinking: "medium" }, "second"), "medium");
 });

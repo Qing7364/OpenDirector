@@ -429,6 +429,9 @@ def query(ctx: typer.Context, kind: str,
           object_id: Annotated[UUID | None, typer.Option()] = None,
           file: Annotated[Path | None, typer.Option(help="Additional query arguments as JSON; use - for stdin.")] = None):
     ctx.obj.command = ctx.command_path
+    if kind == "asset":
+        raise ValueError("Unknown query type 'asset'. Use query object.get --object-id <asset-id> to read the asset, "
+                         "or query asset.preview --object-id <asset-id> for preview access.")
     arguments = read_file(file) if file else {}
     if object_id:
         arguments["objectId"] = str(object_id)
@@ -454,6 +457,10 @@ def register_command(kind, model):
     ]
     for name, definition in properties.items():
         description = definition.get("description", name)
+        if name == "spec":
+            description += " JSON object, not a spec ID. Overrides the entire payload.spec from --file."
+        if kind == "generationSpec.update" and name == "spec":
+            description += " Full replacement: copy the current spec, change intended fields, and keep all other fields."
         parameters.append(inspect.Parameter(name, inspect.Parameter.KEYWORD_ONLY, default=None,
             annotation=Annotated[str | None, typer.Option("--" + kebab(name), help=description)]))
     parameters.append(inspect.Parameter("help_field", inspect.Parameter.KEYWORD_ONLY, default=None,
@@ -475,7 +482,24 @@ def register_command(kind, model):
                 definition = properties[name]
                 alternatives = definition.get("anyOf", definition.get("oneOf", [definition]))
                 accepts_string = any(option.get("type") == "string" for option in alternatives)
-                arguments[name] = value if accepts_string and (value != "null" or len(alternatives) == 1) else json.loads(value)
+                if accepts_string and (value != "null" or len(alternatives) == 1):
+                    arguments[name] = value
+                else:
+                    try:
+                        arguments[name] = json.loads(value)
+                    except json.JSONDecodeError as error:
+                        hint = (" --spec needs a complete JSON object, not a configuration ID. Put the ID in payload.spec.id; "
+                                "if --file already contains it, omit --spec.") if name == "spec" else ""
+                        raise ValueError(f"--{kebab(name)}: invalid JSON at column {error.colno}.{hint} "
+                                         f"Inspect --help-field payload.{name}.") from None
+        if kind == "generationSpec.update" and isinstance(arguments.get("spec"), dict):
+            required = ("purpose", "modelConfigId", "prompt", "promptContent", "parameters", "currentResultId")
+            missing = [f"payload.spec.{field}" for field in required if field not in arguments["spec"]]
+            if missing:
+                raise ValueError("generationSpec.update replaces the complete configuration; missing fields: " +
+                                 ", ".join(missing) + ". Read the current spec with query object.get --object-id <spec-id>, "
+                                 "change only intended fields, and submit the full spec with its current expected version. "
+                                 "Use explicit null to clear nullable fields.")
         versions = list(body.get("expectedVersions", []))
         for value in expected_version or []:
             object_type, identity, revision = value.split(":")

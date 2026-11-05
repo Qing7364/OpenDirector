@@ -1,3 +1,4 @@
+import { trace } from "./trace.ts";
 import { modelSetup } from "./modelSetup.ts";
 import { api } from "./api.ts";
 import { assistant } from "./assistant.ts";
@@ -20,6 +21,7 @@ export const zhCN = {
   ...common,
   ...settings,
   ...modelSetup,
+  ...trace,
   ...canvas,
   ...canvasShell,
   ...canvasNodes,

@@ -8,7 +8,7 @@ function LoadingScreen() {
   const t = useT();
   return (
     <div className="canvas-loading-screen" role="status">
-      {t("app.loading")}
+      <span className="canvas-loading-message"><span className="canvas-loading-spinner" aria-hidden="true" />{t("app.loading")}</span>
     </div>
   );
 }

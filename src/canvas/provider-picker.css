@@ -131,9 +131,6 @@
   font-size: var(--settings-caption-size);
   color: var(--settings-muted);
 }
-.cw-settings-dialog .cw-provider-group[aria-label="vLLM-Omni 兼容"] > button {
-  padding-left: 24px;
-}
 
 .cw-provider-group:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
 

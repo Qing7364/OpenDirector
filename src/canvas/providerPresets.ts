@@ -136,6 +136,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     id,
     name,
     group: "vLLM-Omni",
+    logoOrganization: "vllm-project",
     optionLabel: name.replace("vLLM-Omni ", ""),
     protocol,
     kinds: [...kinds],

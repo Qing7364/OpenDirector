@@ -1304,7 +1304,7 @@ export class CreationProjection {
             if (cloneGeneration && binding?.role === "material")
               // The node is shown with this binding, so it must already be the
               // generation one: the backend refuses to convert a material item
-              // afterwards ("素材节点不能直接改为生成节点").
+              // afterwards (material items cannot be converted directly to generation items).
               binding = {
                 role: "generation",
                 objectRef: { objectType: "generation_spec", id: spec.id },

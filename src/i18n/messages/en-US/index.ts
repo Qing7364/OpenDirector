@@ -1,3 +1,4 @@
+import { trace } from "./trace.ts";
 import { modelSetup } from "./modelSetup.ts";
 import type { MessageEntry } from "../../types.ts";
 import { api } from "./api.ts";
@@ -23,6 +24,7 @@ export const enUS: Record<keyof ZhCatalog, MessageEntry> = {
   ...common,
   ...settings,
   ...modelSetup,
+  ...trace,
   ...canvas,
   ...canvasShell,
   ...canvasNodes,

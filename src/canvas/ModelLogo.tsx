@@ -1,3 +1,4 @@
+import vllmLogo from "@lobehub/icons-static-svg/icons/vllm.svg?url";
 import { modelLogoUrls } from "./modelLogoUrls";
 import { useState } from "react";
 import { CanvasIcon } from "./CanvasIcon";
@@ -15,6 +16,8 @@ export function ModelLogo({
 }) {
   const brand = modelBrand(modelId, organization);
   const [failed, setFailed] = useState("");
+  if (organization?.toLowerCase() === "vllm-project")
+    return <img className="cw-model-logo cw-brand-mono" src={vllmLogo} alt="" aria-hidden="true" title="vLLM" />;
   if (!brand || failed === brand.file)
     return (
       <span className="cw-model-logo" aria-hidden="true">

@@ -210,3 +210,74 @@ def test_completed_job_inspection_reuses_registered_result(monkeypatch, tmp_path
         assert 'delivery' not in job
     finally:
         client.http.close()
+
+
+def test_spec_uuid_override_reports_json_help_without_executing(monkeypatch, tmp_path):
+    monkeypatch.setattr(cli.Client, 'execute', lambda *args, **kwargs: pytest.fail('Invalid input reached execution'))
+    file = tmp_path / 'update.json'
+    file.write_text(json.dumps({'type': 'generationSpec.update', 'payload': {'spec': {'id': str(uuid4())}}}))
+    result = CliRunner().invoke(cli.app, ['generation-spec', 'update', '--file', str(file), '--spec', str(uuid4())])
+    assert result.exit_code != 0
+    message = str(result.exception)
+    assert '--spec needs a complete JSON object' in message
+    assert 'payload.spec.id' in message and 'omit --spec' in message
+
+
+def test_partial_spec_update_reports_missing_fields_before_execution(monkeypatch):
+    monkeypatch.setattr(cli.Client, 'execute', lambda *args, **kwargs: pytest.fail('Partial spec reached execution'))
+    spec = {'id': str(uuid4()), 'projectId': str(uuid4()), 'revision': 1, 'kind': 'video',
+            'parameters': {'aspectRatio': '1:1'}}
+    result = CliRunner().invoke(cli.app, ['generation-spec', 'update', '--spec', json.dumps(spec)])
+    assert result.exit_code != 0
+    message = str(result.exception)
+    for field in ('purpose', 'modelConfigId', 'prompt', 'promptContent', 'currentResultId'):
+        assert 'payload.spec.' + field in message
+    assert 'query object.get' in message and 'current expected version' in message
+
+
+def test_asset_query_error_suggests_existing_queries(monkeypatch):
+    monkeypatch.setattr(cli.Client, 'query', lambda *args, **kwargs: pytest.fail('Invalid query reached execution'))
+    result = CliRunner().invoke(cli.app, ['query', 'asset', '--object-id', str(uuid4())])
+    assert result.exit_code != 0
+    assert 'query object.get' in str(result.exception)
+    assert 'query asset.preview' in str(result.exception)
+
+
+def test_full_spec_file_update_preserves_fields_and_rejects_stale_version(tmp_path, monkeypatch):
+    api = TestClient(create_app(LocalProjects(tmp_path)), headers={'X-OpenDirector-Request': '1'})
+    original_client = httpx.Client
+    def forward(request):
+        response = api.request(request.method, request.url.path, headers=dict(request.headers), content=request.read())
+        return httpx.Response(response.status_code, headers=response.headers, content=response.content)
+    monkeypatch.setattr(cli.httpx, 'Client', lambda **kwargs:
+        original_client(**kwargs, transport=httpx.MockTransport(forward)))
+    runner = CliRunner()
+    project, identity = str(uuid4()), str(uuid4())
+    def invoke(args):
+        return runner.invoke(cli.app, ['--project', project, *args])
+    assert invoke(['project', 'create', '--name', 'Full spec update']).exit_code == 0
+    spec = {'id': identity, 'projectId': project, 'revision': 1, 'kind': 'video', 'purpose': 'generation',
+            'modelConfigId': None, 'prompt': 'Keep this prompt', 'promptContent': None,
+            'currentResultId': None, 'parameters': {'durationSeconds': 5.0, 'resolution': '768P'}}
+    result = invoke(['generation-spec', 'create', '--spec', json.dumps(spec)])
+    assert result.exit_code == 0, result.output or str(result.exception)
+    before = json.loads(invoke(['project', 'show']).output)['generationSpecs'][0]
+    full = {**before, 'parameters': {**before['parameters'], 'aspectRatio': '1:1'}}
+    file = tmp_path / 'update.json'
+    file.write_text(json.dumps({'type': 'generationSpec.update', 'payload': {'spec': full},
+        'expectedVersions': [{'objectType': 'generation_spec', 'id': identity, 'revision': before['revision']}]}))
+    result = invoke(['generation-spec', 'update', '--file', str(file)])
+    assert result.exit_code == 0, result.output or str(result.exception)
+    after = json.loads(invoke(['project', 'show']).output)['generationSpecs'][0]
+    assert after['prompt'] == before['prompt'] and after['modelConfigId'] == before['modelConfigId']
+    assert after['parameters']['durationSeconds'] == 5.0 and after['parameters']['aspectRatio'] == '1:1'
+    stale = invoke(['generation-spec', 'update', '--file', str(file)])
+    assert stale.exit_code != 0
+    assert json.loads(invoke(['project', 'show']).output)['generationSpecs'][0] == after
+
+
+def test_spec_update_help_explains_replacement_and_json():
+    result = CliRunner().invoke(cli.app, ['generation-spec', 'update', '--help'], terminal_width=200)
+    assert result.exit_code == 0
+    assert 'not a spec ID' in result.output
+    assert 'Replace the complete generation configuration' in ' '.join(result.output.split())

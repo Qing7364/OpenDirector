@@ -45,3 +45,18 @@ Agent 的 Shell 通过 PATH 使用同一个 `opendirector`。宿主提供受令�
 ## 检查已有生成结果
 
 `job show` / `job wait` 在任务成功后返回 `delivery`：已登记的 AssetRef、当前采用状态及展示该素材的画布项。生成成功不等于质量验收；Agent 应检查现有素材。复制到执行目录做媒体探测、抽帧和审看不需要重新发布，也不应为同一次交付新增画布项。编辑产生的新交付文件才需要登记；独立副本展示应有用户要求。
+
+
+## 更新生成配置
+
+`generation-spec update` 替换完整配置，不是局部补丁。先用 `opendirector query object.get --object-id <spec-id>` 读取当前配置，修改需要调整的字段后，将完整对象放入命令文件的 `payload.spec`，并携带当前 `expectedVersions`。
+
+`--spec` 接收 JSON 对象，不接收配置 UUID；它会覆盖 `--file` 中的整个 `payload.spec`。命令文件已经包含配置时只需 `opendirector generation-spec update --file update.json`。保留 `purpose`、`modelConfigId`、`prompt`、`promptContent`、`parameters` 和 `currentResultId`；清空可空字段时显式使用 `null`。
+
+素材查询使用 `query object.get`；获取预览访问使用 `query asset.preview`。不存在 `query asset` 类型。
+
+### Updating generation configurations
+
+`generation-spec update` replaces the complete configuration. Read it with `opendirector query object.get --object-id <spec-id>`, edit the intended fields, and submit the complete object as `payload.spec` with its current `expectedVersions`. Keep `purpose`, `modelConfigId`, `prompt`, `promptContent`, `parameters`, and `currentResultId`; use explicit `null` to clear nullable fields.
+
+`--spec` accepts a JSON object, not a UUID, and overrides the entire `payload.spec` from `--file`. If the file already contains the configuration, use `opendirector generation-spec update --file update.json` without `--spec`. Query assets with `query object.get` and obtain preview access with `query asset.preview`; `query asset` is not supported.

@@ -337,7 +337,7 @@ _COMMANDS = (
     ('CanvasEditorAttachCommand', 'canvas.attachEditor', CanvasEditorAttach, 'Attach an editor document to a canvas item.'),
     ('CanvasEditorDetachCommand', 'canvas.detachEditor', CanvasEditorAttach, 'Detach an editor document from a canvas item.'),
     ('SpecCreateCommand', 'generationSpec.create', SpecWrite, 'Create a generation configuration without submitting a job.'),
-    ('SpecUpdateCommand', 'generationSpec.update', SpecWrite, 'Update a generation configuration without changing accepted jobs.'),
+    ('SpecUpdateCommand', 'generationSpec.update', SpecWrite, 'Replace the complete generation configuration without changing accepted jobs. Read the current spec, preserve fields not being edited, and submit its current expected version.'),
     ('SpecRestoreCommand', 'generationSpec.restore', SpecRestore, 'Restore generation settings from a historical command.'),
     ('SpecPromptCommand', 'generationSpec.setPrompt', SpecPromptWrite, 'Update prompt text and structured references.'),
     ('ReferenceAddCommand', 'reference.add', ReferenceWrite, 'Add a generation reference; expectedVersions must include its target generation_spec.'),

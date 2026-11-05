@@ -87,6 +87,7 @@ export interface ChatDraft {
   draftContent?: ReferenceContent | null;
   assets: ChatAsset[];
   thinking: Thinking;
+  builtinModelThinking?: Record<string, Thinking>;
   modelSelections: ModelSelections;
   runtime?: AgentRuntime;
   runtimeModel?: string | null;

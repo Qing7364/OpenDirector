@@ -10746,7 +10746,7 @@
       },
       "SpecUpdateCommand": {
         "additionalProperties": false,
-        "description": "Update a generation configuration without changing accepted jobs.",
+        "description": "Replace the complete generation configuration without changing accepted jobs. Read the current spec, preserve fields not being edited, and submit its current expected version.",
         "properties": {
           "commandId": {
             "description": "Stable command ID for idempotent replay.",
@@ -10791,7 +10791,7 @@
           },
           "payload": {
             "$ref": "#/$defs/SpecWrite",
-            "description": "Update a generation configuration without changing accepted jobs."
+            "description": "Replace the complete generation configuration without changing accepted jobs. Read the current spec, preserve fields not being edited, and submit its current expected version."
           }
         },
         "required": [
@@ -10805,7 +10805,7 @@
       },
       "SpecUpdateCommandOperation": {
         "additionalProperties": false,
-        "description": "Update a generation configuration without changing accepted jobs.",
+        "description": "Replace the complete generation configuration without changing accepted jobs. Read the current spec, preserve fields not being edited, and submit its current expected version.",
         "properties": {
           "type": {
             "const": "generationSpec.update",
@@ -10815,7 +10815,7 @@
           },
           "payload": {
             "$ref": "#/$defs/SpecWrite",
-            "description": "Update a generation configuration without changing accepted jobs."
+            "description": "Replace the complete generation configuration without changing accepted jobs. Read the current spec, preserve fields not being edited, and submit its current expected version."
           }
         },
         "required": [
@@ -25194,7 +25194,7 @@
       },
       "SpecUpdateCommand": {
         "additionalProperties": false,
-        "description": "Update a generation configuration without changing accepted jobs.",
+        "description": "Replace the complete generation configuration without changing accepted jobs. Read the current spec, preserve fields not being edited, and submit its current expected version.",
         "properties": {
           "commandId": {
             "description": "Stable command ID for idempotent replay.",
@@ -25239,7 +25239,7 @@
           },
           "payload": {
             "$ref": "#/$defs/SpecWrite",
-            "description": "Update a generation configuration without changing accepted jobs."
+            "description": "Replace the complete generation configuration without changing accepted jobs. Read the current spec, preserve fields not being edited, and submit its current expected version."
           }
         },
         "required": [
@@ -25255,7 +25255,7 @@
       },
       "SpecUpdateCommandOperation": {
         "additionalProperties": false,
-        "description": "Update a generation configuration without changing accepted jobs.",
+        "description": "Replace the complete generation configuration without changing accepted jobs. Read the current spec, preserve fields not being edited, and submit its current expected version.",
         "properties": {
           "type": {
             "const": "generationSpec.update",
@@ -25265,7 +25265,7 @@
           },
           "payload": {
             "$ref": "#/$defs/SpecWrite",
-            "description": "Update a generation configuration without changing accepted jobs."
+            "description": "Replace the complete generation configuration without changing accepted jobs. Read the current spec, preserve fields not being edited, and submit its current expected version."
           }
         },
         "required": [

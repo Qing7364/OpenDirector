@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { rememberAgentSelection, restoreAgentSelection } from "./agentPreferences";
+import { rememberAgentSelection, restoreAgentSelection, builtinThinking } from "./agentPreferences";
 import { errorMessage } from "../backend/api";
 import {
   attachChat,
@@ -244,6 +244,7 @@ export function useAssistantChat(
     value.draftContent,
     value.assets,
     value.thinking,
+    value.builtinModelThinking,
     value.modelSelections,
     value.skills,
     value.runtime,
@@ -432,7 +433,7 @@ export function useAssistantChat(
           text: input.draft,
           content: input.draftContent,
           assets: input.assets.map((asset) => asset.id),
-          thinking: input.thinking,
+          thinking: builtinThinking(input, agent?.id),
           modelSelections: input.modelSelections,
           skills: input.skills ?? [],
         },

@@ -1,4 +1,7 @@
 export const canvasWorkspace = {
+  "canvas.workspace.help.toggleAssistant": "Toggle AI chat",
+  "canvas.workspace.help.doubleShift": "Press Shift twice",
+
   "canvas.workspace.kind.image": "Image",
   "canvas.workspace.kind.video": "Video",
   "canvas.workspace.kind.audio": "Audio",

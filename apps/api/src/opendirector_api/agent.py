@@ -37,6 +37,7 @@ class Draft(BaseModel):
     runtimeModel: str | None = Field(default=None, max_length=200)
     harnessModels: dict[Literal["opencode", "codex", "claude", "jiuwenswarm", "deepseek"], Annotated[str, Field(max_length=200)] | None] = Field(default_factory=dict)
     thinking: Literal['auto', 'low', 'medium', 'high'] = 'auto'
+    builtinModelThinking: dict[str, Literal['auto', 'low', 'medium', 'high']] = Field(default_factory=dict)
     modelSelections: dict[str, str | None] = Field(default_factory=dict)
     skills: list[str] = Field(default_factory=list, max_length=1)
 
@@ -138,7 +139,7 @@ class Conversations:
                 if len(archives) >= 99:
                     raise ProjectError('项目对话已达 100 个，暂不能继续新建。', 409)
                 target = {'messages': [], **Draft().model_dump(mode='json'),
-                          **{key: current[key] for key in ('runtime', 'runtimeModel', 'harnessModels', 'thinking', 'modelSelections') if key in current},
+                          **{key: current[key] for key in ('runtime', 'runtimeModel', 'harnessModels', 'thinking', 'builtinModelThinking', 'modelSelections') if key in current},
                           'conversationId': str(conversation_id)}
             archives = [item for item in archives if item['conversationId'] != str(conversation_id)]
             durable_json(file, {**target, 'archivedConversations': [current, *archives]})

@@ -90,3 +90,8 @@ code {
   color: #aaa;
   font-size: 13px;
 }
+
+.canvas-loading-message { display: inline-flex; align-items: center; gap: 9px; }
+.canvas-loading-spinner { box-sizing: border-box; width: 15px; height: 15px; flex: 0 0 15px; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: canvas-loading-spin .8s linear infinite; }
+@keyframes canvas-loading-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .canvas-loading-spinner { animation: none; } }

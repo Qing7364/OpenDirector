@@ -1,3 +1,5 @@
+import { generationDefaults } from "../src/canvas/generationCatalog.ts";
+import { backendBlocker } from "../src/backend/rules.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ModelConfig } from "../src/backend/rules.ts";
@@ -194,4 +196,17 @@ test("without a configured model a new node keeps the catalog defaults", () => {
   assert.equal(settings.modelConfigId, undefined);
   assert.equal(settings.aspectRatio, "1:1");
   assert.equal(settings.resolution, "2K");
+});
+
+test("new image nodes replace unsupported catalog sizing with adapter defaults", () => {
+  const model = config("image", "MOSS-Image-Base", {
+    inputRules: { profile: "compatible", allowedKinds: ["text"], maxImages: 0,
+      maxVideos: 0, maxAudios: 0, videoModes: [],
+      imageOutputs: [{ aspectRatio: "1:1", size: "1024x1024" }] },
+  });
+  const settings = newNodeGenerationSettings("image", [model], { image: model.id });
+  assert.equal(settings.modelConfigId, model.id);
+  assert.equal(settings.resolution, "auto");
+  assert.equal(settings.aspectRatio, "1:1");
+  assert.equal(backendBlocker({ ...settings, prompt: "Cloud cinema" }, [], [model]), null);
 });

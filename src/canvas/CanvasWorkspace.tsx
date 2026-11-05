@@ -1,3 +1,4 @@
+import { doubleShiftDetector } from "./doubleShift.ts";
 import { pinnedReferenceAssets } from "./pinnedReferenceAssets.ts";
 import { SaveQueue } from "./saveQueue.ts";
 import {
@@ -251,7 +252,6 @@ import {
 import { CanvasPointerGesture } from "./pointerGesture";
 import { resourceNodeData } from "./projectAssets";
 import { persistCurrentDocument } from "./projectManagement";
-import { ProjectNameDialog } from "./ProjectNameDialog";
 import { ProjectSelector } from "./ProjectSelector";
 import { referencePresentation, referenceSnapshot } from "./referenceEvidence";
 import "./settings.css";
@@ -374,6 +374,7 @@ const helpShortcuts = (
         [t("canvas.workspace.help.fit"), t("canvas.workspace.help.fitKeys")],
         [t("canvas.workspace.help.nudge"), t("canvas.workspace.help.nudgeKeys")],
         [t("canvas.workspace.help.delete"), t("canvas.workspace.help.deleteKeys")],
+        [t("canvas.workspace.help.toggleAssistant"), t("canvas.workspace.help.doubleShift")],
       ]
     : [
         [t("canvas.workspace.help.pan"), t("canvas.workspace.help.panKeys")],
@@ -387,6 +388,7 @@ const helpShortcuts = (
         [t("canvas.workspace.help.fit"), t("canvas.workspace.help.fitKeys")],
         [t("canvas.workspace.help.nudge"), t("canvas.workspace.help.nudgeKeys")],
         [t("canvas.workspace.help.delete"), t("canvas.workspace.help.deleteKeysPc")],
+        [t("canvas.workspace.help.toggleAssistant"), t("canvas.workspace.help.doubleShift")],
       ];
 const nodeTypes = {
   image: CanvasNodeView,
@@ -540,10 +542,7 @@ function Workspace() {
   const [ready, setReady] = useState(false);
   const [pageVisible, setPageVisible] = useState(() => !document.hidden);
   const [initializationError, setInitializationError] = useState("");
-  const [projectDialog, setProjectDialog] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
+  const [editProjectNameId, setEditProjectNameId] = useState<string | null>(null);
   const [projectRenaming, setProjectRenaming] = useState(false);
   const [switching, setSwitching] = useState(false);
   const switchPending = useRef(false);
@@ -973,6 +972,41 @@ function Workspace() {
     setAssistantOpen(true);
     if (selected.length) setAssistantSelectionRequest((n) => n + 1);
   };
+  const assistantReturnFocus = useRef<HTMLElement | null>(null);
+  const toggleAssistantShortcut = useRef(() => {});
+  toggleAssistantShortcut.current = () => {
+    if (!ready || switching || document.querySelector("dialog[open], .cw-modal-backdrop")) return;
+    if (assistantOpen) {
+      setAssistantOpen(false);
+      const target = assistantReturnFocus.current;
+      requestAnimationFrame(() => {
+        if (target?.isConnected && !target.closest(".cw-assistant-panel")) target.focus({ preventScroll: true });
+        else root.current?.focus({ preventScroll: true });
+      });
+    } else {
+      assistantReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      showAssistant();
+    }
+  };
+  useEffect(() => {
+    const detector = doubleShiftDetector();
+    const down = (event: KeyboardEvent) => detector.keydown(event);
+    const up = (event: KeyboardEvent) => {
+      if (detector.keyup(event)) toggleAssistantShortcut.current();
+    };
+    window.addEventListener("keydown", down, true);
+    window.addEventListener("keyup", up, true);
+    window.addEventListener("blur", detector.reset);
+    window.addEventListener("pointerdown", detector.reset, true);
+    window.addEventListener("compositionstart", detector.reset, true);
+    return () => {
+      window.removeEventListener("keydown", down, true);
+      window.removeEventListener("keyup", up, true);
+      window.removeEventListener("blur", detector.reset);
+      window.removeEventListener("pointerdown", detector.reset, true);
+      window.removeEventListener("compositionstart", detector.reset, true);
+    };
+  }, []);
   const togglePanel = (value: Panel) => {
     setAssistantOpen(false);
     referenceTarget.current = null;
@@ -4879,17 +4913,26 @@ function Workspace() {
           />
           <ProjectSelector
             currentId={doc.id}
+            editNameForId={editProjectNameId}
             name={doc.title}
             disabled={!ready || switching || projectRenaming}
             onSelect={(project) =>
               switchDocument(() => openWorkspaceProject(project))
             }
-            onCreate={() =>
-              setProjectDialog({
-                id: crypto.randomUUID(),
-                name: "",
-              })
-            }
+            onCreate={() => {
+              const id = crypto.randomUUID();
+              void switchDocument(async () => {
+                const { projects } = await listWorkspaceProjects();
+                const names = new Set(projects.map(project => project.name));
+                const base = t("canvas.project.defaultName");
+                let name = base;
+                for (let suffix = 2; names.has(name); suffix++) name = `${base} ${suffix}`;
+                const project = await createWorkspaceProject(name, id);
+                const document = await openWorkspaceProject(project);
+                await saveWorkspaceDocument(document);
+                return document;
+              }).then(success => { if (success) setEditProjectNameId(id); });
+            }}
             onRename={renameCurrentProject}
             onRenameProject={renameProject}
             onDeleteProject={deleteProject}
@@ -4972,15 +5015,18 @@ function Workspace() {
             active={panel === "history"}
             onClick={() => togglePanel("history")}
           />
-          <button
-            className="cw-import-button"
+          <IconButton
+            name="upload"
+            label={t("canvas.workspace.toolbar.importCanvas")}
+            tooltipSide="bottom"
             onClick={() => importInput.current?.click()}
-          >
-            <span>{t("canvas.workspace.toolbar.importCanvas")}</span>
-          </button>
-          <button className="cw-export-button" onClick={exportDocument}>
-            <span>{t("canvas.workspace.toolbar.exportCanvas")}</span>
-          </button>
+          />
+          <IconButton
+            name="download"
+            label={t("canvas.workspace.toolbar.exportCanvas")}
+            tooltipSide="bottom"
+            onClick={exportDocument}
+          />
           <input
             ref={importInput}
             type="file"
@@ -5066,7 +5112,7 @@ function Workspace() {
           <small>{t("canvas.workspace.empty.tagline")}</small>
         </div>
       )}
-      {!ready && <div className="cw-loading">{t("canvas.workspace.loading.opening")}</div>}
+      {!ready && <div className="cw-loading canvas-loading-message"><span className="canvas-loading-spinner" aria-hidden="true" />{t("canvas.workspace.loading.opening")}</div>}
 
       <div className="cw-bottom-left">
         <div className="cw-settings-control">
@@ -6680,37 +6726,15 @@ function Workspace() {
               <button onClick={() => window.location.reload()}>{t("canvas.workspace.loading.reconnect")}</button>
               <a href="/">{t("canvas.workspace.loading.backHome")}</a>
             </div>
-          ) : switching ? (
-            t("canvas.workspace.loading.switching")
           ) : (
-            t("canvas.workspace.loading.opening")
+            <span className="canvas-loading-message">
+              <span className="canvas-loading-spinner" aria-hidden="true" />
+              {t(switching ? "canvas.workspace.loading.switching" : "canvas.workspace.loading.opening")}
+            </span>
           )}
         </div>
       )}
-      {projectDialog && (
-        <ProjectNameDialog
-          key={projectDialog.id}
-          initialName={projectDialog.name}
-          onClose={() => setProjectDialog(null)}
-          onSubmit={async (name) => {
-            const success = await switchDocument(
-              async () => {
-                const project = await createWorkspaceProject(
-                  name,
-                  projectDialog.id,
-                );
-                const document = await openWorkspaceProject(project);
-                await saveWorkspaceDocument(document);
-                return document;
-              },
-              false,
-              true,
-            );
-            if (!success)
-              throw new Error(t("canvas.workspace.error.projectCreateIncomplete"));
-          }}
-        />
-      )}
+
     </>
   );
 }

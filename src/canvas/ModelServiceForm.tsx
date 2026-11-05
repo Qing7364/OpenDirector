@@ -112,7 +112,7 @@ export function ModelServiceForm({
     authMode: existing?.authMode ?? "none",
     videoAdapter: existing?.videoAdapter ?? "auto",
     inputModalities:
-      kind === "agent" ? (existing?.inputModalities ?? ["text"]) : undefined,
+      kind === "agent" ? (existing ? existing.inputModalities ?? ["text"] : ["text", "image"]) : undefined,
   });
   const [selectedModels, setSelectedModels] = useState<string[]>(() =>
     existing
@@ -220,7 +220,7 @@ export function ModelServiceForm({
     }));
     try {
       const result = await testAgentModel(
-        { ...value, ...modelOptions[id], modelId: id },
+        { ...value, ...optionsFor(id), modelId: id },
         connection?.id,
       );
       setResults((current) => ({
@@ -259,9 +259,7 @@ export function ModelServiceForm({
         selectedModels,
         connection?.id,
         Object.fromEntries(
-          selectedModels
-            .filter((id) => modelOptions[id])
-            .map((id) => [id, modelOptions[id]!]),
+          selectedModels.map((id) => [id, optionsFor(id)]),
         ),
       );
       onClose();
@@ -334,6 +332,14 @@ export function ModelServiceForm({
           ? model.providerId === connection.providerId
           : model.id === connection.id),
     );
+  function optionsFor(id: string): ModelOptions {
+    if (kind !== "agent") return modelOptions[id] ?? {};
+    const saved = savedModel(id);
+    return {
+      inputModalities: saved ? saved.inputModalities ?? ["text"] : ["text", "image"],
+      ...modelOptions[id],
+    };
+  }
   return (
     <form
       className="cw-model-editor"
@@ -503,7 +509,7 @@ export function ModelServiceForm({
               connection={value}
               configId={connection?.id}
               saved={savedModel(id)}
-              options={modelOptions[id] ?? {}}
+              options={optionsFor(id)}
               disabled={locked}
               onChange={(patch) =>
                 setModelOptions((current) => ({

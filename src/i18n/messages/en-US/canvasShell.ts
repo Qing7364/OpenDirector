@@ -1,4 +1,9 @@
 export const canvasShell = {
+  "canvas.project.search": "Search projects",
+  "canvas.project.clearSearch": "Clear search",
+  "canvas.project.noSearchResults": "No matching projects",
+
+  "canvas.project.defaultName": "Untitled project",
   "canvas.search.label": "Search nodes",
   "canvas.search.placeholder": "Search names, prompts or text",
   "canvas.search.clear": "Clear search",

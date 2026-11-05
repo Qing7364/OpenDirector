@@ -1,5 +1,8 @@
 /** Canvas workspace shell: topbar, side panels, menus, dialogs and toasts. */
 export const canvasWorkspace = {
+  "canvas.workspace.help.toggleAssistant": "打开 / 收起 AI 对话",
+  "canvas.workspace.help.doubleShift": "连按两次 Shift",
+
   "canvas.workspace.kind.image": "图片",
   "canvas.workspace.kind.video": "视频",
   "canvas.workspace.kind.audio": "音频",

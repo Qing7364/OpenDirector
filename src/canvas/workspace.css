@@ -2154,3 +2154,10 @@
 .cw-reference-source-choice button:focus-visible {
   outline: 2px solid #ac9fff;
 }
+
+.cw-project-search { display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin: 2px 6px 8px; padding: 0 10px; min-height: 34px; border: 1px solid var(--settings-border); border-radius: 8px; background: var(--settings-input); color: var(--settings-muted); }
+.cw-project-search:focus-within { border-color: var(--cw-control-accent); }
+.cw-project-search input[type="search"] { width: 100%; min-width: 0; height: 32px; padding: 0; margin: 0; border: 0; outline: none; box-shadow: none; background: transparent; color: var(--settings-text); font: inherit; font-size: 13px; }
+.cw-project-search input::-webkit-search-cancel-button { display: none; }
+.cw-project-search button { display: grid; place-items: center; padding: 3px; border: 0; background: transparent; color: var(--settings-muted); cursor: pointer; }
+.cw-project-search input::placeholder { color: var(--settings-muted); }

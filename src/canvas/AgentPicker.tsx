@@ -64,6 +64,7 @@ export function AgentPicker({
   });
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Harness | null>(null);
+  const [editingModel, setEditingModel] = useState<string | null>(null);
   const [setup, setSetup] = useState<Harness | null>(null);
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState("");
@@ -189,6 +190,7 @@ export function AgentPicker({
   }, [projectId, runtimes]);
   function close() {
     setOpen(false);
+    setEditingModel(null);
     setEditing(null);
     setSetup(null);
     trigger.current?.focus();
@@ -220,6 +222,7 @@ export function AgentPicker({
   }
   function edit(id: Harness) {
     setSetup(null);
+    setEditingModel(null);
     setEditing(id);
   }
   useEffect(() => {
@@ -251,6 +254,7 @@ export function AgentPicker({
       if (!root.current?.contains(event.target as Node)) {
         setOpen(false);
         setEditing(null);
+        setEditingModel(null);
       }
     };
     document.addEventListener("pointerdown", outside);
@@ -262,7 +266,7 @@ export function AgentPicker({
   }, [open, disabled]);
   useEffect(() => {
     if (!open) return;
-    if (editing)
+    if (editing || editingModel)
       submenu.current
         ?.querySelector<HTMLButtonElement>(
           '[aria-checked="true"], button:not(:disabled)',
@@ -275,35 +279,36 @@ export function AgentPicker({
         ) ??
         menu.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")
       )?.focus();
-  }, [open, editing, setup]);
+  }, [open, editing, editingModel, setup]);
   useLayoutEffect(() => {
-    if (!editing || !submenu.current || !menu.current) return;
+    if ((!editing && !editingModel) || !submenu.current || !menu.current) return;
     const bounds = menu.current.getBoundingClientRect();
     const layer = submenu.current;
     layer.style.left = `${Math.max(8, bounds.left - 310)}px`;
     layer.style.bottom = `${window.innerHeight - bounds.bottom}px`;
     layer.showPopover();
-    const reposition = () => setEditing(null);
+    const reposition = () => { setEditing(null); setEditingModel(null); };
     window.addEventListener("resize", reposition);
     return () => {
       window.removeEventListener("resize", reposition);
     };
-  }, [editing]);
+  }, [editing, editingModel]);
   function keys(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
       if (setup) setSetup(null);
-      else if (editing) setEditing(null);
+      else if (editing || editingModel) { setEditing(null); setEditingModel(null); }
       else close();
       return;
     }
-    if (event.key === "ArrowLeft" && editing) {
+    if (event.key === "ArrowLeft" && (editing || editingModel)) {
       event.preventDefault();
       setEditing(null);
+      setEditingModel(null);
       return;
     }
-    const scope = editing ? submenu.current : menu.current;
+    const scope = editing || editingModel ? submenu.current : menu.current;
     const rows = [
       ...(scope?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ??
         []),
@@ -334,6 +339,7 @@ export function AgentPicker({
         aria-expanded={open && !disabled}
         onClick={() => {
           setOpen(!open);
+          setEditingModel(null);
           setEditing(null);
           setSetup(null);
         }}
@@ -533,6 +539,11 @@ export function AgentPicker({
                         <CanvasIcon name="check" />
                       )}
                     </button>
+                    <button type="button" className="cw-agent-edit"
+                      aria-label={t("assistant.agent.editModels", { name: item.modelId })}
+                      onClick={() => { setEditing(null); setEditingModel(item.id); }}>
+                      {t("assistant.agent.edit")}
+                    </button>
                   </div>
                 ))}
                 {!options.length && <p>{t("assistant.agent.noAgentModels")}</p>}
@@ -549,6 +560,20 @@ export function AgentPicker({
               </div>
             </>
           )}
+          {editingModel && <div className="cw-agent-submenu" popover="manual" role="menu"
+            aria-label={t("assistant.agent.editModels", { name: options.find(item => item.id === editingModel)?.modelId ?? "" })}
+            ref={submenu}>
+            <button type="button" className="cw-agent-back" onClick={() => setEditingModel(null)}>← {options.find(item => item.id === editingModel)?.modelId}</button>
+            <h3>{t("assistant.agent.effort")}</h3>
+            {(["auto", "low", "medium", "high"] as const).map(effort => <div className="cw-agent-row" key={effort}>
+              <button type="button" role="menuitemradio"
+                aria-checked={(value.builtinModelThinking?.[editingModel] ?? "auto") === effort}
+                onClick={() => onChange({ builtinModelThinking: { ...value.builtinModelThinking, [editingModel]: effort } })}>
+                <strong>{t(EFFORT_LABELS[effort])}</strong>
+                {(value.builtinModelThinking?.[editingModel] ?? "auto") === effort && <CanvasIcon name="check" />}
+              </button>
+            </div>)}
+          </div>}
           {editingSpec && (
             <div
               className="cw-agent-submenu"

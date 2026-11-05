@@ -16,6 +16,7 @@ const ACTION_MENU_HEIGHT = 92;
 
 export function ProjectSelector({
   currentId,
+  editNameForId,
   name,
   disabled,
   onSelect,
@@ -25,6 +26,7 @@ export function ProjectSelector({
   onDeleteProject,
 }: {
   currentId: string;
+  editNameForId?: string | null;
   name: string;
   disabled: boolean;
   onSelect: (project: WorkspaceProject) => Promise<boolean>;
@@ -35,6 +37,8 @@ export function ProjectSelector({
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
   const [projects, setProjects] = useState<WorkspaceProject[]>([]);
   const [unreadable, setUnreadable] = useState<UnreadableWorkspaceProject[]>(
     [],
@@ -79,6 +83,16 @@ export function ProjectSelector({
     setEditing(false);
     setRenameError("");
   }, [currentId]);
+  const editedNewProject = useRef<string | null>(null);
+  useEffect(() => {
+    if (disabled || editNameForId !== currentId || editedNewProject.current === currentId) return;
+    editedNewProject.current = currentId;
+    setOpen(false);
+    setDraftName(name);
+    setRenameError("");
+    editingRef.current = true;
+    setEditing(true);
+  }, [currentId, editNameForId, disabled, name]);
   const closeActions = useCallback((restoreFocus: boolean) => {
     setActions((current) => {
       if (current && restoreFocus)
@@ -189,6 +203,11 @@ export function ProjectSelector({
   useEffect(() => {
     if (!open) setActions(null);
   }, [open]);
+  const filteredProjects = projects.filter(project => project.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  useEffect(() => {
+    if (open) searchInput.current?.focus();
+    else setQuery("");
+  }, [open]);
   return (
     <div
       className="cw-project-selector"
@@ -279,6 +298,13 @@ export function ProjectSelector({
             ref={nameButton}
             disabled={disabled || busy}
             title={t("canvas.project.editNameHint")}
+            onKeyDown={(event) => {
+              // Focus returns here after saving; a held submit key must not reopen editing.
+              if (event.repeat && (event.key === "Enter" || event.key === " ")) {
+                event.preventDefault();
+                event.stopPropagation();
+              }
+            }}
             onClick={() => {
               setOpen(false);
               setDraftName(name);
@@ -327,6 +353,18 @@ export function ProjectSelector({
           <div className="cw-project-caption">
             {t("canvas.project.caption")}
           </div>
+          <div className="cw-project-search">
+            <CanvasIcon name="search" size={15} />
+            <input ref={searchInput} type="search" value={query}
+              aria-label={t("canvas.project.search")}
+              placeholder={t("canvas.project.search")}
+              onChange={event => { setQuery(event.target.value); closeActions(false); }}
+              onKeyDown={event => {
+                if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "Escape") event.stopPropagation();
+              }}
+            />
+            {query && <button type="button" aria-label={t("canvas.project.clearSearch")} onClick={() => { setQuery(""); searchInput.current?.focus(); }}><CanvasIcon name="close" size={14} /></button>}
+          </div>
           {error && (
             <p className="cw-project-error" role="alert">
               {error}
@@ -337,6 +375,7 @@ export function ProjectSelector({
               {notice}
             </p>
           )}
+          {!loading && !error && query.trim() && !filteredProjects.length && <p className="cw-project-placeholder" role="status">{t("canvas.project.noSearchResults")}</p>}
           <div
             className="cw-project-list"
             aria-busy={loading || busy}
@@ -347,7 +386,7 @@ export function ProjectSelector({
                 {t("canvas.project.loading")}
               </p>
             ) : (
-              projects.map((project) => (
+              filteredProjects.map((project) => (
                 <div className="cw-project-row" key={project.id}>
                   <button
                     role="menuitemradio"
