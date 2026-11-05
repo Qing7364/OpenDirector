@@ -73,3 +73,6 @@ __pycache__/
 !/docs/architecture/
 !/docs/development/
 !/docs/guides/
+
+/build/
+/packages/core/src/opendirector/_bundled/

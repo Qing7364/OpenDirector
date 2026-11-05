@@ -40,9 +40,8 @@ jobs:
           node --version
           npm --version
           python --version
-          npm ci
+          python -m pip install -v -r requirements.txt
           npm exec --no -- opencode --version
-          python -m pip install -r requirements.txt
           python -m pip check
       - name: Frontend tests
         run: npm test
@@ -54,6 +53,13 @@ jobs:
         run: python scripts/generate_contracts.py --check
       - name: Production build
         run: npm run build
+      - name: Verify installed wheel without Node.js
+        run: |
+          python -m pip wheel . --no-deps -w "$RUNNER_TEMP/opendirector-wheels"
+          python -m venv "$RUNNER_TEMP/opendirector-wheel-venv"
+          "$RUNNER_TEMP/opendirector-wheel-venv/bin/python" -m pip install "$RUNNER_TEMP"/opendirector-wheels/opendirector-*.whl
+          "$RUNNER_TEMP/opendirector-wheel-venv/bin/python" -m pip check
+          python scripts/verify_install.py --python "$RUNNER_TEMP/opendirector-wheel-venv/bin/python"
       - name: Install isolated browser dependencies
         run: |
           npm install --prefix "$RUNNER_TEMP/opendirector-browser" --no-save --no-package-lock playwright-core@1.58.2

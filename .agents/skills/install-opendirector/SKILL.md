@@ -13,8 +13,7 @@ to create or discuss this skill does not authorize installing the application.
 
 1. Honor the requested directory and revision. Otherwise reuse an OpenDirector
    checkout in the working directory or the repository containing this skill.
-   Identify it by `package.json`, both Python projects under `packages/core` and
-   `apps/api`, and `scripts/opendirector.py`, rather than its directory name.
+   Identify it by `package.json`, the root `pyproject.toml`, and `scripts/opendirector.py`, rather than its directory name.
 2. If there is no checkout, use the source URL in the bundled platform guidance:
    `https://github.com/ThinkFlowLab/OpenDirector.git`. Clone into an available
    `OpenDirector` directory under the working directory. Never overwrite a
@@ -82,22 +81,20 @@ it to an unused backup name before recreating it; do not delete its contents.
 POSIX (replace `python3` with the selected interpreter):
 
 ```sh
-npm ci
 python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -v -e .
 .venv/bin/python -m pip check
-npm run build
 ```
 
 Windows PowerShell (select the Python version before using `py -3`):
 
 ```powershell
-npm.cmd ci
 py -3 -m venv .venv
-& .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+& .\.venv\Scripts\python.exe -m pip install -v -e .
 & .\.venv\Scripts\python.exe -m pip check
-npm.cmd run build
 ```
+
+The pip build backend runs npm ci, the frontend build, and the bundled OpenCode version check. Do not run these stages separately during installation. Wheel installs contain these resources and do not require Node.js; source installs do.
 
 Skip the venv creation command when reusing one. Do not skip dependency
 installation solely because `node_modules` or `.venv` exists. `npm ci` requires

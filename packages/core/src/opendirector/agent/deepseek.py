@@ -11,7 +11,6 @@ from tempfile import TemporaryDirectory
 import yaml
 
 from opendirector.agent.process import terminate
-from opendirector.agent.tools import ROOT
 from opendirector.domain.projects import ProjectError
 
 

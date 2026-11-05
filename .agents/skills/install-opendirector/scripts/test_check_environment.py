@@ -25,8 +25,7 @@ class EnvironmentChecks(unittest.TestCase):
         files = {
             "package.json": json.dumps({"name": "opendirector", "engines": {"node": ">=24.22.1"}}),
             ".nvmrc": "24.22.1\n",
-            "packages/core/pyproject.toml": '[project]\nrequires-python = ">=3.11"\n',
-            "apps/api/pyproject.toml": '[project]\nrequires-python = ">=3.11"\n',
+            "pyproject.toml": '[project]\nrequires-python = ">=3.11"\n',
             "requirements.txt": "", "package-lock.json": "{}", "scripts/opendirector.py": "",
         }
         for relative, content in files.items():
@@ -76,8 +75,8 @@ class EnvironmentChecks(unittest.TestCase):
         (self.root / ".git").write_text("gitdir: /example", encoding="utf-8")
         self.assertEqual(self.report(missing=("git",))["status"], "action_required")
 
-    def test_both_python_constraints_apply(self):
-        (self.root / "apps/api/pyproject.toml").write_text(
+    def test_root_python_constraint_applies(self):
+        (self.root / "pyproject.toml").write_text(
             '[project]\nrequires-python = ">=99.0"\n', encoding="utf-8")
         checks = {item["name"]: item for item in self.report()["checks"]}
         self.assertEqual(checks["python"]["code"], "version_too_old")

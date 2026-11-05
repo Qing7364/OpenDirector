@@ -16,12 +16,13 @@ from opendirector.agent.context import RunContext
 from opendirector.agent.gateway import ToolGateway
 from opendirector.agent.process import terminate
 from opendirector.agent.tools import ROOT, SYSTEM
+from opendirector.installation import BUNDLED
 from opendirector.agent.skill_snapshot import prepare_skills
 from opendirector.domain.projects import ProjectError
 from opendirector.integrations.chat_completions import ChatCompletions
 
 
-BUNDLED_INSTALL_ERROR = ('内置 Agent 依赖安装不完整或无法运行，请在仓库根目录执行 npm ci，并确保允许 opencode-ai 的安装脚本运行。')
+BUNDLED_INSTALL_ERROR = ('内置 Agent 依赖安装不完整或无法运行，请重新执行 pip install --force-reinstall opendirector；源码安装使用 pip install -e .。')
 
 
 def executable(runtime: str) -> str | None:
@@ -30,7 +31,8 @@ def executable(runtime: str) -> str | None:
             path = ROOT / 'node_modules/opencode-ai/bin' / name
             if path.is_file():
                 return str(path)
-        return None
+        path = BUNDLED / 'bin' / ('opencode.exe' if os.name == 'nt' else 'opencode')
+        return str(path) if path.is_file() else None
     return shutil.which('dsh' if runtime == 'deepseek' else runtime)
 
 

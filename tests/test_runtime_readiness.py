@@ -41,6 +41,7 @@ def test_catalog_probes_cli_and_bundled_separately(monkeypatch):
 
 def test_opencode_binary_sources(monkeypatch, tmp_path):
     monkeypatch.setattr(runtime.native, 'ROOT', tmp_path)
+    monkeypatch.setattr(runtime.native, 'BUNDLED', tmp_path / 'bundled')
     monkeypatch.setattr(runtime.native.shutil, 'which', lambda name: '/local/bin/' + name)
     assert runtime.native.executable('default') is None
     binary = tmp_path / 'node_modules/opencode-ai/bin/opencode.exe'
@@ -131,5 +132,9 @@ def test_skill_endpoint_reports_incomplete_bundled_install(tmp_path, monkeypatch
         response = client.get(path + '/assistant/skills')
         assert response.status_code == 503
         assert response.json()['code'] == 'agent_dependency_unavailable'
-        assert 'npm ci' in response.json()['detail']
+        assert 'pip install' in response.json()['detail']
+        english = client.get(path + '/assistant/skills', headers={'Accept-Language': 'en-US'})
+        assert english.status_code == 503
+        assert 'pip install' in english.json()['detail']
+        assert 'Bundled Agent' in english.json()['detail']
         assert '磁盘空间' not in response.json()['detail']

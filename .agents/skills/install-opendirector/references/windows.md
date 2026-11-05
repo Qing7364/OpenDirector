@@ -40,11 +40,9 @@ For quoted executable paths in PowerShell, use the invocation operator:
 
 ```powershell
 & 'C:\path with spaces\Python\python.exe' -m venv .venv
-& .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+& .\.venv\Scripts\python.exe -m pip install -v -e .
 & .\.venv\Scripts\python.exe -m pip check
-npm.cmd ci
-npm.cmd run build
-& .\.venv\Scripts\python.exe scripts/opendirector.py serve
+& .\.venv\Scripts\opendirector.exe serve
 ```
 
 Use `npm.cmd` instead of `npm.ps1`; no execution-policy change or venv activation

@@ -18,8 +18,8 @@ the build is current; only a successful build in this run establishes that.
 
 1. Choose a free local port, preferring 8000. If occupied, use another port and
    preserve the existing listener. Start the real launcher in an owned terminal
-   session: `.venv/bin/python scripts/opendirector.py serve --port PORT` (Windows:
-   `& .\.venv\Scripts\python.exe scripts/opendirector.py serve --port PORT`).
+   session: `.venv/bin/opendirector serve --port PORT` (Windows:
+   `& .\.venv\Scripts\opendirector.exe serve --port PORT`).
 2. Wait for this process's startup URL, while monitoring its exit and logs.
    Allow up to 90 seconds and poll in short intervals. An exited launcher or a
    bind error is failure even if some other service answers on the port.

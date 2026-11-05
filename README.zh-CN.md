@@ -52,7 +52,7 @@ https://github.com/user-attachments/assets/11babc03-e35c-40e7-b5f6-7d476b6bf11a
 | 依赖 | 要求 |
 | --- | --- |
 | Git | 用于克隆源码；也可下载仓库 ZIP 并解压 |
-| Node.js 与 npm | Node.js `24.22.1` 或更新版本，附带 npm |
+| Node.js 与 npm（仅源码构建） | Node.js `24.22.1` 或更新版本，附带 npm；wheel 安装无需此项 |
 | Python | `3.11` 或更新版本 |
 | FFmpeg | 用于媒体处理；终端中需可运行包含 `libx264` 编码器的 `ffmpeg` 和 `ffprobe` |
 | 模型服务（AI 功能需要） | 准备可用的服务地址、Model ID，以及服务要求的 API Key 或其他鉴权信息 |
@@ -90,82 +90,42 @@ ffmpeg -version
 ffprobe -version
 ```
 
-### 2. 获取源码
+### 2. 安装并启动
+
+在已启用的 Python 3.11+ 虚拟环境中，源码安装只需：
 
 ```sh
 git clone https://github.com/ThinkFlowLab/OpenDirector.git
 cd OpenDirector
+pip install -e .
+opendirector serve
 ```
 
-也可下载源码并解压。以下命令均在仓库根目录执行。
+安装过程会明确执行 `npm ci`、前端构建和内置 OpenCode 校验，无需手动重复这些步骤。源码构建需要 Node.js 24.22.1+、npm 和网络；使用 `pip install -v -e .` 查看完整构建日志。`serve` 仅启动服务，不在启动时下载依赖或构建。
 
-### 3. 安装并启动
-
-#### macOS
+如果尚未创建虚拟环境，先执行一次（macOS 使用已安装的 `python3.12`，Linux 可用 Python 3.11+ 的 `python3`）：
 
 ```sh
-npm ci
 python3.12 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m pip check
-npm run build
-.venv/bin/python scripts/opendirector.py serve
+source .venv/bin/activate
 ```
 
-这些命令将应用的 Python 环境建在 `.venv/` 内，无需激活，也无需使用 `sudo pip`。若采用其他 Python 安装方式，创建虚拟环境时将 `python3.12` 替换为对应的 Python 3.11+ 命令。
-
-#### Linux 和 WSL
-
-```sh
-npm ci
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-npm run build
-.venv/bin/python scripts/opendirector.py serve
-```
-
-#### Windows（PowerShell）
+Windows PowerShell：
 
 ```powershell
-npm.cmd ci
 py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-npm.cmd run build
-.\.venv\Scripts\python.exe scripts/opendirector.py serve
+.\.venv\Scripts\Activate.ps1
 ```
 
-如果 `node -v` 低于 `24.22.1`，先安装 `.nvmrc` 指定的版本；Windows 上使用官方 zip
-包即可，无需管理员权限。若 `npm ci` 报 `ECONNRESET`，把 npm 源切换到镜像
-（`npm config set registry <镜像地址>`）后重试。在 Windows 上运行测试还需要开启
-“开发者模式”，因为部分测试会创建符号链接。
+同一个 Python 包支持 wheel 安装，wheel 已包含前端、技能和当前平台的内置 OpenCode，无需 Node.js。发布后可使用 `pip install opendirector`；发布前从项目可信发布渠道取得匹配系统及架构的 wheel，再用 `pip install <wheel路径>` 安装。此说明不表示该版本已上传 PyPI。
 
-如果系统没有 `py` 命令，但已将 Python 加入 PATH，创建虚拟环境时使用 `python -m venv .venv`。
+### 3. 打开与更新
 
-在浏览器打开终端显示的地址，默认是 <http://127.0.0.1:8000>。使用期间保持终端运行，按 `Ctrl+C` 退出。
+打开 <http://127.0.0.1:8000>；按 `Ctrl+C` 停止，再次运行 `opendirector serve` 启动。更换端口使用 `opendirector serve --port 8001`，排查问题使用 `--log-level debug`。
 
-可以在另一个终端检查后端（Windows PowerShell 使用 `curl.exe`）：
+源码安装默认将 `projects/` 和 `.opendirector/` 保存在源码目录；wheel 安装默认使用用户主目录下的 `.opendirector/`。可通过 `OPENDIRECTOR_ROOT` 指定数据目录；安装目录只用于读取应用资源。
 
-```sh
-curl --fail -H 'X-OpenDirector-Request: 1' http://127.0.0.1:8000/api/health
-```
-
-应返回 `{"status":"ok"}`。随后打开页面，新建或打开画布，上传一张本地图片，确认状态变为“已保存到本机”；刷新页面后应能恢复工程。若启动时改了端口，检查命令也要使用对应端口。
-
-- **再次启动**：在仓库根目录运行对应系统的最后一条 `serve` 命令。
-- **更新源码**：先停止应用并备份项目，更新后重新安装依赖、构建前端并启动。
-- **端口冲突**：在对应系统的 `serve` 命令后追加 `--port 8001`，并访问 <http://127.0.0.1:8001>：
-
-```sh
-# macOS、Linux 和 WSL
-.venv/bin/python scripts/opendirector.py serve --port 8001
-```
-
-```powershell
-# Windows（PowerShell）
-.\.venv\Scripts\python.exe scripts/opendirector.py serve --port 8001
-```
-
-默认日志级别为 INFO。排查模型请求参数时，启动命令追加 `--log-level debug`；访问日志与模型调用日志使用相同格式。
+更新源码后重新运行 `pip install -e .`，再启动服务。修改 Python 源码即时生效；修改前端时使用 `opendirector dev`，或重新安装以构建供 `serve` 使用的产物。开发检查见[验证指南](docs/development/validation.md)。
 
 ## 接入模型
 
@@ -310,7 +270,7 @@ HTTP 400。
 | 找不到 `node` / `npm`，或 npm 报 `EBADENGINE` | 用 `node --version` 对照 `.nvmrc`；Mac 通过 Homebrew 安装时，在启动终端执行 `export PATH="$(brew --prefix node@24)/bin:$PATH"` |
 | Python 安装提示版本不支持 | 检查 `.venv/bin/python --version`；Mac 应使用 `python3.12` 创建环境，避免误用旧版系统 `python3`。如果 `.venv` 已用错误版本创建，将其重命名保留后，用支持的解释器重新创建并安装依赖 |
 | 页面无法打开或提示服务不可用 | 确认启动终端仍在运行，使用终端显示的地址，并检查启动错误和端口冲突；只运行 `npm run dev` 不能提供完整应用服务 |
-| 提示先构建前端 | 在仓库根目录运行 `npm run build`，Windows 使用 `npm.cmd run build`，然后重新启动 |
+| 提示先构建前端 | 源码安装重新执行 `pip install -v -e .`；wheel 安装重新安装对应 wheel，然后启动 |
 | 模型无法生成或工具置灰 | 检查模型是否已保存并在面板选中，以及服务地址、协议、Model ID、鉴权和所需能力是否匹配 |
 | 上传被拒绝 | 检查文件类型是否匹配节点或参考槽位，并按提示检查大小、格式和时长 |
 | 媒体处理失败 | 在终端运行 `ffmpeg -version` 和 `ffprobe -version` 检查工具是否可用，安装后重启应用 |

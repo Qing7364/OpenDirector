@@ -1,9 +1,9 @@
 # OpenDirector CLI
 
-安装核心包后使用 `opendirector`。源码开发可直接执行 `python3 scripts/opendirector.py`，该入口使用 checkout 的核心包及项目虚拟环境。
+在仓库根目录通过 `pip install -e .` 安装统一 Python 包后使用 `opendirector`。安装自动构建前端并校验内置 Agent；已发布 wheel 携带对应资源。
 
 ```bash
-pip install -e packages/core
+pip install -e .
 opendirector --help
 opendirector serve --port 18000
 opendirector dev --port 18000 --web-port 5173

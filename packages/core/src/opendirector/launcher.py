@@ -10,7 +10,9 @@ import time
 import urllib.error
 import urllib.request
 
-ROOT = Path(__file__).resolve().parents[4]
+from opendirector.installation import SOURCE_ROOT, data_root, web_root
+
+ROOT = SOURCE_ROOT
 
 
 def port_in_use(port: int) -> bool:
@@ -42,10 +44,14 @@ def start(mode: str = "serve", port: int = 8000, web_port: int = 5173, log_level
         raise ValueError("端口必须在 1–65535 之间。")
     if mode not in {"serve", "dev"}:
         raise ValueError("启动模式必须是 serve 或 dev。")
-    if mode == "serve" and not (ROOT / "dist/index.html").is_file():
-        raise ValueError("请先运行 npm run build。")
-    environment = {**os.environ, "OPENDIRECTOR_ROOT": str(ROOT), "OPENDIRECTOR_API_URL": f"http://127.0.0.1:{port}"}
-    source_paths = [str(ROOT / "packages/core/src"), str(ROOT / "apps/api/src")]
+    if mode == "serve" and not (web_root() / "index.html").is_file():
+        raise ValueError("Web resources missing; reinstall with pip install -e . or pip install --force-reinstall opendirector. / 缺少前端产物，请重新安装。")
+    if mode == "dev" and ROOT is None:
+        raise ValueError("Development mode requires an editable source checkout. / 开发模式需要源码安装。")
+    workspace = data_root()
+    workspace.mkdir(parents=True, exist_ok=True)
+    environment = {**os.environ, "OPENDIRECTOR_ROOT": str(workspace), "OPENDIRECTOR_API_URL": f"http://127.0.0.1:{port}"}
+    source_paths = [str(ROOT / "packages/core/src"), str(ROOT / "apps/api/src")] if ROOT else []
     if environment.get("PYTHONPATH"):
         source_paths.append(environment["PYTHONPATH"])
     environment["PYTHONPATH"] = os.pathsep.join(source_paths)
@@ -55,7 +61,7 @@ def start(mode: str = "serve", port: int = 8000, web_port: int = 5173, log_level
         require_free_port(port, "--port")
         if mode == "dev":
             require_free_port(web_port, "--web-port")
-        api = subprocess.Popen([sys.executable, "-m", "opendirector_api.server", "--port", str(port), "--log-level", log_level], cwd=ROOT, env=environment)
+        api = subprocess.Popen([sys.executable, "-m", "opendirector_api.server", "--port", str(port), "--log-level", log_level], cwd=workspace, env=environment)
         processes.append(api)
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         for _ in range(600):

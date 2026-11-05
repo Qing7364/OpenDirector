@@ -17,7 +17,9 @@ from opendirector.domain.projects import ProjectError
 from opendirector.infrastructure.creation_projects import directory
 from opendirector.infrastructure.local_projects import child
 
-ROOT = Path(__file__).resolve().parents[5]
+from opendirector.installation import SOURCE_ROOT, BUNDLED
+
+ROOT = SOURCE_ROOT or BUNDLED
 EXCLUDED = {'project.create', 'project.trash', 'project.restore', 'asset.import', 'job.checkpoint',
             'canvas.applyEdit', 'canvas.publishMedia', 'timeline.publishRender'}
 COMMANDS = {name: model for name, model in COMMAND_MODELS.items()

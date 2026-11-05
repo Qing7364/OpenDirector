@@ -12,6 +12,7 @@
 | [验证指南](development/validation.md) | 如何复现检查，什么证据能够支持结论？ | 工具、运行要求或验证入口改变时 |
 | [macOS 安装验证](development/macos-install-validation.md) | Apple Silicon Mac 上实际验证了哪些安装与使用场景？ | 重新执行对应安装验收时 |
 | [中英双语界面](development/i18n.md) | 语言如何选择，词条如何组织，新增文案和检查怎么做？ | 语言策略、词条结构或检查方式改变时 |
+| [Python 安装与发布](development/packaging.md) | 如何统一安装、构建平台 wheel 并隔离验证？ | 安装包、资源路径或构建流程改变时 |
 | [业务 CLI](guides/cli.md) | 如何通过终端或 Agent Shell 查询、编辑和执行生成任务？ | 命令、授权或回执语义变化时 |
 | [视频模型能力配置](guides/video-model-capabilities.md) | 如何声明服务实际支持的输出规格？ | 配置字段或模型能力接入行为改变时 |
 

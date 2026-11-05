@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from filelock import Timeout
 from starlette.concurrency import run_in_threadpool
 
+from opendirector.installation import data_root, web_root
 from opendirector.domain.projects import ProjectError, identifier
 from opendirector.domain.creation.validation import ContractError
 from opendirector.domain.settings import GeneralSettings, GeneralSettingsPatch
@@ -36,7 +37,7 @@ from opendirector_api.models import (ModelConfigInput, ModelConfigPublic, AgentM
 
 
 def create_app(store: LocalProjects | None = None, chat_provider=None, generation_provider=None) -> FastAPI:
-    repository = Path(os.environ.get("OPENDIRECTOR_ROOT", Path(__file__).resolve().parents[4]))
+    repository = data_root()
     if store is None:
         store = LocalProjects(repository)
     model_configs = ModelConfigs(store.repository)
@@ -328,7 +329,7 @@ def create_app(store: LocalProjects | None = None, chat_provider=None, generatio
 
     register_tool_routes(creation_tools, '/api/creation/projects/{project_id}/tool-tasks')
 
-    dist = repository / "dist"
+    dist = web_root()
     if dist.is_dir():
         app.mount("/assets", StaticFiles(directory=dist / "assets", check_dir=False), name="assets")
 

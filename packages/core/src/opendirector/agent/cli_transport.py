@@ -7,7 +7,6 @@ from pathlib import Path
 import shlex
 import sys
 
-from opendirector.agent.tools import ROOT
 from opendirector.domain.projects import ProjectError
 
 
@@ -18,10 +17,10 @@ def environment(work, socket, bridge_env=None):
     cli_bin = work / '.opendirector-bin'
     cli_bin.mkdir(exist_ok=True)
     if os.name == 'nt':
-        (cli_bin / 'opendirector.cmd').write_text(f'@"{sys.executable}" "{ROOT / "scripts/opendirector.py"}" %*\n')
+        (cli_bin / 'opendirector.cmd').write_text(f'@"{sys.executable}" -m opendirector.cli %*\n')
     else:
         launcher = cli_bin / 'opendirector'
-        launcher.write_text('#!/bin/sh\nexec ' + shlex.join([sys.executable, str(ROOT / 'scripts/opendirector.py')]) + ' "$@"\n')
+        launcher.write_text('#!/bin/sh\nexec ' + shlex.join([sys.executable, '-m', 'opendirector.cli']) + ' "$@"\n')
         launcher.chmod(0o700)
     env['PATH'] = str(cli_bin) + os.pathsep + env.get('PATH', '')
     return env

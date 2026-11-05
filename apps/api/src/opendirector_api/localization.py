@@ -7,6 +7,7 @@ English, so a missing translation never leaks Chinese into an English UI.
 from fastapi import Request
 
 ENGLISH_BY_CODE = {
+    "agent_dependency_unavailable": "Bundled Agent is unavailable. Reinstall with pip install --force-reinstall opendirector; for a source checkout, use pip install -e .",
     "invalid_input": "The request is invalid. Check the required fields and their formats.",
     "invalid_project": "The project or asset identifier is invalid.",
     "missing_object": "The requested item no longer exists.",

@@ -65,11 +65,10 @@ def inspect(root, installed=False):
     if package.get("name") != "opendirector":
         raise ValueError("not_opendirector_source")
     node_constraint = package["engines"]["node"]
-    python_constraints = []
-    for project in ("packages/core", "apps/api"):
-        with (root / project / "pyproject.toml").open("rb") as stream:
-            python_constraints.append(tomllib.load(stream)["project"]["requires-python"])
-    required_python = max(minimum(item) for item in python_constraints)
+    with (root / "pyproject.toml").open("rb") as stream:
+        python_constraint = tomllib.load(stream)["project"]["requires-python"]
+    python_constraints = [python_constraint]
+    required_python = minimum(python_constraint)
     required_node = minimum(node_constraint)
     preferred_node = (root / ".nvmrc").read_text(encoding="utf-8").strip()
     for relative in ("requirements.txt", "package-lock.json", "scripts/opendirector.py"):
@@ -118,7 +117,7 @@ def inspect(root, installed=False):
                               f"assert sys.version_info[:3] >= {required_python!r}"], root)})
         for name, arguments in (
             ("pip_check", ["-m", "pip", "check"]),
-            ("startup_entrypoint", ["scripts/opendirector.py", "serve", "--help"]),
+            ("startup_entrypoint", ["-m", "opendirector.cli", "serve", "--help"]),
         ):
             checks.append({"name": name, "required": True,
                            **run([str(venv), *arguments], root)})

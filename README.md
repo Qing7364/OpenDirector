@@ -52,7 +52,7 @@ https://github.com/user-attachments/assets/11babc03-e35c-40e7-b5f6-7d476b6bf11a
 | Dependency | Requirement |
 | --- | --- |
 | Git | For cloning the source; alternatively, download and extract the repository ZIP |
-| Node.js and npm | Node.js `24.22.1` or later, with npm |
+| Node.js and npm (source builds only) | Node.js `24.22.1` or later, with npm; not required for wheel installs |
 | Python | `3.11` or later |
 | FFmpeg | `ffmpeg` with the `libx264` encoder and `ffprobe` must be available in your terminal for media processing |
 | Model service (for AI features) | A working service URL, Model ID, and any API key or other authentication information required by the service |
@@ -91,84 +91,42 @@ ffmpeg -version
 ffprobe -version
 ```
 
-### 2. Get the source
+### 2. Install and start
+
+In an activated Python 3.11+ virtual environment, install from source with:
 
 ```sh
 git clone https://github.com/ThinkFlowLab/OpenDirector.git
 cd OpenDirector
+pip install -e .
+opendirector serve
 ```
 
-You can also download and extract the source. Run all the following commands from the repository root.
+Installation explicitly runs `npm ci`, builds the web application, and verifies bundled OpenCode. No separate npm commands are needed. Source builds require Node.js 24.22.1+, npm, and network access. Use `pip install -v -e .` for full build logs. `serve` only starts the application; it does not download dependencies or build resources.
 
-### 3. Install and start
-
-#### macOS
+If needed, create and activate a virtual environment once (use `python3.12` on macOS, or a Python 3.11+ `python3` on Linux):
 
 ```sh
-npm ci
 python3.12 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m pip check
-npm run build
-.venv/bin/python scripts/opendirector.py serve
+source .venv/bin/activate
 ```
 
-These commands create the application's Python environment in `.venv/`; no activation or `sudo pip` is needed. If you use a different Python installation, replace `python3.12` with its Python 3.11+ command when creating the environment.
-
-#### Linux and WSL
-
-```sh
-npm ci
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-npm run build
-.venv/bin/python scripts/opendirector.py serve
-```
-
-#### Windows (PowerShell)
+On Windows PowerShell:
 
 ```powershell
-npm.cmd ci
 py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-npm.cmd run build
-.\.venv\Scripts\python.exe scripts/opendirector.py serve
+.\.venv\Scripts\Activate.ps1
 ```
 
-If `node -v` reports a version below `24.22.1`, install the version pinned in
-`.nvmrc` first; on Windows the official Node.js zip works without administrator
-rights. If `npm ci` fails with `ECONNRESET`, point npm at a mirror
-(`npm config set registry <mirror-url>`) and retry. Running the test suite on
-Windows additionally needs Developer Mode, because some tests create symbolic
-links.
+The same Python distribution supports wheels containing the web application, skills, and platform-specific OpenCode binary, so wheel users do not need Node.js. Once published, install with `pip install opendirector`; until then, obtain a wheel matching your OS and architecture from a trusted project release and run `pip install <wheel-path>`. This does not claim the version is already available on PyPI.
 
-If the `py` command is unavailable but Python is on your PATH, create the virtual environment with `python -m venv .venv`.
+### 3. Open and update
 
-Open the address shown in the terminal in your browser. The default is <http://127.0.0.1:8000>. Keep the terminal running while using the application; press `Ctrl+C` to stop it.
+Open <http://127.0.0.1:8000>. Press `Ctrl+C` to stop; run `opendirector serve` again to restart. Use `opendirector serve --port 8001` for another port or add `--log-level debug` for diagnostics.
 
-To check the backend from another terminal, run (use `curl.exe` in Windows PowerShell):
+Editable installs store `projects/` and `.opendirector/` in the checkout by default. Wheel installs default to `.opendirector/` in your home directory. Set `OPENDIRECTOR_ROOT` to choose a data directory; application resources are read from the installation.
 
-```sh
-curl --fail -H 'X-OpenDirector-Request: 1' http://127.0.0.1:8000/api/health
-```
-
-It should return `{"status":"ok"}`. Then open the page, create or open a canvas, upload a local image, and check that the status becomes **Saved locally**. Reload the page to confirm the project reopens. Change the port in the check if you started on a different one.
-
-- **Start again**: Run the final `serve` command for your operating system from the repository root.
-- **Update the source**: Stop the application and back up your projects first. After updating, reinstall dependencies, rebuild the frontend, and start the application.
-- **Port conflict**: Append `--port 8001` to the corresponding `serve` command and open <http://127.0.0.1:8001>:
-
-```sh
-# macOS, Linux, and WSL
-.venv/bin/python scripts/opendirector.py serve --port 8001
-```
-
-```powershell
-# Windows (PowerShell)
-.\.venv\Scripts\python.exe scripts/opendirector.py serve --port 8001
-```
-
-The default log level is INFO. To inspect model request parameters, append `--log-level debug` to the startup command. Access logs and model call logs use the same format.
+After updating source, run `pip install -e .` again before starting. Python source edits take effect directly. For web edits, use `opendirector dev` or reinstall to rebuild the application served by `serve`. See the [validation guide](docs/development/validation.md) for development checks.
 
 ## Connect models
 
@@ -313,7 +271,7 @@ Saving projects locally does not imply offline inference. Generation prompts and
 | `node` / `npm` is missing, or npm reports `EBADENGINE` | Check `node --version` against `.nvmrc`. On macOS with Homebrew, run `export PATH="$(brew --prefix node@24)/bin:$PATH"` in the startup terminal |
 | Python installation reports an unsupported version | Check `.venv/bin/python --version`. On macOS, create the environment with `python3.12`, not an older system `python3`. If `.venv` was created with the wrong version, rename it and recreate it with the supported interpreter, then reinstall the requirements |
 | The page will not open, or the service is unavailable | Check that the startup terminal is still running, use the address it displays, and check for startup errors or port conflicts. Running only `npm run dev` does not start the complete application service |
-| A message asks you to build the frontend first | Run `npm run build` from the repository root, or `npm.cmd run build` on Windows, then restart |
+| A message asks you to build the frontend first | For source installs, run `pip install -v -e .` again; for wheels, reinstall the matching wheel, then restart |
 | A model cannot generate content, or a tool is disabled | Check that the model is saved and selected in the panel, and that the service URL, protocol, Model ID, authentication, and required capabilities match |
 | An upload is rejected | Check that the file type matches the node or reference slot, then check the size, format, and duration against the error message |
 | Media processing fails | Run `ffmpeg -version` and `ffprobe -version` in your terminal to check that the tools are available; restart the application after installing them |

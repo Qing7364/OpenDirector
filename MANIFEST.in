@@ -1,0 +1,10 @@
+include build_backend.py setup.py pyproject.toml README.md README.zh-CN.md
+include package.json package-lock.json index.html tsconfig.json vite.config.ts .nvmrc
+recursive-include src *
+recursive-include packages/core/src *.py
+recursive-include apps/api/src *.py
+recursive-include packages/agent/skills *
+prune packages/core/src/opendirector/_bundled
+prune node_modules
+prune dist
+prune build
