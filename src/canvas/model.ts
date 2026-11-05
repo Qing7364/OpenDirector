@@ -20,6 +20,7 @@ import {
 import {
   fillConnectedFrames,
   frameImageLimitIssue,
+  type FrameCapabilities,
 } from "./frameReferences.ts";
 /** Authored local canvas model, compatible with React Flow's node/edge shape. */
 export type CanvasNodeKind =
@@ -459,8 +460,9 @@ export function canAddReference(
 export function applyCommand(
   document: CanvasDocument,
   command: CanvasCommand,
+  frames?: FrameCapabilities,
 ): CanvasDocument {
-  let next = applyCanvasCommand(document, command);
+  let next = applyCanvasCommand(document, command, frames);
   if (
     next !== document &&
     (command.type === "remove-edges" ||
@@ -564,9 +566,13 @@ export function applyCommand(
 function applyCanvasCommand(
   document: CanvasDocument,
   command: CanvasCommand,
+  frames?: FrameCapabilities,
 ): CanvasDocument {
   if (command.type === "batch")
-    return command.commands.reduce(applyCommand, document);
+    return command.commands.reduce(
+      (current, item) => applyCommand(current, item, frames),
+      document,
+    );
   if (command.type === "reference-sources") {
     const ids = new Set(
       [...document.nodes, ...(document.hiddenNodes ?? [])].map(
@@ -770,7 +776,7 @@ function applyCanvasCommand(
           settings.videoMode === "first-last" &&
           node.data.settings?.videoMode !== "first-last"
         )
-          settings = fillConnectedFrames(settings, incoming);
+          settings = fillConnectedFrames(settings, incoming, frames);
         if (settings !== data.settings) data = { ...data, settings };
       }
       changed = true;
@@ -1017,7 +1023,11 @@ function applyCanvasCommand(
     const incoming = incomingIds.flatMap(
       (id) => logicalNodes.find((node) => node.id === id) ?? [],
     );
-    const settings = fillConnectedFrames(target.data.settings, incoming);
+    const settings = fillConnectedFrames(
+      target.data.settings,
+      incoming,
+      frames,
+    );
     return {
       ...document,
       edges,

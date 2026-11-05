@@ -1,6 +1,7 @@
 import { applyCommand } from "./model.ts";
 import { sameGenerationSettings, sameNodeData } from "./dataBoundary.ts";
 import type { CanvasCommand, CanvasDocument, CanvasNode } from "./model.ts";
+import type { FrameCapabilities } from "./frameReferences.ts";
 import { tNow } from "../i18n/messages.ts";
 
 export interface CanvasHistory {
@@ -38,8 +39,9 @@ export function recordChange(
 export function executeCommand(
   history: CanvasHistory,
   command: CanvasCommand,
+  frames?: FrameCapabilities,
 ): CanvasHistory {
-  return recordChange(history, applyCommand(history.present, command));
+  return recordChange(history, applyCommand(history.present, command, frames));
 }
 
 /** Start once on drag start, update during drag, then commit once on drag stop. */

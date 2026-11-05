@@ -4,6 +4,7 @@ import type {
   GenerationSettings,
 } from "./model.ts";
 import { tNow } from "../i18n/messages.ts";
+import type { ModelConfig } from "../backend/rules.ts";
 
 export const FRAME_IMAGE_LIMIT = 2;
 export const frameImageLimitMessage = () =>
@@ -22,11 +23,45 @@ export function frameImageLimitIssue(
     : null;
 }
 
+/**
+ * What the canvas command layer needs to know about the selected model. The
+ * document model has no access to the configured service catalog, so the
+ * workspace supplies it. Without it, a configured service model is treated as
+ * first-frame only: filling a slot the model rejects would block generation.
+ */
+export interface FrameCapabilities {
+  supportsLastFrame(settings: GenerationSettings): boolean;
+}
+
+/** Read last-frame support from the configured model's input rules. */
+export function modelFrameCapabilities(
+  models: readonly Pick<ModelConfig, "id" | "inputRules">[],
+): FrameCapabilities {
+  return {
+    supportsLastFrame: (settings) => {
+      if (!settings.modelConfigId) return true;
+      const config = models.find(
+        (model) => model.id === settings.modelConfigId,
+      );
+      return Boolean(config?.inputRules.frameRoles?.includes("last_frame"));
+    },
+  };
+}
+
+function supportsLastFrame(
+  settings: GenerationSettings,
+  capabilities?: FrameCapabilities,
+) {
+  if (capabilities) return capabilities.supportsLastFrame(settings);
+  return !settings.modelConfigId;
+}
+
 /** Connection/mode-change default only; rendering and manual clearing never
  * refill a slot. Keep explicit selections and the order of incoming edges. */
 export function fillConnectedFrames(
   settings: GenerationSettings,
   incoming: readonly CanvasNode[],
+  capabilities?: FrameCapabilities,
 ): GenerationSettings {
   if (
     settings.mode !== "video" ||
@@ -44,8 +79,11 @@ export function fillConnectedFrames(
     ? settings
     : { ...settings, frameSlotsInitialized: true };
   for (const field of ["firstFrameNodeId", "lastFrameNodeId"] as const) {
-    // Current local adapters accept a first frame only.
-    if (settings.modelConfigId && field === "lastFrameNodeId") continue;
+    if (
+      field === "lastFrameNodeId" &&
+      !supportsLastFrame(settings, capabilities)
+    )
+      continue;
     if (next[field]) continue;
     const image = images.find(
       (node) =>

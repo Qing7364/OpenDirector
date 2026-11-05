@@ -14,7 +14,10 @@ import {
 import { createHistory, recordChange, undo } from "../src/canvas/history.ts";
 import { parseDocument, serializeDocument } from "../src/canvas/storage.ts";
 import { referenceIssue } from "../src/canvas/connectionPolicy.ts";
-import { initializeConnectedFrames } from "../src/canvas/frameReferences.ts";
+import {
+  initializeConnectedFrames,
+  modelFrameCapabilities,
+} from "../src/canvas/frameReferences.ts";
 
 const image = () =>
   createNode("image", undefined, {
@@ -200,6 +203,93 @@ test("first-frame-only adapters fill the first slot without creating an unsuppor
   );
   assert.equal(doc.nodes.at(-1)!.data.settings!.firstFrameNodeId, a.id);
   assert.equal(doc.nodes.at(-1)!.data.settings!.lastFrameNodeId, undefined);
+});
+
+test("configured models that declare a last frame fill both slots in edge order", () => {
+  const a = image(),
+    b = image(),
+    target = video(true);
+  const configId = target.data.settings!.modelConfigId!;
+  const frames = modelFrameCapabilities([
+    {
+      id: configId,
+      inputRules: { frameRoles: ["first_frame", "last_frame"] },
+    } as never,
+  ]);
+  let doc: CanvasDocument = { ...createDocument(), nodes: [a, b, target] };
+  for (const source of [a, b])
+    doc = applyCommand(
+      doc,
+      {
+        type: "add-edge",
+        edge: { id: crypto.randomUUID(), source: source.id, target: target.id },
+      },
+      frames,
+    );
+  const settings = doc.nodes.at(-1)!.data.settings!;
+  assert.equal(settings.firstFrameNodeId, a.id);
+  assert.equal(settings.lastFrameNodeId, b.id);
+});
+
+test("frame capabilities reach slots filled by a batch or a switch to first-last mode", () => {
+  const a = image(),
+    b = image(),
+    target = video(true);
+  target.data.settings!.videoMode = "reference";
+  const configId = target.data.settings!.modelConfigId!;
+  const frames = modelFrameCapabilities([
+    {
+      id: configId,
+      inputRules: { frameRoles: ["first_frame", "last_frame"] },
+    } as never,
+  ]);
+  const edges = [a, b].map((source) => ({
+    type: "add-edge" as const,
+    edge: { id: crypto.randomUUID(), source: source.id, target: target.id },
+  }));
+  let doc = applyCommand(
+    { ...createDocument(), nodes: [a, b, target] },
+    { type: "batch", commands: edges },
+    frames,
+  );
+  doc = applyCommand(
+    doc,
+    {
+      type: "update-node",
+      id: target.id,
+      patch: {
+        data: {
+          settings: { ...target.data.settings!, videoMode: "first-last" },
+        },
+      },
+    },
+    frames,
+  );
+  const settings = doc.nodes.at(-1)!.data.settings!;
+  assert.equal(settings.firstFrameNodeId, a.id);
+  assert.equal(settings.lastFrameNodeId, b.id);
+});
+
+test("unknown or first-frame-only configured models never receive a last frame", () => {
+  const target = video(true);
+  const settings = target.data.settings!;
+  assert.equal(modelFrameCapabilities([]).supportsLastFrame(settings), false);
+  assert.equal(
+    modelFrameCapabilities([
+      {
+        id: settings.modelConfigId!,
+        inputRules: { frameRoles: ["first_frame"] },
+      } as never,
+    ]).supportsLastFrame(settings),
+    false,
+  );
+  assert.equal(
+    modelFrameCapabilities([]).supportsLastFrame({
+      ...settings,
+      modelConfigId: undefined,
+    }),
+    true,
+  );
 });
 
 test("over-limit reference mode cannot switch to frames or submit a legacy over-limit draft", () => {

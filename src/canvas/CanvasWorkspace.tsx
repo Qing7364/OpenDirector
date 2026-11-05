@@ -164,6 +164,7 @@ import { referenceContentCommand } from "./generationReferenceEdit.ts";
 import type { GenerationReferenceControls } from "./GenerationReferenceEditor";
 import { absolutePosition, arrangeNodes, boundsOfNodes } from "./geometry";
 import { lockedNodeIds } from "./hierarchy";
+import { modelFrameCapabilities } from "./frameReferences";
 import {
   beginTransaction,
   commitTransaction,
@@ -905,8 +906,14 @@ function Workspace() {
     if (actionSession && !actionNode) setActionSession(null);
   }, [actionSession, actionNode]);
   useEffect(() => () => quickAction.current?.abort(), [doc.id]);
+  const frameCapabilities = useRef(modelFrameCapabilities([]));
+  frameCapabilities.current = useMemo(
+    () => modelFrameCapabilities(backendCatalog.models),
+    [backendCatalog.models],
+  );
   const command = useCallback(
-    (value: CanvasCommand) => setHistory((h) => executeCommand(h, value)),
+    (value: CanvasCommand) =>
+      setHistory((h) => executeCommand(h, value, frameCapabilities.current)),
     [],
   );
   const change = useCallback(
