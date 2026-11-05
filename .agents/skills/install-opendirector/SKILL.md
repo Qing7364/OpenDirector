@@ -112,9 +112,9 @@ py -3 -m venv .venv
 
 The pip build backend runs npm ci, the frontend build, and the bundled OpenCode version check. Do not run these stages separately during installation. Wheel installs contain these resources and do not require Node.js; source installs do.
 
-If pip or npm downloads are slow or time out, follow
-[download troubleshooting](references/download-mirrors.md) for an
-installation-scoped retry with a user-specified or trusted alternative registry. Keep the unified pip build entrypoint.
+If pip or npm downloads are slow or time out, retry the same installation with
+a user-specified or trusted alternative registry scoped to that process.
+Preserve global registry settings, lockfiles, and integrity checks.
 
 Skip the venv creation command when reusing one. Do not skip dependency
 installation solely because `node_modules` or `.venv` exists. `npm ci` requires
