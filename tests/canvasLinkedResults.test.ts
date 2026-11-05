@@ -101,10 +101,25 @@ test("tool provenance is projected from history without duplicating saved edges 
     toolProvenanceEdges([job], { ...document, nodes: [source] }),
     [],
   );
-  assert.deepEqual(
-    toolProvenanceEdges([{ ...job, status: "cancelled" }], document),
-    [],
-  );
+  for (const status of ["failed", "cancelled", "interrupted"] as const) {
+    const failed = {
+      ...job,
+      status,
+      targetNodeId: result.id,
+      toolTask: { placement: "unplaced" as const, outputIds: [] },
+    };
+    assert.deepEqual(toolProvenanceEdges([failed, failed], document), edges);
+    const replaced = { ...result, data: { ...result.data, src: "another-image.png" } };
+    assert.deepEqual(toolProvenanceEdges([failed], { ...document, nodes: [source, replaced] }), []);
+  }
+  const submitting: GenerationJob = {
+    ...job,
+    status: "running",
+    toolTask: undefined,
+    targetNodeId: result.id,
+    tool: { version: 1, tool: "outpaint", sourceNodeIds: [source.id], parameters: {} },
+  };
+  assert.deepEqual(toolProvenanceEdges([submitting], document), edges);
 });
 for (const kind of ["timeline", "external"] as const) {
   test(`${kind} renders can join the canvas without an original media URL`, () => {

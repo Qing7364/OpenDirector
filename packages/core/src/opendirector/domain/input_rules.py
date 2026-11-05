@@ -1,7 +1,7 @@
 """Explicit adapter profiles, not model-name guesses or online capability probes."""
 from urllib.parse import urlsplit
 from typing import Literal
-from opendirector.domain.video_capabilities import capability_fields
+from opendirector.domain.video_capabilities import capability_fields, seedance_20_variant
 
 MAX_REFERENCES = 64  # Storage/structure guard; provider budgets are checked separately.
 VideoMode = Literal['first_frame', 'reference', 'continuation']
@@ -62,13 +62,17 @@ def _adapter_rules(config):
         if host == 'api.deepseek.com' and path in {'', '/v1'} and model == 'deepseek-flash':
             rules['profile'] = 'deepseek-flash'
     elif host == 'ark.cn-beijing.volces.com' and path == '/api/plan/v3':
+        seedance = seedance_20_variant(model) if kind == 'video' else None
         if kind == 'image' and model in {'doubao-seedream-5.0-pro', 'doubao-seedream-5-0-pro'}:
             rules.update(profile='seedream-5.0-pro', maxImages=10, imageBytes=30 * 1024 * 1024, requestBytes=64 * 1024 * 1024)
-        elif kind == 'video' and model == 'doubao-seedance-2.0':
+        elif seedance:
+            # The 2.0 family shares one adapter: mini and fast serve 480P/720P,
+            # the full model adds 1080P and 4K. All accept 4–15 seconds.
+            lite = seedance != 'full'
             rules.update(profile='seedance-2.0', allowedKinds=['text', 'image', 'audio'], maxImages=9, maxAudios=3, imageBytes=30 * 1024 * 1024,
                          requestBytes=64 * 1024 * 1024, videoModes=['first_frame', 'reference'],
-                         outputResolutions=['480P', '720P', '1080P', '4K'],
-                         referenceImageResolutions=['480P', '720P', '4K'])
+                         outputResolutions=['480P', '720P'] if lite else ['480P', '720P', '1080P', '4K'],
+                         referenceImageResolutions=['480P', '720P'] if lite else ['480P', '720P', '4K'])
     if kind == 'image' and model.rsplit('/', 1)[-1].lower() in {'qwen-image-2.1', 'qwen-image-2.1-turbo'}:
         # Self-hosted vLLM-Omni Qwen-Image-2.1: text-to-image and instruction
         # editing in one model, conditioned on up to four reference images.

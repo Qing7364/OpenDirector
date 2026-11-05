@@ -3,6 +3,26 @@ import asyncio
 from contextlib import suppress
 import os
 import signal
+import subprocess
+import sys
+
+WINDOWS = sys.platform == 'win32'
+
+
+def _signal_tree(process: asyncio.subprocess.Process, *, force: bool) -> None:
+    """Stop the child together with anything it spawned.
+
+    POSIX exposes process groups; Windows has no equivalent, so its process
+    tree is walked by taskkill instead of a single group signal.
+    """
+    if WINDOWS:
+        command = ['taskkill', '/PID', str(process.pid), '/T']
+        if force:
+            command.append('/F')
+        with suppress(OSError, subprocess.SubprocessError):
+            subprocess.run(command, capture_output=True, check=False, timeout=5)
+        return
+    os.killpg(process.pid, signal.SIGKILL if force else signal.SIGTERM)
 
 
 async def terminate(process: asyncio.subprocess.Process, *, group: bool = False) -> None:
@@ -10,7 +30,7 @@ async def terminate(process: asyncio.subprocess.Process, *, group: bool = False)
         return
     with suppress(ProcessLookupError):
         if group:
-            os.killpg(process.pid, signal.SIGTERM)
+            _signal_tree(process, force=False)
         else:
             process.terminate()
     try:
@@ -18,7 +38,7 @@ async def terminate(process: asyncio.subprocess.Process, *, group: bool = False)
     except TimeoutError:
         with suppress(ProcessLookupError):
             if group:
-                os.killpg(process.pid, signal.SIGKILL)
+                _signal_tree(process, force=True)
             else:
                 process.kill()
         await process.wait()

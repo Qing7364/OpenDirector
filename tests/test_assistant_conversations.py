@@ -174,7 +174,9 @@ def test_image_reference_reaches_runtime_with_media_metadata(assistant):
     from pathlib import Path
     assert Path(references[0]['path']).is_absolute()
     assert Path(references[0]['path']).read_bytes() == image.getvalue()
-
+    conversation_id = client.get(path).json()['conversationId']
+    assert frames(send(client, path, conversation_id, '继续使用刚才的参考'))[-1]['error'] is None
+    assert contexts[-1][0]['content'].split('\nReferenced project assets: ', 1)[1].split('\n', 1)[0] == json.dumps(references, ensure_ascii=False)
 
 
 def test_stop_releases_project_after_saving_partial_reply(assistant, monkeypatch):

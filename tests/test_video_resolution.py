@@ -156,6 +156,33 @@ def test_seedance_maps_resolution_and_rejects_1080p_image_reference():
     assert parameters == {'resolution': '1080p'}
 
 
+@pytest.mark.parametrize('model', ['doubao-seedance-2.0-mini', 'doubao-seedance-2-0-mini', 'doubao-seedance-2-0-mini-260615'])
+def test_seedance_mini_declares_the_720p_ladder_and_4_to_15_seconds(model):
+    config = {'kind': 'video', 'protocol': 'volcengine', 'modelId': model,
+              'url': 'https://ark.cn-beijing.volces.com/api/plan/v3'}
+    rules = input_rules(config)
+    assert rules['profile'] == 'seedance-2.0'
+    assert rules['outputResolutions'] == ['480P', '720P']
+    assert rules['videoCapabilities']['outputs'] == [
+        {'resolution': '480P', 'durations': list(range(4, 16))},
+        {'resolution': '720P', 'durations': list(range(4, 16))},
+    ]
+    with pytest.raises(ProjectError, match='不支持所选分辨率'):
+        apply_video_resolution({}, {'videoMode': 'reference', 'referenceIds': []}, {}, config, {'resolution': '1080P'})
+    parameters = {}
+    apply_video_resolution(parameters, {'videoMode': 'reference', 'referenceIds': []}, {}, config,
+                           {'resolution': '720P', 'durationSeconds': 12})
+    assert parameters == {'resolution': '720p'}
+
+
+def test_seedance_fast_keeps_the_base_ladder_for_future_ids():
+    config = {'kind': 'video', 'protocol': 'volcengine', 'modelId': 'doubao-seedance-2.0',
+              'url': 'https://ark.cn-beijing.volces.com/api/plan/v3'}
+    fast = {**config, 'modelId': 'doubao-seedance-2.0-fast'}
+    assert input_rules(fast)['outputResolutions'] == ['480P', '720P']
+    assert input_rules(config)['outputResolutions'] == ['480P', '720P', '1080P', '4K']
+
+
 def test_seedance_resolution_is_forwarded_in_the_provider_json(tmp_path):
     store = LocalProjects(tmp_path)
     config = {'kind': 'video', 'protocol': 'volcengine', 'modelId': 'doubao-seedance-2.0',
@@ -176,3 +203,28 @@ def test_seedance_resolution_is_forwarded_in_the_provider_json(tmp_path):
         assert await provider.generate(config, task, submitted) == ('mp4', b'fixture-video')
     asyncio.run(run())
     assert len(posts) == 1 and posts[0]['resolution'] == '4k'
+
+
+def test_seedance_sends_whole_seconds_because_ark_rejects_floats(tmp_path):
+    # The editor stores durationSeconds as 4.0; Ark answers InvalidParameter for
+    # that JSON number, so the adapter has to submit 4.
+    store = LocalProjects(tmp_path)
+    config = {'kind': 'video', 'protocol': 'volcengine', 'modelId': 'doubao-seedance-2.0-mini',
+              'url': 'https://ark.cn-beijing.volces.com/api/plan/v3', 'apiKey': 'fixture-key'}
+    task = {'kind': 'video', 'projectId': str(uuid4()), 'prompt': '小猫奔跑',
+            'referenceIds': [], 'videoMode': 'reference',
+            'parameters': {'duration': 4.0, 'ratio': '16:9', 'generate_audio': True, 'watermark': False}}
+    posts = []
+    def handle(request):
+        if request.method == 'POST':
+            import json
+            posts.append(json.loads(request.content))
+            return httpx.Response(200, json={'id': 'task-1'})
+        if request.url.host == 'cdn.test': return httpx.Response(200, content=b'fixture-video')
+        return httpx.Response(200, json={'status': 'succeeded', 'content': {'video_url': 'https://cdn.test/result'}})
+    async def run():
+        async def submitted(value): assert value == 'task-1'
+        provider = GenerationProviders(store, httpx.MockTransport(handle), poll_interval=0)
+        assert await provider.generate(config, task, submitted) == ('mp4', b'fixture-video')
+    asyncio.run(run())
+    assert posts[0]['duration'] == 4 and type(posts[0]['duration']) is int

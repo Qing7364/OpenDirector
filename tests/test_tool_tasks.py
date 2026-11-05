@@ -152,6 +152,40 @@ def test_outpaint_asks_instruction_editors_to_pull_the_camera_back(project):
     assert output_image(store, project_id, task).size == (128, 48)
 
 
+@pytest.mark.parametrize('model', ['doubao-seedream-5.0-pro', 'doubao-seedream-4-5-251128', 'ep-test-image'])
+def test_outpaint_uses_ark_image_generation_with_configured_model(project, model):
+    store, project_id, session = project
+    configs = ModelConfigs(store.local.repository)
+    configs.save('image', 'https://ark.cn-beijing.volces.com/api/plan/v3', model, 'test-key', protocol='volcengine')
+    source = upload(store, project_id, session, 'blue.png', png())
+    calls = []
+
+    def handle(request):
+        assert request.method == 'POST'
+        assert request.url.path == '/api/plan/v3/images/generations'
+        body = json.loads(request.read())
+        calls.append(body)
+        width, height = map(int, body['size'].split('x'))
+        assert 3686400 <= width * height <= 4624220
+        assert abs(width / height - 128 / 48) < 0.01
+        assert 'output_format' not in body
+        jpeg = io.BytesIO()
+        Image.new('RGB', (64, 48), 'blue').save(jpeg, 'JPEG')
+        return httpx.Response(200, json={'data': [{'b64_json': base64.b64encode(jpeg.getvalue()).decode()}]})
+
+    tools = ToolTasks(store.local, configs, None, projects=store).catalog()['tools']
+    outpaint = next(item for item in tools if item['id'] == 'outpaint')
+    assert outpaint['available'] and outpaint['models']['image.edit'][0]['label'] == model
+    task = run(store, configs, httpx.MockTransport(handle), project_id, session,
+               {'tool': 'outpaint', 'sourceAssetIds': [source], 'parameters': {'right': 1, 'prompt': '延伸地板'}})
+    assert task['status'] == 'succeeded', task['error']
+    body, = calls
+    assert body['model'] == model and '延伸地板' in body['prompt'] and '在右侧新增' in body['prompt']
+    assert body['image'].startswith('data:image/png;base64,')
+    assert Image.open(io.BytesIO(base64.b64decode(body['image'].split(',', 1)[1]))).size == (64, 48)
+    assert output_image(store, project_id, task).size == (128, 48)
+
+
 def test_inpainting_only_changes_the_masked_region(project):
     store, project_id, session = project
     configs = configure(store, ZIMAGE)

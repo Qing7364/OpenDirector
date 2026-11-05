@@ -35,6 +35,7 @@ import { MUSIC_SECONDS } from "./rules.ts";
 import {
   assetReference,
   CreationClient,
+  CreationCommandError,
   currentAsset,
   isCurrentCanvasReference,
   itemSpec,
@@ -45,6 +46,14 @@ import {
 
 const same = (a: unknown, b: unknown) =>
   JSON.stringify(a) === JSON.stringify(b);
+const presentationFields = [
+  "title",
+  "width",
+  "height",
+  "zIndex",
+  "locked",
+  "parentId",
+] as const;
 const extension: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
@@ -1358,10 +1367,18 @@ export class CreationProjection {
           locked: old?.locked ?? false,
           parentId: old?.parentId ?? null,
         };
-        if (!same(presentation, oldPresentation))
+        const changedFields = presentationFields.filter(
+          (field) => !same(presentation[field], oldPresentation[field]),
+        );
+        if (changedFields.length)
           operations.push({
             type: "canvas.update",
-            payload: { itemId: node.id, ...presentation },
+            payload: {
+              itemId: node.id,
+              ...Object.fromEntries(
+                changedFields.map((field) => [field, presentation[field]]),
+              ),
+            },
           });
         if (!same(node.position, old?.position))
           moves.push({ itemId: node.id, position: node.position });
@@ -1748,6 +1765,79 @@ export class CreationProjection {
     return { operations, versions: [...versions.values()] };
   }
 
+  /** Retry a rejected layout change only when its fields still match the
+   * original basis (or already equal our intent). Generated media and unrelated
+   * presentation changes can then arrive without trapping a drag in stale CAS.
+   * Content edits and changes to hierarchy, visibility or locks keep their CAS.
+   */
+  private rebasePresentation(
+    operations: CreationOperation[],
+    versions: readonly ObjectVersion[],
+  ): ObjectVersion[] | undefined {
+    if (
+      !operations.every(
+        (op) => op.type === "canvas.move" || op.type === "canvas.update",
+      ) ||
+      versions.some((version) => version.objectType !== "canvas_item")
+    )
+      return;
+    const before = new Map(
+      this.basis.canvasItems.map((item) => [item.id, item]),
+    );
+    const current = new Map(
+      this.client.snapshot.canvasItems.map((item) => [item.id, item]),
+    );
+    for (const version of versions) {
+      const old = before.get(version.id),
+        next = current.get(version.id);
+      if (
+        !old ||
+        !next ||
+        old.revision !== version.revision ||
+        old.kind !== next.kind ||
+        old.visible !== next.visible ||
+        old.locked !== next.locked ||
+        old.parentId !== next.parentId
+      )
+        return;
+    }
+    const unchanged = (
+      id: string,
+      field: keyof CanvasItem,
+      intended: unknown,
+    ) => {
+      const old = before.get(id),
+        next = current.get(id);
+      return (
+        old &&
+        next &&
+        (same(old[field], next[field]) || same(intended, next[field]))
+      );
+    };
+    for (const op of operations) {
+      if (op.type === "canvas.move") {
+        if (
+          op.payload.items.some(
+            (item) => !unchanged(item.itemId, "position", item.position),
+          )
+        )
+          return;
+      } else if (op.type === "canvas.update") {
+        if (
+          presentationFields.some(
+            (field) =>
+              field in op.payload &&
+              !unchanged(op.payload.itemId, field, op.payload[field]),
+          )
+        )
+          return;
+      }
+    }
+    return versions.map((version) =>
+      objectVersion("canvas_item", current.get(version.id)!),
+    );
+  }
+
   viewError = "";
   async save(document: CanvasDocument, options: { saveView?: boolean } = {}) {
     // Run inside the caller's save queue, after any pending acknowledgement.
@@ -1763,7 +1853,28 @@ export class CreationProjection {
     )
       return false;
     const { operations, versions } = await this.prepare(document);
-    await this.client.batch(operations, versions);
+    let expected = versions;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await this.client.batch(operations, expected);
+        break;
+      } catch (error) {
+        // command() refreshes after a definitive receipt. A lost response or
+        // any other rejection must keep its original delivery and edit basis.
+        if (
+          attempt >= 2 ||
+          !(error instanceof CreationCommandError) ||
+          !error.receipt.issues.length ||
+          error.receipt.issues.some(
+            (issue) => issue.code !== "revision_conflict",
+          )
+        )
+          throw error;
+        const rebased = this.rebasePresentation(operations, versions);
+        if (!rebased) throw error;
+        expected = rebased;
+      }
+    }
     // Business acknowledgement cannot be undone by a view preference failure.
     this.basis = this.client.snapshot;
     this.baseline = document;

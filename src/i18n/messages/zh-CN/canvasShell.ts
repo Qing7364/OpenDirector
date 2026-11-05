@@ -88,6 +88,7 @@ export const canvasShell = {
   "canvas.selection.tool.videoExtend": "视频延长",
 
   "canvas.selection.edit.text": "编辑文本",
+  "canvas.selection.expandText": "展开编辑",
   "canvas.selection.edit.timeline": "编辑时间线",
   "canvas.selection.edit.stack": "管理堆叠",
   "canvas.selection.edit.tool": "编辑工具",
@@ -128,4 +129,8 @@ export const canvasShell = {
   "canvas.selection.previewFullscreen": "全屏预览",
   "canvas.selection.duplicate": "创建副本",
   "canvas.selection.deleteNode": "删除节点",
+
+  "canvas.textWindow.hint": "编辑内容会实时同步到画布节点",
+  "canvas.textWindow.locked": "节点已锁定，仅可查看",
+  "canvas.textWindow.count": "{count} 字",
 } as const;

@@ -17,8 +17,6 @@ export const canvasWorkspace = {
   "canvas.workspace.help.close": "关闭说明",
   "canvas.workspace.help.body":
     "拖动节点排列画面，从节点右侧圆点拖到另一个节点左侧即可建立参考连线。点击圆点旁的按钮可创建关联节点。",
-  "canvas.workspace.help.storage":
-    "项目与画布保存在本地 projects 目录，导出的 .canvas 压缩包内含画布 JSON 与素材文件，可备份或交换。图像裁剪与调色在本机实际执行；节点生成通过本地服务调用“设置 → 模型接入”中的模型。助手对话、云分享和云端资产尚未接入。",
 
   "canvas.workspace.help.pan": "平移画布",
   "canvas.workspace.help.panKeys": "滚动 / 空格＋拖动",
@@ -85,7 +83,7 @@ export const canvasWorkspace = {
 
   "canvas.workspace.empty.title": "你的故事，由你执导",
   "canvas.workspace.empty.hint": "双击画布创建节点，或拖入你的素材",
-  "canvas.workspace.empty.imageNode": "图片节点",
+  "canvas.workspace.empty.configureModels": "配置模型",
   "canvas.workspace.empty.example": "体验示例画布",
   "canvas.workspace.empty.tagline": "参考连接 · 自由编排 · 本机自动保存",
 

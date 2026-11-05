@@ -89,6 +89,7 @@ def test_draft_snapshot_publication_replay_reopen_and_dependency_protection(prep
             output = next(a for a in saved.assets if str(a.id) == task['outputs'][0]['id'])
             assert output.provenance.source == 'edited'
             assert output.provenance.toolTaskId == UUID(value['id'])
+            assert output.provenance.sourceItemId == UUID(value['canvas']['nodeId'])
             assert output.provenance.editorRevision == draft.revision
             assert {r.assetId for r in output.provenance.sources} == {source.id, mask.id}
             target = next(i for i in saved.canvasItems if str(i.id) == value['canvas']['targetNodeId'])
@@ -249,7 +250,7 @@ def test_accepted_model_selection_is_fixed_and_reconfiguration_cannot_redirect_c
     asyncio.run(run())
 
 @pytest.mark.parametrize('edit',['none','move','prompt','lock','upload','hide'])
-def test_terminal_cleanup_uses_task_ownership_and_preserves_user_edits(prepared,edit):
+def test_unsuccessful_tool_keeps_its_target_and_preserves_user_edits(prepared,edit):
     store,pid,session,service,value,source,mask,seen=prepared
     task,_,_=service._prepare(str(pid),value,session)
     snapshot=store.snapshot(pid)
@@ -268,12 +269,12 @@ def test_terminal_cleanup_uses_task_ownership_and_preserves_user_edits(prepared,
     assert settled['placement']=='unplaced'
     after=store.snapshot(pid)
     actual=next(i for i in after.canvasItems if i.id==target.id)
-    assert actual.visible==(edit in {'prompt','lock','upload'})
+    assert actual.visible==(edit!='hide')
     assert service._settle_terminal(str(pid),task['id'],session)==settled
     assert store.snapshot(pid)==after
 
 @pytest.mark.parametrize('status',['failed','cancelled','interrupted'])
-def test_terminal_cleanup_recovers_project_commit_before_ledger_ack(prepared,monkeypatch,status):
+def test_unsuccessful_tool_recovers_ledger_ack_without_hiding_target(prepared,monkeypatch,status):
     store,pid,session,service,value,*_=prepared
     task,directory,_=service._prepare(str(pid),value,session)
     task.update(status=status)
@@ -284,7 +285,7 @@ def test_terminal_cleanup_recovers_project_commit_before_ledger_ack(prepared,mon
     with pytest.raises(OSError,match='lost ledger ack'):
         service._settle_terminal(str(pid),task['id'],session)
     committed=store.snapshot(pid)
-    assert not committed.canvasItems[1].visible
+    assert committed.canvasItems[1].visible
     monkeypatch.setattr(service,'_write',original)
     # Reads expose the pending acknowledgement without repairing it.
     assert service.get(str(pid),task['id'],session)['placement']=='pending'

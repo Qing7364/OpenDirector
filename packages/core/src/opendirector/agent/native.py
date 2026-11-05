@@ -5,8 +5,10 @@ import os
 from pathlib import Path
 import secrets
 import shutil
+import subprocess
 import sys
 from tempfile import TemporaryDirectory
+from urllib.request import getproxies
 
 from opendirector.agent.model_gateway import ModelGateway
 from opendirector.agent import cli_transport, deepseek
@@ -32,6 +34,41 @@ def executable(runtime: str) -> str | None:
     return shutil.which('dsh' if runtime == 'deepseek' else runtime)
 
 
+_CODEX_ISOLATION: dict[str, tuple[str, ...]] = {}
+
+
+def codex_environment() -> dict[str, str]:
+    env = dict(os.environ)
+    if sys.platform == 'win32' and not (env.get('HTTPS_PROXY') or env.get('ALL_PROXY')):
+        # A Windows system proxy need not be exported to the CLI process.
+        if proxy := getproxies().get('https'):
+            env['HTTPS_PROXY'] = proxy
+    return env
+
+
+def codex_isolation_flags(binary: str) -> tuple[str, ...]:
+    """Optional codex flags this CLI accepts.
+
+    Isolation flags vary across releases, and an unsupported flag prevents the
+    CLI from starting. Turns do not resume CLI sessions, so use `--ephemeral`
+    when available.
+    """
+    cached = _CODEX_ISOLATION.get(binary)
+    if cached is not None:
+        return cached
+    wanted = ('--ignore-user-config', '--ignore-rules', '--ephemeral')
+    try:
+        probe = subprocess.run([binary, 'exec', '--help'], capture_output=True,
+                               timeout=20, stdin=subprocess.DEVNULL)
+        # Help text can contain bytes outside the console code page.
+        help_text = (probe.stdout + probe.stderr).decode('utf-8', 'replace')
+    except (OSError, subprocess.SubprocessError):
+        help_text = ''
+    flags = tuple(flag for flag in wanted if flag in help_text)
+    _CODEX_ISOLATION[binary] = flags
+    return flags
+
+
 def command(runtime: str, work: Path, socket: str, token: str, model: str | None,
             model_url: str, catalog: list[dict], *, input_modalities: list[str] | None = None,
             bridge_env: dict[str, str] | None = None) -> tuple[list[str], dict[str, str]]:
@@ -42,6 +79,8 @@ def command(runtime: str, work: Path, socket: str, token: str, model: str | None
     if bundled:
         runtime = 'opencode'
     env = cli_transport.environment(work, socket, bridge_env)
+    if runtime == 'codex' and (proxy := codex_environment().get('HTTPS_PROXY')):
+        env['HTTPS_PROXY'] = proxy
     if runtime == 'opencode':
         config = {'autoupdate': False, 'default_agent': 'opendirector',
             'agent': {'opendirector': {'mode': 'primary', 'prompt': SYSTEM}},
@@ -66,7 +105,7 @@ def command(runtime: str, work: Path, socket: str, token: str, model: str | None
         settings = ['features.shell_tool=true', 'features.apply_patch_freeform=false', 'web_search="disabled"',
             'sandbox_workspace_write.network_access=true',
             'skills.bundled.enabled=false', f'developer_instructions={json.dumps(SYSTEM)}']
-        args = [binary, 'exec', '--json', '--skip-git-repo-check', '--ignore-user-config', '--ignore-rules', '--sandbox', 'workspace-write']
+        args = [binary, 'exec', '--json', '--skip-git-repo-check', *codex_isolation_flags(binary), '--sandbox', 'workspace-write']
         for setting in settings:
             args += ['-c', setting]
     else:
@@ -87,6 +126,9 @@ def command(runtime: str, work: Path, socket: str, token: str, model: str | None
 def text_events(runtime: str, raw: dict) -> list[dict]:
     if runtime == 'claude' and raw.get('error') == 'authentication_failed':
         raise ProjectError('Claude Code 登录已过期，请在终端执行 claude auth login 后重试。', 401)
+    if runtime == 'codex' and raw['type'] == 'error':
+        # Codex also emits this event while reconnecting. Wait for turn.failed or process exit.
+        return []
     if raw['type'] in {'error', 'turn.failed'} or raw['type'] == 'result' and raw.get('is_error'):
         raise ProjectError(f'{runtime} 运行失败，请检查登录、模型或原生轨迹。', 502)
     if runtime == 'opencode' and raw['type'] == 'text':

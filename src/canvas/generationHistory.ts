@@ -80,39 +80,43 @@ export interface GenerationJob {
   };
 }
 
-/** Tool provenance is a projection of the service ledger, not a generation
- * reference targeting a GenerationSpec. Hidden/missing endpoints stay hidden. */
+/** Project tool progress and older results from execution records. Saved
+ * provenance takes precedence, and hidden/missing endpoints stay hidden. */
 export function toolProvenanceEdges(
   jobs: readonly GenerationJob[],
   document: CanvasDocument,
 ): CanvasEdge[] {
-  const visible = new Set(document.nodes.map((node) => node.id));
-  return jobs.flatMap((job) =>
-    job.toolTask && visible.has(job.nodeId)
-      ? [
-          ...new Set([
-            ...(job.status === "running" && job.targetNodeId
-              ? [job.targetNodeId]
-              : []),
-            ...(job.status === "succeeded" ? job.toolTask.outputIds : []),
-          ]),
-        ].flatMap((id) =>
-          visible.has(id) &&
-          !document.edges.some(
-            (edge) => edge.source === job.nodeId && edge.target === id,
-          )
-            ? [
-                {
-                  id: `tool-${id}`,
-                  source: job.nodeId,
-                  target: id,
-                  intent: "post_edit_result" as const,
-                },
-              ]
-            : [],
-        )
-      : [],
-  );
+  const visible = new Map(document.nodes.map((node) => [node.id, node]));
+  const projected = new Set<string>();
+  const edges: CanvasEdge[] = [];
+  for (const job of jobs) {
+    if (!(job.toolTask || job.tool) || !visible.has(job.nodeId)) continue;
+    const targets = job.status === "succeeded" ? (job.toolTask?.outputIds ?? []) : [];
+    const target = job.targetNodeId && visible.get(job.targetNodeId);
+    if (
+      target &&
+      (job.status === "running" ||
+        (job.toolTask &&
+          ["failed", "interrupted", "cancelled"].includes(job.status) &&
+          !target.data.src))
+    )
+      targets.push(target.id);
+    for (const id of targets) {
+      if (
+        !visible.has(id) ||
+        projected.has(id) ||
+        document.edges.some((edge) => edge.source === job.nodeId && edge.target === id)
+      ) continue;
+      projected.add(id);
+      edges.push({
+        id: `tool-${id}`,
+        source: job.nodeId,
+        target: id,
+        intent: "post_edit_result",
+      });
+    }
+  }
+  return edges;
 }
 
 export function parseGenerationJob(value: unknown): GenerationJob {

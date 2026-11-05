@@ -1,8 +1,12 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 from pathlib import Path
+import socket
+import subprocess
 import sys
+from types import SimpleNamespace
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -14,6 +18,7 @@ from opendirector.agent import native
 from opendirector.agent.skills import skills
 from opendirector.agent.runtime import AgentRuntimes
 from opendirector.agent.context import RunContext
+from opendirector.domain.projects import ProjectError
 from opendirector.infrastructure.local_projects import LocalProjects
 from opendirector.infrastructure.model_configs import ModelConfigs
 from opendirector.integrations.chat_completions import ChatCompletions
@@ -71,6 +76,32 @@ def project(client):
     return path
 
 
+
+
+def test_cli_bridge_preserves_utf8_with_legacy_stdio_encoding():
+    response = {'name': '场景𠮷'}
+    with socket.socket() as listener, ThreadPoolExecutor() as pool:
+        listener.bind(('127.0.0.1', 0))
+        listener.listen()
+        listener.settimeout(5)
+        def respond():
+            with listener.accept()[0] as connection, connection.makefile('rb') as stream:
+                request = json.loads(stream.readline())
+                assert request['arguments'] == {'type': 'asset.search', 'text': '场景𠮷'}
+                assert 'token' not in request
+                connection.sendall((json.dumps({'value': response}, ensure_ascii=False) + '\n').encode())
+        server = pool.submit(respond)
+        script = ('import json; from opendirector.cli import Client; '
+                  'c=Client(None,"http://localhost:1",None,None); '
+                  'print(json.dumps(c.query("asset.search",text="\u573a\u666f\U00020bb7"))); c.http.close()')
+        result = subprocess.run([sys.executable, '-c', script], env={**os.environ,
+            'PYTHONIOENCODING': 'cp936', 'OPENDIRECTOR_AGENT_HOST': '127.0.0.1',
+            'OPENDIRECTOR_AGENT_PORT': str(listener.getsockname()[1])},
+            capture_output=True, check=True, timeout=10)
+        server.result()
+        assert json.loads(result.stdout) == response
+
+
 @pytest.mark.parametrize('runtime', ['default', 'opencode', 'codex', 'claude'])
 def test_native_events_real_cli_and_shared_write(tmp_path, monkeypatch, runtime):
     local = LocalProjects(tmp_path)
@@ -123,6 +154,7 @@ def test_native_events_real_cli_and_shared_write(tmp_path, monkeypatch, runtime)
 
 def test_native_commands_keep_auth_and_restrict_tools(tmp_path, monkeypatch):
     monkeypatch.setattr(native, "executable", lambda _: sys.executable)
+    monkeypatch.setattr(native, 'codex_isolation_flags', lambda _: ('--ignore-user-config', '--ignore-rules', '--ephemeral'))
     for runtime in ('default', 'opencode', 'codex', 'claude'):
         work = tmp_path / runtime
         work.mkdir()
@@ -143,6 +175,37 @@ def test_native_commands_keep_auth_and_restrict_tools(tmp_path, monkeypatch):
             assert 'steps' not in config['agent']['opendirector']
             assert config['permission']['*'] == 'deny'
             assert config['skills']['paths'] == [str(work / '.agents/skills')]
+
+
+def test_codex_only_passes_supported_isolation_flags(tmp_path, monkeypatch):
+    binary = str(tmp_path / 'codex')
+    monkeypatch.setattr(native, 'executable', lambda _: binary)
+    monkeypatch.setattr(native, '_CODEX_ISOLATION', {})
+    monkeypatch.setattr(native.subprocess, 'run', lambda *args, **kwargs:
+        SimpleNamespace(stdout=b'Options:\n      --ephemeral\n', stderr=b''))
+    args, _ = native.command('codex', tmp_path, '', 'token', None, '', [])
+    assert '--ephemeral' in args
+    assert '--ignore-user-config' not in args
+    assert '--ignore-rules' not in args
+
+
+def test_codex_inherits_windows_system_proxy_without_overriding_explicit_proxy(monkeypatch):
+    monkeypatch.setattr(native, 'sys', SimpleNamespace(platform='win32'))
+    monkeypatch.setattr(native, 'getproxies', lambda: {'https': 'http://127.0.0.1:8001'})
+    monkeypatch.delenv('HTTPS_PROXY', raising=False)
+    monkeypatch.delenv('ALL_PROXY', raising=False)
+    assert native.codex_environment()['HTTPS_PROXY'] == 'http://127.0.0.1:8001'
+    assert 'HTTPS_PROXY' not in os.environ
+    monkeypatch.setenv('HTTPS_PROXY', 'http://127.0.0.1:8002')
+    assert native.codex_environment()['HTTPS_PROXY'] == 'http://127.0.0.1:8002'
+
+
+def test_codex_reconnect_does_not_end_turn():
+    assert native.text_events('codex', {'type': 'error', 'message': 'Reconnecting...'}) == []
+    assert native.text_events('codex', {'type': 'item.completed', 'item': {
+        'type': 'agent_message', 'text': 'Connected'}}) == [{'type': 'delta', 'text': 'Connected'}]
+    with pytest.raises(ProjectError):
+        native.text_events('codex', {'type': 'turn.failed'})
 
 
 @pytest.mark.parametrize("runtime", ["default"])

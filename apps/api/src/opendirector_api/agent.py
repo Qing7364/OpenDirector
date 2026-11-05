@@ -264,9 +264,9 @@ def agent_routes(projects, generation, configs, provider=None) -> APIRouter:
             if set(value.skills) - {item['name'] for item in available}:
                 raise ProjectError('技能已失效，请重新选择。', 409)
             snapshot = await asyncio.to_thread(projects.snapshot, project_id)
-            assets = {asset.id: asset for asset in snapshot.assets}
+            assets = {str(asset.id): asset for asset in snapshot.assets}
             for asset_id in value.assets:
-                if asset_id not in assets:
+                if str(asset_id) not in assets:
                     raise ProjectError('引用素材不属于当前工程。', 409)
             model = config['modelId'] if config else (value.runtimeModel or 'CLI 默认模型')
             model_selections = dict(value.modelSelections)
@@ -280,26 +280,33 @@ def agent_routes(projects, generation, configs, provider=None) -> APIRouter:
                 plan = None
                 try:
                     user = {'id': str(value.id), 'role': 'user', 'text': value.text, 'content': value.content,
-                        'assets': [{'id': str(assets[key].id), 'name': assets[key].name, 'type': assets[key].metadata.mimeType,
-                            'size': assets[key].metadata.size, 'fingerprint': assets[key].fingerprint} for key in value.assets],
+                        'assets': [{'id': str(asset.id), 'name': asset.name, 'type': asset.metadata.mimeType,
+                            'size': asset.metadata.size, 'fingerprint': asset.fingerprint}
+                            for asset in (assets[str(key)] for key in value.assets)],
                         'skills': value.skills, 'runtime': value.runtime, 'runtimeModel': value.runtimeModel,
                         'modelSelections': dict(value.modelSelections),
                         'model': model, 'status': 'complete'}
                     saved = await asyncio.to_thread(conversations.update, project_id, session, begin=user, conversation_id=value.conversationId)
                     accepted = True
                     await queue.put({'type': 'start', 'conversation': saved})
-                    context = [{'role': message['role'], 'content': message['text'] or '(empty reply)'} for message in saved['messages'][:-1]]
+                    context = []
+                    for message in saved['messages'][:-1]:
+                        content = message['text'] or '(empty reply)'
+                        references = []
+                        for attachment in message.get('assets', []):
+                            asset = assets.get(attachment['id'])
+                            if asset is not None:
+                                references.append({'id': str(asset.id), 'name': attachment['name'],
+                                    'kind': asset.kind, 'path': str((directory / asset.path).resolve()),
+                                    'metadata': asset.metadata.model_dump(mode='json', exclude_none=True)})
+                        if references:
+                            content += '\nReferenced project assets: ' + json.dumps(references, ensure_ascii=False)
+                            content += '\nThese are asset references, not visual observations. Inspect media with available tools before describing its contents.'
+                        context.append({'role': message['role'], 'content': content})
                     context[-1]['content'] += '\nSummarize the delivered result and material limitations. Keep execution IDs, revisions and receipts in tool details unless requested.'
                     if preferences:
                         context[-1]['content'] += '\nUser model preferences for this turn: ' + json.dumps(preferences, ensure_ascii=False)
                         context[-1]['content'] += '\nUse these models for new generation unless the user explicitly requests another. If unavailable or unsuitable, explain and ask before substituting. Keep existing nodes on their configured models unless the user requests a change.'
-                    if value.assets:
-                        references = [{'id': str(assets[key].id), 'name': assets[key].name,
-                            'kind': assets[key].kind, 'path': str((directory / assets[key].path).resolve()),
-                            'metadata': assets[key].metadata.model_dump(mode='json', exclude_none=True)}
-                            for key in value.assets]
-                        context[-1]['content'] += '\nReferenced project assets: ' + json.dumps(references, ensure_ascii=False)
-                        context[-1]['content'] += '\nThese are asset references, not visual observations. Inspect media with available tools before describing its contents.'
                     run = RunContext(runtime=value.runtime, project_id=project_id, turn_id=value.id,
                         session=session, directory=directory, config=config, messages=context,
                         selected_skills=value.skills, thinking=value.thinking, model_selections=model_selections,

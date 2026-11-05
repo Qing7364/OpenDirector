@@ -91,6 +91,35 @@ class VolcengineGeneration:
             raise ProjectError("模型未生成文本。", 502)
         return "md", text.encode("utf-8")
 
+    async def generate_image(self, config, prompt, parameters, refs, *, request_bytes, result_ready=None):
+        payload = {"model": config["modelId"], "prompt": prompt, **parameters}
+        if refs:
+            payload["image"] = refs if len(refs) > 1 else refs[0]
+        request_size(payload, request_bytes)
+        secrets = (config['apiKey'],)
+        stage = 'submit'
+        try:
+            async with httpx.AsyncClient(event_hooks=MODEL_HTTP_HOOKS, transport=self.transport, trust_env=trust_environment(config['url'], config=config), timeout=httpx.Timeout(240, connect=15), follow_redirects=False) as client:
+                async with client.stream("POST", endpoint(config["url"], "/images/generations"),
+                                         headers={"Authorization": f"Bearer {config['apiKey']}"}, json=payload) as response:
+                    value = json.loads(await bounded(response, stage=stage, secrets=secrets))
+                result = value["data"][0]
+                if result.get("b64_json"):
+                    data = base64.b64decode(result["b64_json"], validate=True)
+                    if len(data) > MAX_ASSET_BYTES:
+                        raise ProjectError("生成图片超过 50 MB。", 413)
+                    return data
+                stage = 'download'
+                if result_ready:
+                    await result_ready('png', result['url'])
+                return await self._download(client, result["url"], secrets=secrets)
+        except httpx.TimeoutException:
+            raise transport_failure(stage, timeout=True) from None
+        except httpx.HTTPError:
+            raise transport_failure(stage) from None
+        except (ValueError, TypeError, KeyError, IndexError, AttributeError):
+            raise protocol_failure(stage) from None
+
     async def generate(self, config, task, submitted, *, result_ready=None):
         kind = task["kind"]
         if kind == "text":
@@ -99,29 +128,15 @@ class VolcengineGeneration:
         # present locally; no input is sent again when externalTaskId exists.
         prepared = None if kind == 'video' and task.get('externalTaskId') else await asyncio.to_thread(generation_references, self.store, task, config)
         prompt, refs = (task['prompt'], []) if prepared is None else (prepared['prompt'], prepared['images'])
+        if kind == "image":
+            data = await self.generate_image(config, prompt, task["parameters"], refs,
+                                             request_bytes=prepared["rules"]["requestBytes"], result_ready=result_ready)
+            return "png", data
         headers = {"Authorization": f"Bearer {config['apiKey']}"}
         secrets = (config['apiKey'],)
         stage = 'submit'
         try:
             async with httpx.AsyncClient(event_hooks=MODEL_HTTP_HOOKS, transport=self.transport, trust_env=trust_environment(config['url'], config=config), timeout=httpx.Timeout(240, connect=15), follow_redirects=False) as client:
-                if kind == "image":
-                    payload = {"model": config["modelId"], "prompt": prompt, **task["parameters"]}
-                    if refs:
-                        payload["image"] = refs if len(refs) > 1 else refs[0]
-                    request_size(payload, prepared["rules"]["requestBytes"])
-                    async with client.stream("POST", endpoint(config["url"], "/images/generations"), headers=headers, json=payload) as response:
-                        value = json.loads(await bounded(response, stage=stage, secrets=secrets))
-                    result = value["data"][0]
-                    if result.get("b64_json"):
-                        data = base64.b64decode(result["b64_json"], validate=True)
-                        if len(data) > MAX_ASSET_BYTES:
-                            raise ProjectError("生成图片超过 50 MB。", 413)
-                    else:
-                        stage = 'download'
-                        if result_ready:
-                            await result_ready('png', result['url'])
-                        data = await self._download(client, result["url"], secrets=secrets)
-                    return "png", data
                 if kind == "video":
                     url = endpoint(config["url"], "/contents/generations/tasks")
                     external_id = task.get("externalTaskId")
@@ -130,7 +145,14 @@ class VolcengineGeneration:
                         role = 'reference_image' if task.get('videoMode') == 'reference' else 'first_frame'
                         content.extend({'type': 'image_url', 'image_url': {'url': image}, 'role': role} for image in refs)
                         content.extend({'type': 'audio_url', 'audio_url': {'url': audio}, 'role': 'reference_audio'} for audio in prepared['audios'])
-                        payload = {'model': config['modelId'], 'content': content, **task['parameters']}
+                        parameters = dict(task['parameters'])
+                        # Ark accepts whole seconds only, while the editor stores
+                        # durationSeconds as a float (4.0) and rejects it as
+                        # InvalidParameter instead of rounding.
+                        seconds = parameters.get('duration')
+                        if isinstance(seconds, (int, float)) and not isinstance(seconds, bool) and float(seconds).is_integer():
+                            parameters['duration'] = int(seconds)
+                        payload = {'model': config['modelId'], 'content': content, **parameters}
                         request_size(payload, prepared['rules']['requestBytes'])
                         async with client.stream("POST", url, headers=headers, json=payload) as response:
                             external_id = json.loads(await bounded(response, stage=stage, secrets=secrets))["id"]

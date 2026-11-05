@@ -338,6 +338,8 @@ export const errors = {
   "errors.backend.sourceMediaChanged":
     "The source media changed. Choose it again.",
   "errors.backend.editSaving": "The edit is being saved. Try again shortly.",
+  "errors.backend.saveConflict":
+    "The node was updated and this edit conflicts with the new version. Export the unsaved copy, then load the server version to review it.",
   "errors.backend.editChangedAfterSave":
     "The edit was saved, but its content changed afterwards. The draft is kept; reopen it to check the latest version.",
   "errors.backend.priorEditSaved":

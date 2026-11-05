@@ -58,7 +58,7 @@ def start(mode: str = "serve", port: int = 8000, web_port: int = 5173, log_level
         api = subprocess.Popen([sys.executable, "-m", "opendirector_api.server", "--port", str(port), "--log-level", log_level], cwd=ROOT, env=environment)
         processes.append(api)
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        for _ in range(100):
+        for _ in range(600):
             if api.poll() is not None:
                 raise RuntimeError("本地 API 启动失败（进程已退出）。请查看上方错误输出；"
                                    "若提示地址已被占用，请用 --port 换一个端口后重试。")

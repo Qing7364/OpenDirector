@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   backendBlocker,
+  backendDurations,
   backendResolutions,
+  serviceVideoSettings,
   type ModelConfig,
 } from "../src/backend/rules.ts";
 import {
@@ -111,4 +113,43 @@ test("image reference restrictions narrow Seedance choices", () => {
     "1080P",
     "4K",
   ]);
+});
+
+test("Seedance 2.0 mini offers its 480P/720P ladder and 4–15 second durations", () => {
+  const mini: ModelConfig = {
+    ...config,
+    modelId: "doubao-seedance-2.0-mini",
+    protocol: "volcengine",
+    inputRules: {
+      ...config.inputRules,
+      profile: "seedance-2.0",
+      outputResolutions: ["480P", "720P"],
+      referenceImageResolutions: ["480P", "720P"],
+      videoModes: ["first_frame", "reference"],
+      videoCapabilities: {
+        outputs: ["480P", "720P"].map((resolution) => ({
+          resolution,
+          durations: Array.from({ length: 12 }, (_, index) => index + 4),
+        })),
+        defaultResolution: "auto",
+        defaultDuration: 5,
+        dimensionStep: 2,
+      },
+    },
+  };
+  assert.deepEqual(backendResolutions(settings, mini), ["auto", "480P", "720P"]);
+  assert.deepEqual(backendDurations(mini), [
+    4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+  ]);
+  // A node left on an older model's 16 seconds has to land on the model's own
+  // default, otherwise the duration trigger would open on an unsupported value.
+  assert.equal(
+    serviceVideoSettings(
+      { ...settings, model: mini.modelId, modelConfigId: mini.id, durationSeconds: 16 },
+      mini,
+      [],
+      true,
+    ).durationSeconds,
+    5,
+  );
 });

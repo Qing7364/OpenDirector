@@ -50,7 +50,7 @@ def test_repeated_reads_preserve_task_bytes_and_placeholder(prepared, status):
     assert store.snapshot(pid) == before
 
 
-def test_startup_recovers_and_cleans_without_a_query(prepared):
+def test_startup_recovers_without_hiding_the_interrupted_target(prepared):
     store, pid, session, service, value, *_ = prepared
     task, _, _ = service._prepare(str(pid), value, session)
     async def run():
@@ -58,7 +58,7 @@ def test_startup_recovers_and_cleans_without_a_query(prepared):
         try:
             assert service.get(str(pid), task['id'])['status'] == 'interrupted'
             assert service.get(str(pid), task['id'])['placement'] == 'unplaced'
-            assert not store.snapshot(pid).canvasItems[1].visible
+            assert store.snapshot(pid).canvasItems[1].visible
             before = store.snapshot(pid)
             await service.recover()
             assert store.snapshot(pid) == before

@@ -8,6 +8,7 @@ Adding a model means adding or extending an adapter; operations stay unchanged.
 import asyncio
 import base64
 import json
+import math
 import re
 from urllib.parse import quote, urlsplit
 
@@ -21,7 +22,8 @@ from opendirector.domain.input_rules import input_rules
 from opendirector.domain.projects import ProjectError
 from opendirector.integrations.generation_errors import checked, protocol_failure, provider_failure, transport_failure
 from opendirector.integrations.http_settings import MODEL_HTTP_HOOKS, auth_headers, trust_environment
-from opendirector.integrations.volcengine import bounded, endpoint
+from opendirector.integrations.reference_inputs import data_uri, image_type
+from opendirector.integrations.volcengine import VolcengineGeneration, bounded, endpoint
 from opendirector.media import processing as media
 from opendirector.media.async_work import blocking
 
@@ -172,6 +174,44 @@ class OpenAIImages(ModelAdapter):
         if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
             return MediaResult(data, 'webp')
         raise protocol_failure('submit')
+
+
+class ArkImageEdits(ModelAdapter):
+    """Instruction edits through Ark's JSON generation endpoint with reference images."""
+
+    capabilities = frozenset({'image.edit'})
+    # Use the shared reference count limit across Ark's Seedream variants.
+    max_images = 10
+
+    async def image(self, config, request: ImageRequest) -> MediaResult:
+        width, height = request.width, request.height
+        if not 1 / 16 <= width / height <= 16:
+            raise ProjectError('火山方舟图片编辑的输出宽高比须在 1:16 至 16:1 之间。', 422)
+        # A 2K square's pixel count fits the explicit-size ranges of Seedream
+        # 4.x and 5.x. Preserve the requested aspect ratio without naming a model.
+        scale = 2048 / math.sqrt(width * height)
+        width, height = round(width * scale), round(height * scale)
+        width, height = min(width, 16 * height), min(height, 16 * width)
+        images = [request.image, *request.references] if request.image is not None else list(request.references)
+        if len(images) > self.max_images:
+            raise ProjectError('火山方舟图片编辑最多接受 10 张参考图片。', 422)
+        refs = []
+        for image in images:
+            mime = image_type(image)
+            if not mime:
+                raise ProjectError('参考图片格式无效。', 422)
+            if len(image) > 30 * 1024 * 1024:
+                raise ProjectError('火山方舟图片编辑的单张参考图片不能超过 30 MB。', 413)
+            refs.append(data_uri(image, mime))
+        ark = VolcengineGeneration(None, transport=self.transport)
+        data = await ark.generate_image(
+            config, request.prompt, {'size': f'{width}x{height}', 'response_format': 'b64_json'},
+            refs, request_bytes=64 * 1024 * 1024,
+        )
+        suffix = {'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp'}.get(image_type(data))
+        if not suffix:
+            raise protocol_failure('submit')
+        return MediaResult(data, suffix)
 
 
 class VllmOmniVideo(ModelAdapter):
@@ -509,6 +549,8 @@ def adapter_for(config, transport=None, poll_interval=3) -> ModelAdapter | None:
         return OpenAIImages(transport, poll_interval, free_size=True, strength=True)
     if kind == 'image' and profile == 'vllm-omni-qwen-image':
         return OpenAIImages(transport, poll_interval, free_size=True, max_edge=2048, grid=32, max_images=4, transparent=True)
+    if kind == 'image' and protocol == 'volcengine':
+        return ArkImageEdits(transport, poll_interval)
     if kind == 'image' and protocol == 'openai':
         return OpenAIImages(transport, poll_interval)
     if kind == 'video' and profile == 'vllm-omni-h3':

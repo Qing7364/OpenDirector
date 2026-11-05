@@ -1,4 +1,5 @@
 """Editable output contracts. A declaration is data, never executable provider code."""
+import re
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
@@ -50,7 +51,16 @@ class VideoCapabilities(BaseModel):
         return self
 
 
-def preset_capabilities(profile):
+SEEDANCE_20 = re.compile(r'doubao-seedance-2[.-]0(?:[.-](mini|fast))?(?:[.-]\d{6})?')
+
+
+def seedance_20_variant(model):
+    """Ark's Seedance 2.0 ids: the full model, mini and fast, with an optional date suffix."""
+    match = SEEDANCE_20.fullmatch(model.rsplit('/', 1)[-1].lower())
+    return None if match is None else (match.group(1) or 'full')
+
+
+def preset_capabilities(profile, model=''):
     if profile in {'fasth3-omni', 'vllm-omni-h3'}:
         return {'outputs': [{'resolution': label, 'durations': list(range(4, 16)), 'width': width, 'height': height}
                             for label, width, height in [('480P', 832, 480), ('768P', 1344, 768)]],
@@ -59,14 +69,15 @@ def preset_capabilities(profile):
         return {'outputs': [{'resolution': label, 'durations': list(range(4, 16))} for label in ['768P', '2K']],
                 'defaultResolution': '768P', 'defaultDuration': 5, 'dimensionStep': 2}
     if profile == 'seedance-2.0':
-        return {'outputs': [{'resolution': label, 'durations': list(range(4, 16))}
-                            for label in ['480P', '720P', '1080P', '4K']],
+        # mini and fast stop at 720P; the full model adds 1080P and 4K.
+        labels = ['480P', '720P'] if seedance_20_variant(model) in {'mini', 'fast'} else ['480P', '720P', '1080P', '4K']
+        return {'outputs': [{'resolution': label, 'durations': list(range(4, 16))} for label in labels],
                 'defaultResolution': 'auto', 'defaultDuration': 5, 'dimensionStep': 2}
     return None
 
 
 def capability_fields(config, rules):
-    capabilities = config.get('videoCapabilities') or preset_capabilities(rules['profile'])
+    capabilities = config.get('videoCapabilities') or preset_capabilities(rules['profile'], config['modelId'])
     if rules['profile'] == 'minimax-h3-official' and config['modelId'] in MINIMAX_MODELS:
         native = minimax_capabilities(config['modelId'])
         if config.get('videoCapabilities'):

@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx
 from pydantic import BaseModel, Field
 
-from opendirector.agent.native import executable
+from opendirector.agent.native import codex_environment, executable
 from opendirector.agent.process import terminate
 from opendirector.domain.projects import ProjectError
 
@@ -99,7 +99,8 @@ async def model_choices(runtime: str) -> list[dict]:
     try:
         process = await asyncio.create_subprocess_exec(
             binary, *args, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL, start_new_session=True, limit=4 * 1024 * 1024)
+            stderr=asyncio.subprocess.DEVNULL, start_new_session=True, limit=4 * 1024 * 1024,
+            env=codex_environment() if runtime == 'codex' else None)
     except OSError as error:
         raise ProjectError('CLI 无法启动，请检查安装。', 503) from error
 

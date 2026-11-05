@@ -16,8 +16,6 @@ export const canvasWorkspace = {
   "canvas.workspace.help.close": "Close help",
   "canvas.workspace.help.body":
     "Drag nodes to arrange the scene. Drag from the dot on a node's right edge to another node's left edge to create a reference connection. Use the button beside the dot to create a connected node.",
-  "canvas.workspace.help.storage":
-    "Projects and canvases are stored in the local projects directory, and an exported .canvas archive contains the canvas JSON plus its asset files, so it can be backed up or exchanged. Image cropping and color grading run on this machine; node generation calls the model configured under “Settings → Model connections”. Assistant chat, cloud sharing and cloud assets are not connected yet.",
 
   "canvas.workspace.help.pan": "Pan canvas",
   "canvas.workspace.help.panKeys": "Scroll / Space + drag",
@@ -85,7 +83,7 @@ export const canvasWorkspace = {
   "canvas.workspace.empty.title": "Your story, directed by you",
   "canvas.workspace.empty.hint":
     "Double-click the canvas to create a node, or drop in your assets",
-  "canvas.workspace.empty.imageNode": "Image node",
+  "canvas.workspace.empty.configureModels": "Configure models",
   "canvas.workspace.empty.example": "Try the example canvas",
   "canvas.workspace.empty.tagline":
     "Reference connections · Free arrangement · Autosaved locally",

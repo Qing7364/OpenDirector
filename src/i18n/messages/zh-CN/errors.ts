@@ -242,6 +242,8 @@ export const errors = {
   "errors.tools.taskMessage.interrupted": "执行已中断。{detail}不会自动重新生成。",
   "errors.backend.sourceMediaChanged": "来源素材已变化，请重新选择。",
   "errors.backend.editSaving": "编辑正在保存，请稍候。",
+  "errors.backend.saveConflict":
+    "节点已被更新，当前修改与新版本冲突。请先导出未保存副本，再读取服务端版本核对。",
   "errors.backend.editChangedAfterSave":
     "编辑已保存，但内容随后又发生变化。草稿已保留，请重新打开以核对最新版本。",
   "errors.backend.priorEditSaved":

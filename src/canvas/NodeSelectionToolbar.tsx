@@ -35,6 +35,8 @@ export interface NodeSelectionToolbarProps {
   onPreview?: () => void;
   onDownload?: () => void;
   onAssistant?: () => void;
+  /** Opens the text node in the large editing window; the trailing control in the bar. */
+  onExpand?: () => void;
   onRename?: () => void;
   onDuplicate?: () => void;
   onDelete?: () => void;
@@ -103,6 +105,7 @@ export function NodeSelectionToolbar({
   onPreview,
   onDownload,
   onAssistant,
+  onExpand,
   onRename,
   onDuplicate,
   onDelete,
@@ -476,6 +479,28 @@ export function NodeSelectionToolbar({
             ))}
           </div>
         ))}
+        {onExpand && node.type === "text" && (
+          <div className="cw-selection-toolbar-group cw-selection-toolbar-expand">
+            <span
+              className="cw-selection-toolbar-separator"
+              aria-hidden="true"
+            />
+            <TooltipButton
+              data-action="expand"
+              className="is-icon-only"
+              aria-label={t("canvas.selection.expandText")}
+              aria-haspopup="dialog"
+              label={t("canvas.selection.expandText")}
+              tooltipSide="top"
+              onClick={() => {
+                setOpenMenu(null);
+                onExpand();
+              }}
+            >
+              <CanvasIcon name="expand" size={16} />
+            </TooltipButton>
+          </div>
+        )}
       </div>
       {openMenu && menuAction && (
         <SelectionToolbarMenu

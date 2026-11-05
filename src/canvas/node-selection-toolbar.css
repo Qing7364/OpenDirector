@@ -30,6 +30,10 @@
   gap: 1px;
   flex: 0 0 auto;
 }
+/* The text editor control stays at the bar's right edge, not beside "duplicate". */
+.cw-selection-toolbar-expand {
+  margin-left: auto;
+}
 .cw-selection-toolbar-separator {
   height: 16px;
   width: 1px;

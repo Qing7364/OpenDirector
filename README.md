@@ -228,6 +228,7 @@ The first launch creates an untitled canvas. Later launches can restore the most
 
 - Click the project name at the top left to rename it. Press `Enter` or click elsewhere to save, or press `Esc` to cancel.
 - Click the arrow next to the name to switch projects. Choose **New canvas project** to create one.
+- On an empty canvas, click **Configure models** to open **Settings → Model connections**.
 - Use the left toolbar or double-click empty canvas space to create text, image, video, audio, timeline, or subject nodes.
 - Right-click empty canvas space to create a node, paste, undo, or redo.
 - Click **Upload** on the left or drag files onto the canvas to add assets. Use **Asset library** to choose existing assets.

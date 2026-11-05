@@ -6,6 +6,7 @@ import type {
   ObjectVersion,
   CanvasItem,
   TextGenerationSpec,
+  ImageGenerationSpec,
   Asset,
   Reference,
 } from "../src/contracts/generated.ts";
@@ -478,6 +479,309 @@ test("edited projections retain their original revision basis and emit semantic 
   );
   assert.equal(batch.versions[0]!.revision, 1); // A stale form never acquires revision 2 silently.
   assert.ok(!JSON.stringify(batch).includes("Another actor changed it"));
+});
+
+function presentationFixture() {
+  const snapshot = empty(),
+    node = createNode("image");
+  const spec: ImageGenerationSpec = {
+    id: crypto.randomUUID(),
+    projectId: snapshot.project.id,
+    revision: 1,
+    kind: "image",
+    purpose: "generation",
+    prompt: "",
+    promptContent: null,
+    modelConfigId: null,
+    currentResultId: null,
+    parameters: {
+      size: "auto",
+      aspectRatio: null,
+      preset: "none",
+      responseFormat: "url",
+      outputFormat: "png",
+    },
+  };
+  const item: CanvasItem = {
+    id: node.id,
+    projectId: snapshot.project.id,
+    revision: 1,
+    kind: "image",
+    title: node.data.title,
+    position: node.position,
+    width: node.width,
+    height: node.height,
+    locked: false,
+    visible: true,
+    zIndex: 0,
+    parentId: null,
+    tags: [],
+    editors: [],
+    binding: {
+      role: "generation",
+      objectRef: { objectType: "generation_spec", id: spec.id },
+      materialOverride: null,
+    },
+  };
+  const basis = { ...snapshot, canvasItems: [item], generationSpecs: [spec] };
+  const client = new CommandCapture(snapshot.project.id);
+  client.install(basis);
+  const projection = new CreationProjection(client);
+  const document = { ...createDocument(), id: client.id, nodes: [node] };
+  projection.baseline = document;
+  projection.basis = basis;
+  const conflict = new CreationCommandError({
+    commandId: crypto.randomUUID(),
+    projectId: client.id,
+    inputFingerprint: "a".repeat(64),
+    status: "rejected",
+    changed: [],
+    jobIds: [],
+    eventCursor: basis.eventCursor + 1,
+    issues: [
+      {
+        code: "revision_conflict",
+        message: "stale",
+        objectId: item.id,
+        field: null,
+      },
+    ],
+  });
+  return { client, projection, document, basis, item, node, conflict };
+}
+
+test("a rejected move rebases over generated dimensions and preserves the generated result", async () => {
+  const { client, projection, document, basis, item, node, conflict } =
+    presentationFixture();
+  const latest = {
+    ...basis,
+    eventCursor: basis.eventCursor + 1,
+    canvasItems: [
+      {
+        ...item,
+        revision: 2,
+        width: item.width + 100,
+        binding: {
+          role: "material" as const,
+          objectRef: {
+            assetId: crypto.randomUUID(),
+            revision: 1,
+            kind: "image" as const,
+            fingerprint: "a".repeat(64),
+          },
+        },
+      },
+    ],
+  };
+  const originalFetch = globalThis.fetch;
+  const sent: {
+    commandId: string;
+    expectedVersions: ObjectVersion[];
+    payload: { operations: CreationOperation[] };
+  }[] = [];
+  client.batch = async (operations, versions) => {
+    await CreationClient.prototype.batch.call(client, operations, versions);
+    return undefined;
+  };
+  globalThis.fetch = async (url, options) => {
+    if (String(url).endsWith("/commands")) {
+      const body = JSON.parse(options!.body as string);
+      sent.push(body);
+      if (sent.length === 1)
+        return Response.json({
+          ...conflict.receipt,
+          commandId: body.commandId,
+        });
+      assert.equal(body.expectedVersions[0].revision, 2);
+      return Response.json({
+        ...conflict.receipt,
+        commandId: body.commandId,
+        status: "applied",
+        issues: [],
+        changed: [],
+        eventCursor: 2,
+      });
+    }
+    return Response.json({ snapshot: latest, edges: [] });
+  };
+  const edited = {
+    ...document,
+    nodes: [{ ...node, position: { x: 100, y: 25 } }],
+  };
+  try {
+    assert.equal(await projection.save(edited, { saveView: false }), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.deepEqual(
+    sent.map((batch) => batch.expectedVersions[0]!.revision),
+    [1, 2],
+  );
+  assert.notEqual(sent[0]!.commandId, sent[1]!.commandId);
+  assert.deepEqual(sent[1]!.payload.operations, [
+    {
+      type: "canvas.move",
+      payload: { items: [{ itemId: node.id, position: { x: 100, y: 25 } }] },
+    },
+  ]);
+  assert.equal(projection.baseline, edited);
+  assert.deepEqual(projection.basis, latest);
+  assert.equal(client.snapshot.canvasItems[0]!.binding.role, "material");
+});
+
+test("renaming sends only the edited field and rebases over a generated size", async () => {
+  const { client, projection, document, basis, item, node, conflict } =
+    presentationFixture();
+  client.batch = async (operations, versions) => {
+    client.batches.push({ operations, versions });
+    client.install({
+      ...basis,
+      eventCursor: 2,
+      canvasItems: [{ ...item, revision: 2, width: item.width + 100 }],
+    });
+    if (client.batches.length === 1) throw conflict;
+    return undefined;
+  };
+  await projection.save(
+    {
+      ...document,
+      nodes: [{ ...node, data: { ...node.data, title: "Renamed" } }],
+    },
+    { saveView: false },
+  );
+  assert.deepEqual(client.batches[1]!.operations, [
+    { type: "canvas.update", payload: { itemId: node.id, title: "Renamed" } },
+  ]);
+  assert.equal(client.batches[1]!.versions[0]!.revision, 2);
+});
+
+for (const [label, change] of [
+  ["position", { position: { x: 999, y: 999 } }],
+  ["lock", { locked: true }],
+  ["visibility", { visible: false }],
+  ["parent", { parentId: crypto.randomUUID() }],
+] as const) {
+  test(`a move keeps its draft and rejects a concurrent ${label} change`, async () => {
+    const { client, projection, document, basis, item, node, conflict } =
+      presentationFixture();
+    client.batch = async (operations, versions) => {
+      client.batches.push({ operations, versions });
+      client.install({
+        ...basis,
+        eventCursor: 2,
+        canvasItems: [{ ...item, ...change, revision: 2 }],
+      });
+      throw conflict;
+    };
+    await assert.rejects(
+      projection.save({
+        ...document,
+        nodes: [{ ...node, position: { x: 100, y: 25 } }],
+      }),
+      (error) => error === conflict,
+    );
+    assert.equal(client.batches.length, 1);
+    assert.equal(projection.baseline, document);
+    assert.equal(projection.basis, basis);
+  });
+}
+
+test("a rename does not overwrite a concurrent rename", async () => {
+  const { client, projection, document, basis, item, node, conflict } =
+    presentationFixture();
+  client.batch = async (operations, versions) => {
+    client.batches.push({ operations, versions });
+    client.install({
+      ...basis,
+      eventCursor: 2,
+      canvasItems: [{ ...item, title: "Remote title", revision: 2 }],
+    });
+    throw conflict;
+  };
+  await assert.rejects(
+    projection.save({
+      ...document,
+      nodes: [{ ...node, data: { ...node.data, title: "Local title" } }],
+    }),
+    (error) => error === conflict,
+  );
+  assert.equal(client.batches.length, 1);
+  assert.equal(projection.basis, basis);
+});
+
+test("an unknown save outcome does not receive a new layout attempt", async () => {
+  const { client, projection, document, node } = presentationFixture();
+  client.batch = async (operations, versions) => {
+    client.batches.push({ operations, versions });
+    throw new TypeError("response lost");
+  };
+  await assert.rejects(
+    projection.save({
+      ...document,
+      nodes: [{ ...node, position: { x: 100, y: 25 } }],
+    }),
+    /response lost/,
+  );
+  assert.equal(client.batches.length, 1);
+});
+
+test("layout recovery is bounded while new server revisions keep arriving", async () => {
+  const { client, projection, document, basis, item, node, conflict } =
+    presentationFixture();
+  client.batch = async (operations, versions) => {
+    client.batches.push({ operations, versions });
+    const revision = client.batches.length + 1;
+    client.install({
+      ...basis,
+      eventCursor: revision,
+      canvasItems: [{ ...item, width: item.width + revision, revision }],
+    });
+    throw conflict;
+  };
+  await assert.rejects(
+    projection.save({
+      ...document,
+      nodes: [{ ...node, position: { x: 100, y: 25 } }],
+    }),
+    (error) => error === conflict,
+  );
+  assert.equal(client.batches.length, 3);
+  assert.equal(projection.basis, basis);
+  assert.equal(projection.baseline, document);
+});
+
+test("a mixed prompt and layout edit preserves its original content versions", async () => {
+  const { client, projection, document, basis, item, node, conflict } =
+    presentationFixture();
+  client.batch = async (operations, versions) => {
+    client.batches.push({ operations, versions });
+    client.install({
+      ...basis,
+      eventCursor: 2,
+      canvasItems: [{ ...item, width: item.width + 100, revision: 2 }],
+    });
+    throw conflict;
+  };
+  await assert.rejects(
+    projection.save({
+      ...document,
+      nodes: [
+        {
+          ...node,
+          position: { x: 100, y: 25 },
+          data: { ...node.data, prompt: "Local prompt" },
+        },
+      ],
+    }),
+    (error) => error === conflict,
+  );
+  assert.ok(
+    client.batches[0]!.operations.some(
+      (op) => op.type === "generationSpec.setPrompt",
+    ),
+  );
+  assert.equal(client.batches.length, 1);
+  assert.equal(projection.basis, basis);
 });
 
 test("reference replacement and hiding preserve the intended project relationships", async () => {

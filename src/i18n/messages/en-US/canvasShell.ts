@@ -89,6 +89,7 @@ export const canvasShell = {
   "canvas.selection.tool.videoExtend": "Extend video",
 
   "canvas.selection.edit.text": "Edit text",
+  "canvas.selection.expandText": "Expand editor",
   "canvas.selection.edit.timeline": "Edit timeline",
   "canvas.selection.edit.stack": "Manage stack",
   "canvas.selection.edit.tool": "Edit tool",
@@ -132,4 +133,11 @@ export const canvasShell = {
   "canvas.selection.previewFullscreen": "Full-screen preview",
   "canvas.selection.duplicate": "Duplicate",
   "canvas.selection.deleteNode": "Delete node",
+
+  "canvas.textWindow.hint": "Edits sync to the canvas node as you type",
+  "canvas.textWindow.locked": "This node is locked; viewing only",
+  "canvas.textWindow.count": {
+    one: "{count} character",
+    other: "{count} characters",
+  },
 } as const;

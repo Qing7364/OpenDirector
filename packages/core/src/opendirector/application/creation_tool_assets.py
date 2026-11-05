@@ -34,11 +34,15 @@ class CreationToolAssets:
 
     def import_output(self, task, asset_id, name, data):
         used = {*task['sourceAssetIds'], task.get('maskAssetId'), task.get('annotationAssetId')}
+        snapshot = self.projects.snapshot(task['projectId'])
         sources = tuple(AssetRef(assetId=asset.id, revision=asset.revision, fingerprint=asset.fingerprint, kind=asset.kind)
-                        for asset in self.assets.list(task['projectId']) if str(asset.id) in used)
+                        for asset in snapshot.assets if str(asset.id) in used)
+        source_id = (task.get('canvas') or {}).get('nodeId')
+        source_item = next((item.id for item in snapshot.canvasItems if str(item.id) == source_id), None)
         draft = task.get('draftSnapshot')
         provenance = AssetProvenance(source='edited' if draft else 'manual', sources=sources, toolTaskId=UUID(task['id']),
-            editorDocumentId=UUID(draft['id']) if draft else None, editorRevision=draft['revision'] if draft else None)
+            sourceItemId=source_item, editorDocumentId=UUID(draft['id']) if draft else None,
+            editorRevision=draft['revision'] if draft else None)
         return self.import_file(task['projectId'], asset_id, name, data, None, provenance=provenance)
 
     def import_file(self, project_id, asset_id, name, data, session, *, source='generated', sources=(), provenance=None):

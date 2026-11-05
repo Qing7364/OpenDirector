@@ -179,14 +179,13 @@ class ToolTasks(ToolTaskLifecycle):
             return self._change(project_id, task_id, {'placement': state, 'outputs': task['outputs']})
 
     def _settle_terminal(self, project_id, task_id, session=None):
-        # Project receipt precedes ledger acknowledgement. A crash between them
-        # is repaired from the same owned target without resubmitting execution.
+        # An accepted tool's canvas target remains visible as the place where
+        # the attempt failed. Only settle result placement in the ledger.
         with self.store.transaction():
             directory = self._directory(project_id, session)
             task = read_json(child(self._folder(directory), task_id + '.json'))
             if task['status'] in {'failed', 'cancelled', 'interrupted'} and task.get('placement') == 'pending':
-                from .creation_tool_drafts import release_placeholder
-                task = self._change(project_id, task_id, {'placement': release_placeholder(self, task, session)})
+                task = self._change(project_id, task_id, {'placement': 'unplaced'})
             return task
 
     def _write(self, directory, task):
