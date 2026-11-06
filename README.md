@@ -19,7 +19,11 @@ OpenDirector is an AI video creation workspace that runs locally and is accessed
 
 Use it to explore visual ideas, refine assets, and make short films. Projects stay on your machine; generation uses the provider APIs or self-hosted model services you choose.
 
-[Example film](#example-film-we-can-still-win) · [Quick start](#quick-start) · [Documentation](#documentation) · [Contributing](#contributing)
+[News](#news) · [Example film](#example-film-we-can-still-win) · [Quick start](#quick-start) · [Documentation](#documentation) · [Contributing](#contributing)
+
+## News
+
+- [2026/11/06] We released [v0.1.0](https://github.com/ThinkFlowLab/OpenDirector/releases/tag/v0.1.0), the first OpenDirector release, bringing AI-assisted generation, canvas asset management, media editing, and timeline export into one local workspace. See the release notes for highlights and installation instructions.
 
 ## What you can do
 
