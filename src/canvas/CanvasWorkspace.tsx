@@ -969,7 +969,6 @@ function Workspace() {
     };
   }, [cancelDrag]);
   const showAssistant = () => {
-    setPanel(null);
     setAssistantOpen(true);
     if (selected.length) setAssistantSelectionRequest((n) => n + 1);
   };
@@ -1009,7 +1008,6 @@ function Workspace() {
     };
   }, []);
   const togglePanel = (value: Panel) => {
-    setAssistantOpen(false);
     referenceTarget.current = null;
     setPanel((p) => (p === value ? null : value));
     setMenu(null);
