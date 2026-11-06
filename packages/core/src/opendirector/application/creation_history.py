@@ -467,6 +467,9 @@ class CreationHistory:
         for doc in snapshot.editorDocuments:
             if doc.kind == 'subject':
                 current.update(ref.assetId for ref in asset_references(doc))
+        # A live pinned reference keeps its fixed media reusable even without a canvas
+        # node, after the media has also become a generated result's source.
+        current.update(ref.source.assetId for ref in snapshot.references if ref.active and ref.binding == 'pinned')
         return current, current_results, historical
 
     def asset_list(self, project_id, *, text='', usage='all', visibility='all', category='all', offset=0, limit=100):

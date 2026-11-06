@@ -414,3 +414,43 @@ def test_asset_categories_include_subject_and_timeline_nodes_with_counts_before_
     assert empty['total'] == 1 and empty['nodes'][0]['asset'] is None
     assert empty['nodes'][0]['itemId'] == empty_item and not empty['nodes'][0]['visible']
     assert service.asset_list(pid, category='subject', text='empty', visibility='visible')['total'] == 0
+
+
+def test_asset_used_only_by_an_active_pinned_reference_stays_listed_after_becoming_a_source(project):
+    from opendirector.application.creation_canvas import asset_ref
+    store, pid, session = project
+    assert send(store, pid, 'asset.writeText', session=session, name='pinned.md', text='fixed').status == 'applied'
+    source = store.snapshot(pid).assets[-1]
+    target_item, spec = media(project, title='Target')
+    reference = dict(id=uuid4(), projectId=pid, targetSpecId=spec.id, binding='pinned',
+                     source=asset_ref(source).model_dump(mode='json'), order=0)
+    assert send(store, pid, 'reference.add', session=session,
+                versions=[ver('generation_spec', spec), ver('canvas_item', target_item)],
+                reference=reference).status == 'applied'
+    service = CreationHistory(store)
+    def listed(**kwargs):
+        return {row['asset'].id for row in service.asset_list(pid, **kwargs)['items']}
+    def catalog():
+        return next(row for row in service.reference_catalog(pid) if row['id'] == str(source.id))
+    assert source.id in listed() and source.id in listed(visibility='hidden')
+    assert catalog()['available']
+    # Any newer asset naming it in provenance.sources, like a generated result, makes it historical.
+    assert send(store, pid, 'asset.writeText', session=session, versions=[ver('asset', source)], name='derived.md',
+                text='derived', previousAsset=asset_ref(source).model_dump(mode='json')).status == 'applied'
+    assert store.snapshot(pid).assets[-1].provenance.sources == (asset_ref(source),)
+    # Becoming another asset's source must not hide media a live configuration still pins.
+    assert source.id in listed() and source.id in listed(visibility='hidden')
+    assert catalog()['available'] and catalog()['fileAvailable']
+    reopened = CreationHistory(CreationProjects(LocalProjects(store.local.repository)))
+    assert source.id in {row['asset'].id for row in reopened.asset_list(pid, visibility='hidden')['items']}
+    assert service.usage(store.snapshot(pid), source.id)['used']
+    current = next(item for item in store.snapshot(pid).references if item.id == reference['id'])
+    target = next(item for item in store.snapshot(pid).generationSpecs if item.id == spec.id)
+    assert send(store, pid, 'reference.remove', session=session,
+                versions=[ver('reference', current), ver('generation_spec', target)],
+                referenceId=current.id).status == 'applied'
+    # Once removed, it is again only a historical source, as before.
+    assert source.id not in listed()
+    assert not catalog()['available']
+    # Delete protection is unchanged: the derived version and history still depend on it.
+    assert service.usage(store.snapshot(pid), source.id)['used']
