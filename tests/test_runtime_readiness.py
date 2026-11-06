@@ -84,6 +84,7 @@ def test_runtime_catalog_can_skip_probes_and_check_one_harness(tmp_path, monkeyp
         return 'ready'
     monkeypatch.setattr('opendirector_api.agent.runtime_readiness', probe)
     monkeypatch.setattr(runtime.native, 'executable', lambda _: '/installed/cli')
+    monkeypatch.setattr(runtime.jiuwenswarm, 'executable', lambda: '/installed/jiuwenswarm')
     pid = str(uuid4())
     path = f'/api/creation/projects/{pid}'
     with TestClient(create_app(LocalProjects(tmp_path)), headers={

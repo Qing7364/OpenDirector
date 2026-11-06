@@ -52,14 +52,7 @@ import { previewImageSelection } from "../backend/imageSelections";
 import { MediaPublication } from "../backend/mediaPublication";
 import { useBackendModels } from "../backend/models.ts";
 import { openBackendProject } from "../backend/projects.ts";
-import {
-  backendBlocker,
-  backendModel,
-  backendReferences,
-  backendVideoMode,
-  modelLabel,
-  serviceVoice,
-} from "../backend/rules.ts";
+import { backendModel, modelLabel } from "../backend/rules.ts";
 import {
   backUpLibrarySubject,
   copyLibrarySubjects,
@@ -94,7 +87,6 @@ import {
   studyImage,
 } from "./assets";
 import { AssistantPanel } from "./AssistantPanel";
-import { assistantReferences } from "./assistantReferences";
 import { CanvasActionsContext } from "./CanvasActionsContext";
 import {
   CanvasConnectionLine,
@@ -157,10 +149,7 @@ import {
   type GenerationJob as Job,
 } from "./generationHistory";
 import { GenerationHistoryPanel } from "./GenerationHistoryPanel";
-import {
-  generationContent,
-  incomingReferenceNodes,
-} from "./generationReferenceContent.ts";
+import { incomingReferenceNodes } from "./generationReferenceContent.ts";
 import { referenceContentCommand } from "./generationReferenceEdit.ts";
 import type { GenerationReferenceControls } from "./GenerationReferenceEditor";
 import { absolutePosition, arrangeNodes, boundsOfNodes } from "./geometry";
@@ -254,7 +243,7 @@ import { CanvasPointerGesture } from "./pointerGesture";
 import { resourceNodeData } from "./projectAssets";
 import { persistCurrentDocument } from "./projectManagement";
 import { ProjectSelector } from "./ProjectSelector";
-import { referencePresentation, referenceSnapshot } from "./referenceEvidence";
+import { referencePresentation } from "./referenceEvidence";
 import "./settings.css";
 import { modelSetupMissing, dismissModelSetup, shouldShowModelSetup } from "./ModelSetup";
 import { WelcomeScreen } from "./WelcomeScreen";
@@ -271,7 +260,17 @@ import {
   subjectTargetIdentity,
 } from "./subjectLibraryImport.ts";
 import { subjectWithResource, type SubjectMediaSlot } from "./subjectMedia.ts";
-import { agentGenerationBlocker, agentNodeSettings } from "./textGeneration";
+import {
+  authorFlowChanges,
+  canvasKeyAction,
+  canvasSelectAllIds,
+  connectionDragReleased,
+  droppedConnectionTarget,
+  mergeFlowSelection,
+  placeCreatedNode,
+  serviceGenerationPlan,
+  textGenerationPlan,
+} from "./workspaceInteraction.ts";
 import { TextNodeComposer } from "./TextNodeComposer";
 import { useTheme } from "./theme";
 import { useI18n } from "../i18n/I18nProvider";
@@ -1840,42 +1839,20 @@ function Workspace() {
       ...extra,
     });
     if (kind === "timeline") node.width = 720;
-    node.position = {
-      x: where.x - node.width / 2,
-      y: where.y - node.height / 2,
-    };
-    if (connected) {
-      // The dropped endpoint becomes the new node's input/output port.
-      node.position = {
-        x: where.x - (connected.direction === "target" ? node.width : 0),
-        y: where.y - node.height / 2,
-      };
-      if (connected.side === "left")
-        node.position = {
-          x: where.x - node.width,
-          y: where.y - node.height / 2,
-        };
-      if (connected.side === "top")
-        node.position = {
-          x: where.x - node.width / 2,
-          y: where.y - node.height,
-        };
-      if (connected.side === "bottom")
-        node.position = { x: where.x - node.width / 2, y: where.y };
-    }
-    if (menu?.parentId) {
-      const parent = current.nodes.find(
-        (candidate) => candidate.id === menu.parentId,
-      );
-      if (parent) {
-        const origin = absolutePosition(parent, current.nodes);
-        node.parentId = parent.id;
-        node.position = {
-          x: node.position.x - origin.x,
-          y: node.position.y - origin.y,
-        };
-      }
-    }
+    const parent = menu?.parentId
+      ? current.nodes.find((candidate) => candidate.id === menu.parentId)
+      : undefined;
+    // The dropped endpoint becomes the new node's input/output port.
+    const placed = placeCreatedNode(
+      node,
+      where,
+      connected,
+      parent
+        ? { id: parent.id, origin: absolutePosition(parent, current.nodes) }
+        : undefined,
+    );
+    node.position = placed.position;
+    if (placed.parentId) node.parentId = placed.parentId;
     const commands: CanvasCommand[] = [
       {
         type: "add-nodes",
@@ -2016,17 +1993,24 @@ function Workspace() {
   const onConnectEnd: OnConnectEnd = (event, state) => {
     const start = connectionStarted.current;
     connectionStarted.current = null;
-    if (spacePressed || pointerGesture.current.cancelled) return;
-    const point = "changedTouches" in event ? event.changedTouches[0] : event;
+    const raw = "changedTouches" in event ? event.changedTouches[0] : event;
+    const point = raw ? { x: raw.clientX, y: raw.clientY } : null;
     if (
+      !connectionDragReleased({
+        spacePressed,
+        cancelled: pointerGesture.current.cancelled,
+        moved: pointerGesture.current.moved,
+        start,
+        point,
+        isValid: Boolean(state.isValid),
+        hasEndpoints: Boolean(state.fromNode && state.fromHandle),
+      }) ||
       !point ||
-      !start ||
-      (!pointerGesture.current.moved &&
-        Math.hypot(point.clientX - start.x, point.clientY - start.y) <= 4)
+      !state.fromNode ||
+      !state.fromHandle
     )
       return;
-    if (state.isValid || !state.fromNode || !state.fromHandle) return;
-    const target = document.elementFromPoint(point.clientX, point.clientY);
+    const target = document.elementFromPoint(point.x, point.y);
     const targetId = target
       ?.closest(".react-flow__node")
       ?.getAttribute("data-id");
@@ -2036,14 +2020,20 @@ function Workspace() {
         node.type === "group" &&
         !lockedIds.has(node.id),
     );
-    if (state.toNode && state.toNode.id !== group?.id) return;
-    if (!group && !target?.classList.contains("react-flow__pane")) return;
+    const drop = droppedConnectionTarget({
+      toNodeId: state.toNode?.id,
+      groupId: group?.id,
+      onPane: Boolean(target?.classList.contains("react-flow__pane")),
+      fromNodeId: state.fromNode.id,
+      direction: state.fromHandle.type,
+    });
+    if (!drop) return;
     setMenu({
-      x: point.clientX,
-      y: point.clientY,
-      world: flow.screenToFlowPosition({ x: point.clientX, y: point.clientY }),
-      connected: { id: state.fromNode.id, direction: state.fromHandle.type },
-      parentId: group?.id,
+      x: point.x,
+      y: point.y,
+      world: flow.screenToFlowPosition(point),
+      connected: { id: drop.id, direction: drop.direction },
+      parentId: drop.parentId,
     });
   };
   const onNodesChange = useCallback(
@@ -2068,50 +2058,23 @@ function Workspace() {
           }
           return changed ? next : current;
         });
-      const selections = changes.filter((c) => c.type === "select");
-      if (selections.length)
-        setSelected((ids) => {
-          const next = new Set(ids);
-          for (const c of selections)
-            if (c.type === "select") {
-              if (c.selected) next.add(c.id);
-              else next.delete(c.id);
-            }
-          return [...next];
-        });
-      const patches: CanvasCommand[] = [];
-      // XYFlow may still deliver a final move/resize after cancellation.
-      if (pointerGesture.current.cancelled) return;
-      // Capture the grab offset immediately, but do not author a move inside
-      // click tolerance (or let that jitter snap a node to a nearby guide).
-      if (dragging.current && !pointerGesture.current.moved) return;
-      const resize = changes.find(
-        (c) => c.type === "dimensions" && c.dimensions && c.setAttributes,
-      );
-      if (resize?.type === "dimensions" && resize.dimensions) {
-        const move = changes.find(
-          (c) => c.type === "position" && c.id === resize.id,
-        );
-        // The document owns child-coordinate compensation, including locked children.
-        // Do not apply React Flow's child position patches a second time.
-        command({
-          type: "resize-node",
-          id: resize.id,
-          ...resize.dimensions,
-          ...(move?.type === "position" && move.position
-            ? { position: move.position }
-            : {}),
-        });
-        return;
-      }
-      const positions = changes.flatMap((c) =>
-        c.type === "position" && c.position
-          ? [{ id: c.id, position: c.position }]
+      const selections = changes.flatMap((change) =>
+        change.type === "select"
+          ? [{ id: change.id, selected: change.selected }]
           : [],
       );
-      for (const { id, position } of positions)
-        patches.push({ type: "update-node", id, patch: { position } });
-      if (patches.length) command({ type: "batch", commands: patches });
+      if (selections.length)
+        setSelected((ids) => mergeFlowSelection(ids, selections));
+      // XYFlow may still deliver a final move/resize after cancellation.
+      // Capture the grab offset immediately, but do not author a move inside
+      // click tolerance (or let that jitter snap a node to a nearby guide).
+      // A resize owns child-coordinate compensation, including locked children.
+      const authored = authorFlowChanges(changes, {
+        cancelled: pointerGesture.current.cancelled,
+        dragging: dragging.current,
+        moved: pointerGesture.current.moved,
+      });
+      if (authored) command(authored);
     },
     [command, flow],
   );
@@ -3570,97 +3533,29 @@ function Workspace() {
         });
     }
   }, [jobs, ready, backendCatalog.connected, doc.id, change, persist, notify]);
-  const pinnedSubmissionInputs = (node: CanvasNode) =>
-    (node.data.promptContent ?? []).flatMap((part) => {
-      if (part.type !== "reference" || part.binding !== "asset") return [];
-      const saved = creationClient(doc.id).snapshot?.assets.find(
-        (asset) => asset.id === part.assetId,
-      );
-      const asset =
-        saved ??
-        referenceAssets.assets.find((asset) => asset.id === part.assetId);
-      if (
-        !asset ||
-        !["text", "image", "video", "audio"].includes(asset.kind ?? "")
-      )
-        throw new Error(t("canvas.workspace.error.pinnedMetadataUnloaded"));
-      return [
-        {
-          binding: "asset" as const,
-          assetId: asset.id,
-          fingerprint: part.fingerprint,
-          referenceId: part.referenceId,
-          kind: asset.kind as "image" | "video" | "audio" | "text",
-          title: part.name,
-        },
-      ];
-    });
+  const submissionAssets = () => [
+    ...(creationClient(doc.id).snapshot?.assets ?? []),
+    ...referenceAssets.assets,
+  ];
   const runServiceGeneration = (node: CanvasNode, incoming: CanvasNode[]) => {
-    const settings = getNodeGenerationSettings(node, backendCatalog.models);
-    const config = backendModel(settings, backendCatalog.models);
-    const blocked = backendBlocker(settings, incoming, backendCatalog.models);
-    if (blocked || !config) {
-      notify(blocked ?? t("canvas.workspace.error.modelUnavailable"));
+    const document = historyRef.current.present;
+    const plan = serviceGenerationPlan({
+      document,
+      node,
+      incoming,
+      models: backendCatalog.models,
+      assets: submissionAssets(),
+    });
+    if (plan.status === "blocked") {
+      notify(plan.message ?? t("canvas.workspace.error.modelUnavailable"));
       return;
     }
-    const references = backendReferences(settings, incoming, config);
-    const document = historyRef.current.present;
-    const request: GenerationRequest = {
-      documentId: document.id,
-      documentTitle: document.title,
-      nodeId: node.id,
-      promptContent: generationContent(node, incoming),
-      config,
-      kind: settings.mode,
-      prompt: settings.prompt,
-      title: node.data.title,
-      videoMode: backendVideoMode(settings, references, config),
-      durationSeconds: config.inputRules.videoCapabilities
-        ? settings.durationSeconds
-        : undefined,
-      aspectRatio: settings.aspectRatio,
-      resolution: settings.resolution,
-      voice: serviceVoice(settings),
-      references: [
-        ...assistantReferences(incoming).map((input) => ({
-          ...input,
-          contextOnly: !references.some(
-            ({ node: item }) =>
-              item.id === input.nodeId &&
-              item.data.kind === input.kind &&
-              (input.kind === "text" || item.data.src === input.src),
-          ),
-        })),
-        ...pinnedSubmissionInputs(node).map((input) => ({
-          ...input,
-          contextOnly:
-            settings.mode === "audio" ||
-            (settings.mode === "video" &&
-              settings.videoMode === "first-last" &&
-              input.kind === "image" &&
-              references.some((ref) => ref.role === "firstFrame")),
-        })),
-      ],
-    };
-    const origin: ResultSource = {
-      documentId: document.id,
-      nodeId: node.id,
-      kind: node.type,
-      src: node.data.src,
-      referenceInputs: referenceSnapshot(
-        references.map(
-          (item) =>
-            document.nodes.find((n) => n.id === item.node.id) ?? item.node,
-        ),
-      ),
-    };
-    const count = settings.mode === "audio" ? 1 : (settings.count ?? 1);
-    const batchId = count > 1 ? crypto.randomUUID() : undefined;
-    for (let index = 0; index < count; index++)
+    const batchId = plan.count > 1 ? crypto.randomUUID() : undefined;
+    for (let index = 0; index < plan.count; index++)
       void runServiceTask(
-        { ...request, batchId, executionSlot: index },
-        origin,
-        settings.prompt || node.data.title,
+        { ...plan.request, batchId, executionSlot: index },
+        plan.origin,
+        plan.label,
         index === 0 ? "replace" : "additional",
       );
   };
@@ -3711,45 +3606,18 @@ function Workspace() {
       return;
     const incoming = incomingNodes(current, nodeId);
     if (node.type === "text") {
-      const settings = agentNodeSettings(node);
-      const agents = backendCatalog.models.filter(
-        (model) => model.kind === "agent",
-      );
-      const config = agents.find(
-        (model) => model.id === (settings.modelConfigId ?? agents[0]?.id),
-      );
-      const blocker = agentGenerationBlocker(node, incoming, config);
-      if (blocker || !config) {
-        notify(blocker ?? t("canvas.workspace.error.agentUnavailable"));
+      const plan = textGenerationPlan({
+        document: current,
+        node,
+        incoming,
+        models: backendCatalog.models,
+        assets: submissionAssets(),
+      });
+      if (plan.status === "blocked") {
+        notify(plan.message ?? t("canvas.workspace.error.agentUnavailable"));
         return;
       }
-      void runServiceTask(
-        {
-          documentId: current.id,
-          documentTitle: current.title,
-          nodeId: node.id,
-          promptContent: generationContent(node, incoming),
-          config,
-          kind: "text",
-          prompt: node.data.prompt,
-          title: node.data.title,
-          videoMode: "first_frame",
-          thinking: settings.thinking,
-          maxTokens: settings.maxTokens,
-          references: [
-            ...assistantReferences(incoming),
-            ...pinnedSubmissionInputs(node),
-          ],
-        },
-        {
-          documentId: current.id,
-          nodeId: node.id,
-          kind: "text",
-          text: node.data.text,
-          referenceInputs: referenceSnapshot(incoming),
-        },
-        node.data.title,
-      );
+      void runServiceTask(plan.request, plan.origin, plan.label);
       return;
     }
 
@@ -3918,106 +3786,60 @@ function Workspace() {
       !anchorElement?.closest(".react-flow")
     )
       return;
+    const action = canvasKeyAction({
+      key: event.key,
+      code: event.code,
+      mod,
+      shift: event.shiftKey,
+      hasClipboard: Boolean(clipboard.current),
+      editText: Boolean(
+        single?.type === "text" &&
+          !lockedIds.has(single.id) &&
+          (el === root.current ||
+            el.closest(".react-flow__node")?.getAttribute("data-id") ===
+              single.id),
+      ),
+      hasSingle: Boolean(single),
+    });
+    if (!action) return;
     if (
-      !mod &&
-      event.key === "Enter" &&
-      single?.type === "text" &&
-      !lockedIds.has(single.id) &&
-      (el === root.current ||
-        el.closest(".react-flow__node")?.getAttribute("data-id") === single.id)
-    ) {
+      action.type !== "add-text" &&
+      action.type !== "preview" &&
+      action.type !== "help"
+    )
       event.preventDefault();
+    if (action.type === "edit-text" || action.type === "nudge")
       event.stopPropagation();
-      setTextEditingId(single.id);
-    } else if (mod && key === "z") {
-      event.preventDefault();
-      replayHistory(event.shiftKey);
-    } else if (mod && key === "y") {
-      event.preventDefault();
-      replayHistory(true);
-    } else if (mod && key === "a") {
-      event.preventDefault();
-      setSelected(
-        doc.nodes
-          .filter((n) => !projected.ownerByNodeId.has(n.id))
-          .map((n) => n.id),
-      );
-    } else if (mod && key === "c") {
-      event.preventDefault();
-      copy();
-    } else if (mod && key === "x") {
-      event.preventDefault();
-      cut();
-    } else if (
-      mod &&
-      (event.code === "BracketLeft" || event.code === "BracketRight")
-    ) {
-      event.preventDefault();
+    if (action.type === "edit-text") {
+      if (single?.type === "text") setTextEditingId(single.id);
+    } else if (action.type === "history") replayHistory(action.forward);
+    else if (action.type === "select-all")
+      setSelected(canvasSelectAllIds(doc.nodes));
+    else if (action.type === "copy") copy();
+    else if (action.type === "cut") cut();
+    else if (action.type === "reorder")
       command({
         type: "reorder-nodes",
         ids: selectedRef.current,
-        direction:
-          event.code === "BracketLeft"
-            ? event.shiftKey
-              ? "back"
-              : "backward"
-            : event.shiftKey
-              ? "front"
-              : "forward",
+        direction: action.direction,
       });
-    } else if (mod && key === "v" && clipboard.current) {
-      event.preventDefault();
-      paste();
-    } else if (mod && key === "d") {
-      event.preventDefault();
-      paste(true);
-    } else if (mod && key === "g") {
-      event.preventDefault();
-      if (event.shiftKey) ungroup();
+    else if (action.type === "paste") paste(action.duplicate);
+    else if (action.type === "group") {
+      if (action.ungroup) ungroup();
       else group();
-    } else if (mod && key === "s") {
-      event.preventDefault();
-      void persist(doc);
-    } else if (mod && key === "o") {
-      event.preventDefault();
-      openFilePicker();
-    } else if (event.key === "Delete" || event.key === "Backspace") {
-      event.preventDefault();
-      removeSelected();
-    } else if (event.shiftKey && event.code === "Digit1") {
-      event.preventDefault();
-      fit();
-    } else if (event.shiftKey && event.code === "Digit2") {
-      event.preventDefault();
-      fit(true);
-    } else if (!mod && key === "t") addNode("text");
-    else if (!mod && key === "f" && single) setPreview(single);
-    else if (!mod && key === "?") setHelp(true);
-    else if (
-      ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
-    ) {
-      event.preventDefault();
-      event.stopPropagation();
-      const step = event.shiftKey ? 10 : 1;
+    } else if (action.type === "save") void persist(doc);
+    else if (action.type === "import") openFilePicker();
+    else if (action.type === "delete") removeSelected();
+    else if (action.type === "fit") fit(action.selection);
+    else if (action.type === "add-text") addNode("text");
+    else if (action.type === "preview" && single) setPreview(single);
+    else if (action.type === "help") setHelp(true);
+    else if (action.type === "nudge")
       command({
         type: "move-nodes",
         ids: selectedRef.current,
-        delta: {
-          x:
-            event.key === "ArrowLeft"
-              ? -step
-              : event.key === "ArrowRight"
-                ? step
-                : 0,
-          y:
-            event.key === "ArrowUp"
-              ? -step
-              : event.key === "ArrowDown"
-                ? step
-                : 0,
-        },
+        delta: action.delta,
       });
-    }
   };
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {

@@ -482,9 +482,8 @@ def test_byte_verified_cache_detects_rewrites_with_unchanged_file_signature(proj
     projects.history_index(created.projectId)
     assert decoded == []  # Warm Windows reads verify bytes without re-parsing snapshots.
     raw = file.read_bytes()
-    original_name = b'Renamed' if victim == 'head' else b'Example'
-    assert original_name in raw
-    file.write_bytes(raw.replace(original_name, b'Corrupt', 1))
+    assert raw.startswith(b'{')
+    file.write_bytes(b'!' + raw[1:])  # Invalid JSON with the same size.
     # ctime is creation time on Windows and mtime can be restored externally.
     # A matching signature must not cause a stale cached record to be trusted.
     with pytest.raises(ProjectError, match='缺失或损坏'):

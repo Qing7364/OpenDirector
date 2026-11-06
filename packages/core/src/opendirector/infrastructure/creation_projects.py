@@ -271,12 +271,13 @@ class CreationProjects:
         try:
             before = _file_signature(file)
             cached = self._records_cache.get(file)
-            # A commit file is immutable after publication; a rewrite changes the
+            # On platforms with reliable change times, a rewrite changes the
             # signature (ctime/mtime/size/inode). Re-reading and re-hashing every
             # historical commit on each read cost ~13 s per history query for a
             # project with hundreds of commits, holding the catalog lock past the
-            # 15 s contention budget of unrelated saves.
-            if cached and cached[0] == before:
+            # 15 s contention budget of unrelated saves. On Windows, verify bytes
+            # because the file signature can remain unchanged after a rewrite.
+            if cached and cached[0] == before and not self._verify_record_bytes:
                 self._records_cache.move_to_end(file)
                 # Private repository records are read-only. Public query
                 # boundaries copy returned values, not every historical snapshot.
@@ -285,6 +286,9 @@ class CreationProjects:
             content = sha256(raw).digest() if raw is not None else None
             if raw is not None and _file_signature(file) != before:
                 raise ValueError('Commit changed during read')
+            if cached and cached[0] == before and cached[2] == content:
+                self._records_cache.move_to_end(file)
+                return cached[1]
             if cached:
                 self._records_cache_bytes -= self._records_cache.pop(file)[0][2]
             record = CommitRecord.model_validate_json(raw) if raw is not None else CommitRecord.model_validate(read_json(file))

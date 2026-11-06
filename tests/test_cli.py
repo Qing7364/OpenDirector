@@ -1,5 +1,6 @@
 """CLI entry points against the real API and persistent project store."""
 import json
+import re
 from pathlib import Path
 import shlex
 import subprocess
@@ -125,23 +126,38 @@ def test_cli_project_write_replay_and_lock(tmp_path, monkeypatch):
     assert len(invoke(["project", "show"])["assets"]) == 2
 
 
-def test_all_cli_business_commands_have_help():
+@pytest.fixture(params=[False, True], ids=['plain', 'color'])
+def help_color(request, monkeypatch):
+    monkeypatch.setenv('TERM', 'xterm-256color')
+    if request.param:
+        monkeypatch.delenv('NO_COLOR', raising=False)
+        monkeypatch.setenv('FORCE_COLOR', '1')
+    else:
+        monkeypatch.delenv('FORCE_COLOR', raising=False)
+        monkeypatch.setenv('NO_COLOR', '1')
+
+
+def plain_help(value):
+    return re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', value)
+
+
+def test_all_cli_business_commands_have_help(help_color):
     runner = CliRunner()
     for kind in cli.COMMANDS:
         namespace, action = kind.split(".", 1)
         result = runner.invoke(cli.app, [cli.kebab(namespace), cli.kebab(action), "--help"])
         assert result.exit_code == 0, (kind, result.output)
-        assert "--file" in result.output
+        assert "--file" in plain_help(result.output)
 
 
-def test_parser_error_shows_specific_command_help():
+def test_parser_error_shows_specific_command_help(help_color):
     script = Path(__file__).resolve().parents[1] / "scripts/opendirector.py"
     result = subprocess.run([sys.executable, str(script), "video", "create", "--asset", "unknown"],
                             text=True, capture_output=True)
     assert result.returncode == 2
     assert "No such option: --asset" in result.stderr
     for option in ("--model", "--prompt", "--duration", "--first-frame", "--reference-item"):
-        assert option in result.stderr
+        assert option in plain_help(result.stderr)
 
 
 

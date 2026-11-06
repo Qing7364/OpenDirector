@@ -80,6 +80,7 @@ jobs:
           done
           curl --fail -H 'X-OpenDirector-Request: 1' "$CREATION_API_URL/api/creation-test-health"
           curl --silent --fail "$CREATION_WEB_URL/" >/dev/null
+          node tests/browser/locale.mjs
           node scripts/verify_creation_browser.mjs
           node tests/browser/assistant_activity.mjs
           node tests/browser/canvas_generation_reference.mjs

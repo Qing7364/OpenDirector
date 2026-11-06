@@ -444,8 +444,8 @@ class CreationGeneration(GenerationRuntime):
             eligible = not current_job.cancelRequested
             same_selection = current_spec.currentResultId == current_job.adoptionResultId
             try:
-                current_spec, references = current_generation_inputs(current, current_spec, current_job.inputSnapshot.model.inputRules)
-                effective = execution_spec(current_spec, references, current_job.inputSnapshot.model.inputRules)
+                projected_spec, references = current_generation_inputs(current, current_spec, current_job.inputSnapshot.model.inputRules)
+                effective = execution_spec(projected_spec, references, current_job.inputSnapshot.model.inputRules)
                 now = InputSnapshot(spec=effective.model_copy(update={'purpose': 'generation', 'currentResultId': None}),
                     model=current_job.inputSnapshot.model, references=references)
                 eligible = eligible and now.fingerprint() == current_job.inputFingerprint
