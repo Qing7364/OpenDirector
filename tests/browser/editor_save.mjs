@@ -185,6 +185,56 @@ try {
   console.log(
     "PASS delayed acknowledgement and unknown response keep the draft; retry replays exactly once",
   );
+  await page.unroute("**/commands");
+  await page.unroute("**/receipts/*");
+  await open(true);
+  await page.getByRole("button", { name: "Text", exact: true }).click();
+  await page.getByLabel("Layer text content", { exact: true }).fill("Acknowledged layer");
+  const dialog = page.locator(".lb-dialog");
+  const deliveryKey = `opendirector.editor.delivery:${pid}:${item.id}`;
+  const acknowledged = Promise.withResolvers();
+  const committed = Promise.withResolvers();
+  const holdLayerReply = async (route) => {
+    const body = route.request().postDataJSON();
+    if (!body.payload?.operations?.some((op) => op.type === "canvas.applyEdit"))
+      return route.continue();
+    try {
+      const response = await route.fetch();
+      assert.equal(response.status(), 200);
+      committed.resolve();
+      await acknowledged.promise;
+      await route.fulfill({ response });
+    } catch (error) {
+      committed.reject(error);
+    }
+  };
+  await page.route("**/commands", holdLayerReply);
+  let timer;
+  try {
+    await page.getByRole("button", { name: "Apply to canvas", exact: true }).click();
+    await Promise.race([
+      committed.promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Layer commit did not reach the server")), 15000);
+      }),
+    ]);
+    const persisted = (await state()).editorDocuments.find((doc) => doc.kind === "layers");
+    assert.equal(persisted.data.layers.at(-1).content.text, "Acknowledged layer");
+    assert.equal(await dialog.isVisible(), true, "server commit does not close the editor before acknowledgement");
+    assert.equal(await dialog.getByRole("button", { name: "Apply to canvas", exact: true }).isVisible(), false);
+    assert.equal(await dialog.getByRole("button", { name: "Processing…", exact: true }).isDisabled(), true);
+    assert.notEqual(await page.evaluate((key) => sessionStorage.getItem(key), deliveryKey), null);
+    acknowledged.resolve();
+    await dialog.waitFor({ state: "detached" });
+    assert.equal(await page.evaluate((key) => sessionStorage.getItem(key), deliveryKey), null);
+    assert.equal((await state()).editorDocuments.find((doc) => doc.id === persisted.id).revision, persisted.revision);
+  } finally {
+    clearTimeout(timer);
+    acknowledged.resolve();
+    await page.unroute("**/commands", holdLayerReply);
+  }
+  assert.deepEqual(errors, []);
+  console.log("PASS layer dialog closes only after acknowledgement and pending delivery cleanup");
 } catch (error) {
   console.error(await page.locator("body").innerText());
   console.error({errors});

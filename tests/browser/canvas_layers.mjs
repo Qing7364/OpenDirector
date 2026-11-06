@@ -112,9 +112,9 @@ try {
     .getByLabel("Layer text content", { exact: true })
     .fill("Editable after reopen");
   await page.getByRole("button", { name: "Apply to canvas", exact: true }).click();
-  // A committed snapshot may be visible before the UI receives its acknowledgement.
-  // Do not reload until the editor has cleared its pending delivery and closed.
-  await page.getByRole("button", { name: "Apply to canvas", exact: true }).waitFor({state: "hidden"});
+  // The button becomes "Processing…" before acknowledgement; only the dialog's
+  // removal confirms that the editor finished saving and cleared its delivery.
+  await page.locator(".lb-dialog").waitFor({ state: "detached" });
   snapshot = await until((value) =>
     value.editorDocuments.some(
       (doc) => doc.kind === "layers" && doc.data.layers.length === 2,
@@ -137,9 +137,7 @@ try {
   );
   await page.getByLabel("Layer text content", { exact: true }).fill("Edited again");
   await page.getByRole("button", { name: "Apply to canvas", exact: true }).click();
-  // A committed snapshot may be visible before the UI receives its acknowledgement.
-  // Do not reload until the editor has cleared its pending delivery and closed.
-  await page.getByRole("button", { name: "Apply to canvas", exact: true }).waitFor({state: "hidden"});
+  await page.locator(".lb-dialog").waitFor({ state: "detached" });
   snapshot = await until((value) =>
     value.editorDocuments.some(
       (doc) =>
