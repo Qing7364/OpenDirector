@@ -23,6 +23,7 @@ try {
   await page.goto(`${base}/ai-tool/ai-canvas/${id}`);
   const trigger = page.locator(".cw-project-chevron");
   await trigger.waitFor();
+  await page.locator('.cw-workspace[aria-busy="false"]').waitFor();
   await trigger.focus();
   const tap = async () => { await page.keyboard.press("Shift"); await page.keyboard.press("Shift"); };
   await tap();
