@@ -1,7 +1,7 @@
 import { modelDescription } from "./modelDescriptions";
 import { SearchableSelect } from "./SearchableSelect";
 import { providerLabel } from "./providerPresets";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { CanvasNode, CanvasNodeData, GenerationSettings } from "./model";
 import { LOCAL_DEMO_MODEL } from "./model";
 import { CanvasIcon } from "./CanvasIcon";
@@ -87,6 +87,7 @@ export function NodeComposer({
   referenceControls,
 }: NodeComposerProps) {
   const { t } = useI18n();
+  const voiceHelpId = useId();
   const [openPanel, setPanel] = useState<Panel>(null);
   const panel = running ? null : openPanel;
   const rootRef = useRef<HTMLDivElement>(null);
@@ -105,6 +106,8 @@ export function NodeComposer({
   const mode = settings.mode;
   const backend = Boolean(settings.modelConfigId);
   const config = backendModel(settings, backendModels);
+  const voiceRequired = Boolean(config?.inputRules.voiceRequired);
+  const mossVoice = voiceRequired && config?.inputRules.profile === "moss-speech";
   const serviceModels = backendModels.filter(
     (item) => item.kind === mode && isGenerationModel(item),
   );
@@ -630,9 +633,20 @@ export function NodeComposer({
             )}
             {mode === "audio" && backend && !music && (
               <input
-                aria-label={t("generation.field.voice")}
+                aria-label={t(
+                  voiceRequired
+                    ? "generation.field.requiredVoiceId"
+                    : "generation.field.voice",
+                )}
+                aria-describedby={mossVoice ? voiceHelpId : undefined}
+                aria-required={voiceRequired || undefined}
+                required={voiceRequired}
                 value={settings.voiceName ?? ""}
-                placeholder={t("generation.field.defaultVoice")}
+                placeholder={t(
+                  voiceRequired
+                    ? "generation.field.voiceIdPlaceholder"
+                    : "generation.field.defaultVoice",
+                )}
                 disabled={running}
                 spellCheck={false}
                 onChange={(event) =>
@@ -641,6 +655,17 @@ export function NodeComposer({
                   })
                 }
               />
+            )}
+            {reading && mossVoice && (
+              <a
+                id={voiceHelpId}
+                href="https://create.moss.cn/voice/library"
+                target="_blank"
+                rel="noreferrer"
+                title={t("generation.field.mossVoiceHelp")}
+              >
+                {t("generation.field.mossVoiceLibrary")}
+              </a>
             )}
             {reading && !backend && (
               <button

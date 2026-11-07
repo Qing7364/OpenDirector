@@ -99,6 +99,7 @@ jobs:
           node tests/browser/editor_save.mjs
           node tests/browser/canvas_crop.mjs
           node tests/browser/canvas_layers.mjs --generated
+          node tests/browser/canvas_switch.mjs
           node tests/browser/structured_editors.mjs --publish
           node tests/browser/local_output_delivery.mjs
           PYTHON=python node tests/browser/timeline_workflow.mjs --full-creation

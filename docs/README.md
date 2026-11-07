@@ -12,6 +12,7 @@ This directory is the entry point for the repository's shared documentation. The
 | [Test contracts](architecture/test-contracts.md) | Test/production boundaries, how to avoid stale assertions and environment-dependent red runs | Test infrastructure, capability gates, or contract ownership change |
 | [Roadmap](development/roadmap.md) | Capability dependencies and delivery criteria | Scope, dependencies, or acceptance criteria change |
 | [Validation guide](development/validation.md) | Reproducible checks and evidence requirements | Tools, runtime requirements, or validation entry points change |
+| [UI performance design](development/ui-performance.md) | Interaction design principles, latency budgets, and measurement | A UI performance principle, target, or measurement method changes |
 | [macOS installation validation](development/macos-install-validation.md) | Installation and usage scenarios verified on Apple Silicon | The corresponding acceptance checks are repeated |
 | [Bilingual interface](development/i18n.md) | Language selection, message organization, and checks | Language policy, message structure, or checks change |
 | [Python installation and packaging](development/packaging.md) | Installation, platform wheel builds, and isolated verification | Packaging, resource paths, or build process changes |

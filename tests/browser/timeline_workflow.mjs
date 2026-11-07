@@ -318,6 +318,13 @@ try {
   page.on("pageerror", (e) => errors.push(e.message));
   let url = base + `/ai-tool/ai-canvas/${pid}`;
   const saved = () => page.getByText("Saved on this device", { exact: true }).waitFor();
+  async function releaseEditSession() {
+    // Drain queued renewals and prevent any renewal after release.
+    await page.evaluate(async () => {
+      await (await import("/src/backend/projects.ts")).releaseBackendProject();
+    });
+  }
+
   const state = () => call(`/api/creation/projects/${pid}`);
   const doc = (s) => s.editorDocuments.find((d) => d.id === editorId);
   async function open() {
@@ -421,6 +428,7 @@ try {
   console.log(
     "PASS timeline save refusal retains draft; retry persists stable tracks, clips and asset references",
   );
+  await releaseEditSession();
   await page.reload();
   await saved();
   await open();
@@ -485,11 +493,8 @@ try {
   );
   // Shut down the actual API process and reopen the same root, not just a page refresh.
   await page.getByRole("button", { name: "Close editor" }).click();
-  // A pagehide keepalive may be dropped when the API stops. Confirm release
-  // while the page is alive so the new page can acquire its own edit lease.
-  await page.evaluate(async () => {
-    await (await import("/src/backend/projects.ts")).releaseBackendProject();
-  });
+  // Confirm the edit lease is released before stopping the API.
+  await releaseEditSession();
   await page.goto("about:blank");
   await stop(server);
   await startApi();
