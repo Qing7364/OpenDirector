@@ -47,10 +47,14 @@ jobs:
         run: npm test
       - name: Check bilingual catalogs
         run: npm run check:i18n
-      - name: Python tests
-        run: python -m pytest tests -q -ra
+      - name: Check layer imports
+        run: lint-imports
+      # Runs before the Python suite: a failing or hanging test run must not hide
+      # whether the checked-in contracts still match the models.
       - name: Check generated contracts
         run: python scripts/generate_contracts.py --check
+      - name: Python tests
+        run: python -m pytest tests -q -ra
       - name: Production build
         run: npm run build
       - name: Verify installed wheel without Node.js

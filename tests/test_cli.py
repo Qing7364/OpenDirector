@@ -126,6 +126,45 @@ def test_cli_project_write_replay_and_lock(tmp_path, monkeypatch):
     assert len(invoke(["project", "show"])["assets"]) == 2
 
 
+def test_cli_repeated_trash_reports_the_missing_project(tmp_path, monkeypatch):
+    """An accepted trash stores no receipt, so the same commandId is a 404.
+
+    The workspace maps that 404 to success. The CLI reports it: the id may
+    simply be wrong, and there is no stored receipt to replay.
+    """
+    api = TestClient(create_app(LocalProjects(tmp_path)), headers={"X-OpenDirector-Request": "1"})
+    original_client = httpx.Client
+
+    def forward(request):
+        response = api.request(request.method, request.url.path, headers=dict(request.headers),
+                               content=request.read())
+        return httpx.Response(response.status_code, headers=response.headers, content=response.content)
+
+    monkeypatch.setattr(cli.httpx, "Client", lambda **kwargs:
+                        original_client(**kwargs, transport=httpx.MockTransport(forward)))
+    runner = CliRunner()
+    project, operation = uuid4(), uuid4()
+    prefix = ["--project", str(project)]
+
+    def invoke(arguments):
+        result = runner.invoke(cli.app, prefix + arguments)
+        assert result.exit_code == 0, result.output
+        return json.loads(result.output)
+
+    invoke(["project", "create", "--name", "Trash once"])
+    revision = invoke(["project", "show"])["project"]["revision"]
+    command = ["--operation-id", str(operation), "project", "trash",
+               "--expected-version", f"project:{project}:{revision}"]
+    assert invoke(command)["status"] == "noop"
+    repeated = runner.invoke(cli.app, prefix + command)
+    # invoke() calls the Typer app directly, so the 404 leaves main()'s
+    # formatter and surfaces as the request error. It is not a success.
+    assert repeated.exit_code != 0
+    assert repeated.exception is not None
+    assert repeated.exception.status == 404
+    assert "not_found" in str(repeated.exception)
+
+
 @pytest.fixture(params=[False, True], ids=['plain', 'color'])
 def help_color(request, monkeypatch):
     monkeypatch.setenv('TERM', 'xterm-256color')

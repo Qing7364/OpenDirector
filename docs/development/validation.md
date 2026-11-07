@@ -13,6 +13,7 @@ npm exec --no -- opencode --version
 
 npm test
 .venv/bin/python -m pytest tests -q
+.venv/bin/lint-imports
 npm run build
 npm run check:i18n
 .venv/bin/python scripts/generate_contracts.py --check
