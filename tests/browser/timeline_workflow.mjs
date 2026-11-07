@@ -485,6 +485,11 @@ try {
   );
   // Shut down the actual API process and reopen the same root, not just a page refresh.
   await page.getByRole("button", { name: "Close editor" }).click();
+  // A pagehide keepalive may be dropped when the API stops. Confirm release
+  // while the page is alive so the new page can acquire its own edit lease.
+  await page.evaluate(async () => {
+    await (await import("/src/backend/projects.ts")).releaseBackendProject();
+  });
   await page.goto("about:blank");
   await stop(server);
   await startApi();
