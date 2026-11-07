@@ -44,6 +44,7 @@ await api(`/creation/projects/${projectId}/commands`, {
 const browser = await launchBrowser();
 try {
   const page = await browser.newPage({
+    locale: "zh-CN",
     viewport: { width: 1720, height: 1120 },
   });
   page.setDefaultTimeout(15000);
