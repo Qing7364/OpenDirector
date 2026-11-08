@@ -1,3 +1,4 @@
+import { RULE_FACTS } from "../contracts/ruleFacts.generated.ts";
 import { tNow } from "../i18n/messages.ts";
 import { request } from "../backend/api.ts";
 import type { TimelineData, TimelineTextOverlayView } from "./model.ts";
@@ -12,7 +13,7 @@ export interface TimelineFontSession {
   assertText(fontId: string, text: string): void;
   dispose(): void;
 }
-const maxFontBytes = 32 * 1024 * 1024;
+const maxFontBytes = RULE_FACTS.timelineFontBytes;
 const coverageBytes = 0x110000 / 8;
 // Cache immutable query facts by the digest of the actual bytes, never by a
 // resource ID, caller-supplied coverage, or a mutable project snapshot.
@@ -142,6 +143,8 @@ export async function prepareTimelineFonts(
     const used = new Set(
       (timeline.overlays ?? []).map((overlay) => overlay.fontId),
     );
+    const distinctFonts = new Set<string>();
+    let totalBytes = 0;
     for (const fontId of used) {
       signal.throwIfAborted();
       const font = timeline.fonts?.find((item) => item.id === fontId);
@@ -166,6 +169,12 @@ export async function prepareTimelineFonts(
       const fingerprint = "sha256:" + hash;
       if (font.asset && font.asset.fingerprint !== fingerprint)
         throw new Error(tNow("errors.archive.integrity"));
+      if (!distinctFonts.has(fingerprint)) {
+        totalBytes += bytes.byteLength;
+        if (totalBytes > RULE_FACTS.timelineFontTotalBytes)
+          throw new Error(tNow("errors.render.fontBudget"));
+        distinctFonts.add(fingerprint);
+      }
       const mask = await fontCoverage(bytes, fingerprint);
       signal.throwIfAborted();
       const family = "OpenDirectorText_" + hash;

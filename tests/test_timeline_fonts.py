@@ -53,7 +53,7 @@ def test_spoofed_or_corrupted_font_is_rejected(tmp_path, payload):
     path = tmp_path / 'content'; path.write_bytes(payload)
     with pytest.raises(ProjectError) as error:
         inspect_file(path, 'font.otf')
-    assert error.value.code == 'invalid_input'
+    assert error.value.code == ('timeline_font_unsupported' if payload == b'plain text' else 'timeline_font_invalid')
 
 
 def test_font_size_is_bounded_before_parsing(tmp_path):
@@ -201,9 +201,10 @@ def test_font_rejection_localizes_http_receipts_without_rewriting_stored_fact(pr
     zh = api.post(path, json=command.model_dump(mode='json'), headers={'Accept-Language': 'zh-CN'})
     en = api.post(path, json=command.model_dump(mode='json'), headers={'Accept-Language': 'en-US'})
     assert zh.status_code == en.status_code == 200
+    assert zh.json()['issues'][0]['code'] == en.json()['issues'][0]['code'] == 'timeline_font_coverage'
     assert zh.json()['issues'][0]['message'] == '所选字体未覆盖全部文字字符。'
     assert en.json()['issues'][0]['message'] == 'The selected font does not cover all text characters.'
-    assert store.receipt(pid, command.commandId).issues[0].message == 'The selected font does not cover all text characters.'
+    assert store.receipt(pid, command.commandId).issues[0].message == '所选字体未覆盖全部文字字符。'
     replay = api.get(f'/api/creation/projects/{pid}/receipts/{command.commandId}', headers={'Accept-Language': 'zh-CN'})
     assert replay.json() == zh.json()
 
@@ -252,8 +253,9 @@ def test_repeated_timeline_saves_reuse_verified_parsing_for_used_and_unused_font
     # A warm cache cannot turn a caller-supplied old fingerprint into evidence
     # for newly changed bytes, even when those bytes still form a valid font.
     with second_path.open('rb') as stream:
-        with pytest.raises(ProjectError, match='fingerprint'):
+        with pytest.raises(ProjectError) as failure:
             fonts.require_font_characters(stream, first.fingerprint, 'B')
+        assert failure.value.code == 'timeline_font_fingerprint'
     assert len(parsed) == 2
 
 

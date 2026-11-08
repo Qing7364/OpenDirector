@@ -1,8 +1,31 @@
 """Skill snapshots retain real resources without following external aliases."""
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 from opendirector.agent.skill_snapshot import prepare_skills, copy_skill_tree, _copy_path
+from opendirector.domain.projects import ProjectError
 from process_helpers import directory_link
+
+
+@pytest.mark.parametrize('component', ['.agents', '.agents/skills'])
+def test_reused_snapshot_rejects_reparse_directories_before_removal(tmp_path, monkeypatch, component):
+    work = tmp_path / 'work'
+    root = work / '.agents/skills'
+    root.mkdir(parents=True)
+    retained = root / 'retained.txt'
+    retained.write_text('retained')
+    original = Path.lstat
+    def reparse_info(path, *args, **kwargs):
+        info = original(path, *args, **kwargs)
+        if path == work / component:
+            return SimpleNamespace(st_mode=info.st_mode, st_file_attributes=0x400)
+        return info
+    monkeypatch.setattr(Path, 'lstat', reparse_info)
+    with pytest.raises(ProjectError, match='技能快照目录'):
+        prepare_skills(work, [])
+    assert retained.read_text() == 'retained'
 
 
 def test_long_skill_resources_are_copied_but_external_directory_aliases_are_not(tmp_path):

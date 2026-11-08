@@ -7,44 +7,18 @@ English, so a missing translation never leaks Chinese into an English UI.
 from fastapi import Request
 
 
-# Exact display translations for font validation. Business receipts retain their
-# original diagnostic; these copies are selected only at the HTTP boundary.
-TIMELINE_FONT_MESSAGES = {
-    "Invalid or unsupported editable timeline package.": "可编辑时间线包无效或格式不受支持。",
-    "Editable timeline packages must not exceed 512 MiB.": "可编辑时间线包不能超过 512 MiB。",
-    "Timeline revision does not exist.": "所选时间线版本不存在。",
-    "Timeline package import does not exist.": "该时间线包导入记录不存在。",
-    "Import operation identity is already used by different input.": "该导入操作标识已用于不同输入，请保留原输入重试。",
-    "Timeline resource registration was rejected.": "时间线资源登记被拒绝，请查询导入记录。",
-    "Font files must not exceed 32 MiB.": "字体文件不能超过 32 MiB。",
-    "Font file is unavailable.": "字体文件不可用，请恢复文件后重试。",
-    "Only static TTF and OTF fonts are supported.": "仅支持静态 TTF 和 OTF 字体，不支持字体集合或可变字体。",
-    "Font data is invalid or incomplete.": "字体数据无效或不完整，请检查实际格式。",
-    "Font content differs from its recorded fingerprint.": "字体内容与登记指纹不一致，请恢复原文件。",
-    "The selected font does not cover all text characters.": "所选字体未覆盖全部文字字符。",
-    "Timeline fonts must not exceed 64 MiB in total.": "时间线实际使用的字体总量不能超过 64 MiB。",
-    "Timeline font resource is not a verified static font.": "时间线字体资源不是已验证的静态字体。",
-    "Timeline font format differs from its recorded MIME type.": "时间线字体实际格式与登记类型不一致。",
-    "Bundled font fingerprint mismatch.": "内置字体指纹不一致，请重新安装应用。",
-    "Bundled font is unavailable.": "内置字体不可用，请重新安装应用。",
-}
+from opendirector.domain.timeline_errors import timeline_error_message
 
-
-def localized_timeline_font_message(language: str | None, message: str) -> str:
-    chinese = TIMELINE_FONT_MESSAGES.get(message)
-    if chinese is None:
-        return message
-    return message if wants_english_language(language) else chinese
-
-
-def localized_timeline_font_receipt(language, receipt):
-    if receipt is None:
-        return None
-    return receipt.model_copy(update={'issues': tuple(issue.model_copy(update={
-        'message': localized_timeline_font_message(language, issue.message),
-    }) for issue in receipt.issues)})
+from opendirector.domain.creation.commands import CommandReceipt
 
 ENGLISH_BY_CODE = {
+    "moss_speech_text": "Enter the text to read aloud.",
+    "moss_speech_voice": "Enter a Voice ID available to your MOSS account.",
+    "moss_speech_reference": "MOSS speech generation does not accept references. Enter speech text and a Voice ID.",
+    "moss_prompt_limit": "MOSS requires a nonempty prompt of at most 4,000 characters, including text references.",
+    "moss_image_size": "MOSS image dimensions must be 256–2048, multiples of 16, and no more than 2,097,152 pixels in total.",
+    "moss_image_reference": "MOSS image generation does not accept image references or editing inputs.",
+    "moss_layout_reference": "MOSS layout JSON does not accept additional text references. Put the requirements in the JSON or remove the text references.",
     "agent_dependency_unavailable": "Bundled Agent is unavailable. Reinstall with pip install --force-reinstall opendirector; for a source checkout, use pip install -e .",
     "invalid_input": "The request is invalid. Check the required fields and their formats.",
     "invalid_project": "The project or asset identifier is invalid.",
@@ -99,8 +73,9 @@ def localized_error_for_language(
     status: int,
     code: str = "operation_rejected",
 ) -> str:
-    if chinese in TIMELINE_FONT_MESSAGES:
-        return localized_timeline_font_message(language, chinese)
+    specific = timeline_error_message(code, language)
+    if specific is not None:
+        return specific
     if not wants_english_language(language):
         return chinese
     # A generic operation code must not hide a more specific HTTP status.
@@ -128,3 +103,10 @@ def localized_error(
         status=status,
         code=code,
     )
+
+
+def localized_receipt(request: Request, receipt: CommandReceipt) -> CommandReceipt:
+    return receipt.model_copy(update={'issues': tuple(
+        issue.model_copy(update={'message': localized_error(request, chinese=issue.message, status=422, code=issue.code)})
+        for issue in receipt.issues
+    )})

@@ -12,6 +12,7 @@ export const errors = {
 
   "errors.render.fontLoad": 'Could not load font "{title}".',
   "errors.render.fontMissing": 'The timeline font "{fontId}" is missing.',
+  "errors.render.fontBudget": "Timeline fonts must not exceed 64 MiB in total.",
   "errors.render.fontCoverage":
     "The selected font does not cover all text characters.",
   "errors.tools.error.submissionUnknown":
@@ -114,6 +115,8 @@ export const errors = {
   "errors.rules.segmentationModel":
     "A visual segmentation model is only for selections, segmentation, and matting. Choose a generation model.",
   "errors.rules.promptRequired": "Enter a generation prompt.",
+  "errors.rules.layoutReferences": "MOSS layout JSON cannot be combined with text references. Put the requirements in the JSON or remove the text references.",
+  "errors.rules.promptTooLong": "This model accepts up to {limit} prompt characters. Shorten the prompt and try again.",
   "errors.rules.musicStyle": "Describe the music style.",
   "errors.rules.speechText": "Enter the text to synthesize.",
   "errors.rules.productViews":
@@ -133,6 +136,9 @@ export const errors = {
     "The current speech service only supports text-to-speech.",
   "errors.rules.voiceId":
     "Enter a voice id supported by the service (letters, numbers, dots, underscores, or hyphens).",
+  "errors.rules.voiceRequired": "Enter a valid Voice ID from the service's voice library before generating.",
+  "errors.rules.referencesUnsupported": "This model does not support references. Disconnect the references before generating.",
+  "errors.generationFailure.voiceNotFound": "The voice was not found or is unavailable to this account. Check the Voice ID in the MOSS voice library.",
   "errors.rules.audioDisable":
     "The video adapter does not support disabling generated audio.",
   "errors.rules.duration":
@@ -660,7 +666,7 @@ export const errors = {
   "errors.generationFailure.authentication":
     "Generation service authentication failed. Check the API key in settings.",
   "errors.generationFailure.permission":
-    "This account does not have permission to call the model.",
+    "The generation service denied access. Check that the API key is correct and valid, and review model permissions and service security policies.",
   "errors.generationFailure.quota":
     "The model account balance or plan quota is insufficient.",
   "errors.generationFailure.rateLimit":
@@ -689,7 +695,12 @@ export const errors = {
     "The provider rejected the reference type or input combination.",
   "errors.generationFailure.privacy":
     "The provider rejected the reference image because it may contain a real person.",
-  "errors.history.failed": "Generation failed. Check the service log.",
+  "errors.generationFailure.sensitiveInput":
+    "The provider flagged the input as sensitive content and declined to generate. Change the prompt or reference media before generating again.",
+  "errors.generationFailure.sensitiveOutput":
+    "The provider flagged the generated content as sensitive and withheld it. Adjust the prompt or reference media before generating again.",
+  "errors.history.failed":
+    "Generation failed. Check the service log.",
   "errors.connection.endpointMissing": "The node no longer exists",
   "errors.connection.sourceEmpty":
     "This node has no content yet. Upload or generate content first.",

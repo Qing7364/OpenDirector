@@ -4,6 +4,8 @@ from uuid import uuid4
 
 import pytest
 
+from capabilities import requires_posix
+
 from opendirector.agent.context import RunContext
 from opendirector.agent.gateway import ToolGateway
 from opendirector.agent.tools import AgentTools
@@ -66,6 +68,16 @@ async def test_failed_calls_replay_without_limiting_subsequent_calls(gateway, mo
 
 
 @pytest.mark.anyio
+async def test_timeline_errors_keep_the_code_at_the_agent_boundary(gateway, monkeypatch):
+    async def reject(*args):
+        raise ProjectError('Specific diagnostic', code='timeline_font_coverage')
+    monkeypatch.setattr(gateway.business, 'execute', reject)
+    result = await gateway.call('font-check', 'read_project', {})
+    assert result.value == {'error': 'Specific diagnostic', 'code': 'timeline_font_coverage'}
+    await gateway.close()
+
+
+@pytest.mark.anyio
 async def test_disconnect_keeps_accepted_operation_and_close_blocks_new_calls(gateway, monkeypatch):
     entered, release = asyncio.Event(), asyncio.Event()
     committed = []
@@ -103,6 +115,7 @@ async def test_rejected_receipt_and_forged_scope_are_consistent(gateway, monkeyp
 
 
 @pytest.mark.anyio
+@requires_posix()
 async def test_skill_read_resolves_directory_alias_and_preserves_boundary(gateway, tmp_path):
     skill = tmp_path / 'skills' / 'character-replacement'
     skill.mkdir(parents=True)

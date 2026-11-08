@@ -764,3 +764,60 @@ English summary: all five findings from the November 7 review are addressed. Dir
 - 保留原受限 token、capability、reject_once/cancel 和安全校验；新增 allow 不含 WRITE_DAC/WRITE_OWNER/FILE_DELETE_CHILD，所有适用 deny 扣除仍执行。真实 SDK 的写入隔离不等于通用读取/网络隔离。模型响应使用本地协议夹具，原生引擎、业务服务、文件/字体、FFmpeg、浏览器和媒体输出是真实执行；未验收费模型服务或关闭浏览器后的后台自主渲染，不扩大 Issue #87 的交换格式及自动转写范围。
 
 原始失败、最终 JUnit、真实 ACL/句柄/双进程对照、769 文件冻结清单、wheel 字节核对和浏览器报告保存在可再生成的本机忽略目录 `test-results/issue87/review-fixes`，本节直接保留他人评估所需关键条件与数值。当前结论替代上一节尚未处理五项的状态；既有工作保留，暂存区为空，**未提交、推送或合并**。
+
+
+## 2026-11-08：PR #193 共享复审修复后的 Mac arm64 检查
+
+本节对应包含本节的共享修复提交，输入为 PR 头 `0934583c29173509b8a41d557165e073a15dc3a7`
+与主分支 `2f35c78ee3b4d7ba389bf62686762b5c849c0062`。最终发布检查点的完整 SHA 由 PR 描述记录；
+复现时先检出该 SHA。采用合并提交保留已发布历史，未重写 Windows 提交。此前各节的 Windows、
+wheel、桌面性能证据保留原始版本范围，不将旧结果重新标为本次运行。
+
+English summary: the shared review fixes integrate main, preserve active references through hidden
+source/group editing, publish common text/font limits, require Pydantic >=2.12, retain typed bilingual
+diagnostics through HTTP/CLI/Agent, and disable unsupported exchange actions with alternatives.
+A fresh independent review found a missing aggregate browser font budget; a failing regression was
+added, then the actual-byte/digest-based limit was implemented. The final complete suites passed.
+This is a Draft checkpoint for the remaining Windows ACL repair and native acceptance, not a new
+Windows, installed-wheel, headed-desktop, paid-model or performance sign-off.
+
+环境：macOS 原生 arm64，Python 3.13.12、Node 24.22.1 arm64、Pydantic 2.14.3、fontTools 4.68.0、
+FFmpeg 8.1、Chrome for Testing 151。使用隔离生成的工程、浏览器 profile、测试 CLI/模型夹具；
+没有用户工程、付费服务或系统安全策略修改。依赖复用本机已安装的原生环境；额外测试工具和
+Pydantic 2.12.0 安装到独立临时目录，没有升级共享环境。
+
+| 检查 | 本次实际结果 |
+| --- | --- |
+| 完整 Python `python -m pytest -q` | **1,306 passed、56 skipped、0 failed、1 warning，133.30 秒，退出 0**。56 项由现有平台/能力门禁跳过，未增加 skip/xfail；不是 Windows 结果。warning 为 Starlette/httpx 弃用提示 |
+| 完整 Node `npm test` | **714 passed、0 failed**，包含字体总量的三个新回归 |
+| 最低 Pydantic 2.12.0 | 时间线文字、规则事实、字体、可编辑包四个模块 **77 passed**；空字体/文字字段省略、Schema 可选性、旧工程指纹和重放均执行。该版本仍产生序列化告警，未将其冒充零 warning |
+| 生成契约、构建、i18n | `generate_contracts.py --check`、`npm run build` 均通过；**2,934 keys、0 problems**。构建保留既有大 chunk 提示 |
+| 架构与浏览器规范 | import-linter **4 kept、0 broken**；browser locale **64 pages、0 problems**；manifest **66 entries**，含两个有原生前提的 manual 项 |
+| 隐藏引用跨边界 | Node 真正读取并准备修改，Python 真正提交并用新存储实例重开；follow_current / pinned+sourceVersion × 来源 / 分组隐藏，**4 passed**。提示词引用、业务身份及最终输入素材均保留 |
+| 真实 UI 编辑 | `timeline_text_editing.mjs` 通过：IME、撤销/重做、保存、Agent/UI 接续、服务重启重开、并发/锁、中文/英文新导出说明、FCPXML/旧 ZIP 禁用 |
+| 真实文字渲染与混音 | `timeline_text_render.mjs` 通过：实际字体、预览/MP4 解码帧、独占结束、层次、纯文字、音频混合及清理；本次不新增性能保证 |
+| 字形覆盖与独立消费者 | `timeline_text_coverage.mjs` 退出 0：取消一个消费者不取消另一个、失败可重试、缺字拒绝、Inspector 预览/恢复；同时执行中英文 |
+| 可编辑包、两份成片 | `timeline_text_archive.mjs` 通过 UI→CLI→UI 跨工程、重启后续编、两次 MP4 发布与精确旧版本、双语拒绝、未知包能力拒绝 |
+| 无文字媒体回归 | `timeline_workflow.mjs` 通过：保存失败保留草稿/重试、实际 MP4 顺序/尺寸/混音、取消无结果、缺失素材拒绝、重启/速度/顺序编辑及第二份成片 |
+
+最初的完整 Python 运行有两项失败：DeepSeek resume 的 ACP cwd 与实际进程目录不一致；主分支将
+media recipe 拆分后，旧测试仍 patch 原模块。前者通过复用经过校验的 DeepSeek 工作目录修复，
+后者将失败注入移到实际 recipe 模块，仍核对异常传播和持久化失败任务。聚焦检查 59 passed，
+随后上表完整 Python 重跑通过。Windows 必须重新覆盖续聊时的 owner-access、技能快照和清理。
+
+独立复核的字体总量反例使用三个不同的 23 MiB 输入，旧浏览器可加载 69 MiB，但后端会拒绝保存。
+新增 Node 回归先观测到“缺少拒绝”，修复后核对恰好 64 MiB、超过上限、不同槽位复用同字节字体；
+按实际 SHA-256 去重，超限字体加载前拒绝，已加载 FontFace 均释放。真实浏览器渲染继续通过。
+
+共享代码的风险边界未扩大：文件仍经平台 execution-file adapter 打开，应用层经 ports 使用基础设施，
+保存仍受会话/锁/对象版本控制；引用的隐藏仅影响展示。字体和包继续验证实际字节、格式、指纹与预算，
+错误码与双语显示分离。完整契约、持久化、真实媒体及失败清理检查的范围如上。
+
+剩余 Windows 工作见 [Windows 指令](issue-87-windows-handoff.zh-CN.md)
+([English](issue-87-windows-handoff.md))。已知 ACL 回滚记账问题未在 Mac 修复：未写入的尝试可能认领
+外部同字节 deny；实际 WinAPI 并发、setter 成功后冲突、租约退出均需本机回归。七组浏览器的
+Windows host adapter 需要正式提交并对最终 SHA 验证。本轮没有新建 Windows wheel，也没有重跑
+可见桌面 1080p/2,000-cue 性能或已安装 wheel 浏览器；这些不可由上述五组源码浏览器替代。
+
+本地完整日志位于 `test-results/issue87/pr193-shared-review-20261108/`（忽略的验收产物），
+复现命令和范围已记在本节，读取仓库不依赖该本机目录。

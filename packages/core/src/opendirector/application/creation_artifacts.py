@@ -4,9 +4,8 @@ from pathlib import Path
 
 from opendirector.domain.creation.project import ProjectSnapshot
 from opendirector.domain.projects import ProjectError
-from opendirector.infrastructure.creation_files import CHUNK_BYTES
-from opendirector.infrastructure.creation_uploads import asset_name
-from opendirector.infrastructure.execution_files import execution_file
+from opendirector.ports.files import CHUNK_BYTES
+from opendirector.ports.gateway import gateway
 
 
 def publish_artifact(assets, command, *, execution_directory: Path, session, provenance, source='agent'):
@@ -23,9 +22,9 @@ def publish_artifact(assets, command, *, execution_directory: Path, session, pro
         snapshot = records[0].snapshot
         for reference in request.sources:
             assets._reference(snapshot, reference)
-    name = asset_name(request.name)
+    name = gateway().asset_name(request.name)
     key = command.commandId
-    with execution_file(execution_directory, request.path) as stream:
+    with gateway().execution_file(execution_directory, request.path) as stream:
         facts = os.fstat(stream.fileno())
         writer = assets.uploads.begin(project_id, key, session, name, expected_kind=request.expectedKind)
         try:

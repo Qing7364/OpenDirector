@@ -8,6 +8,7 @@ from .assets import AssetRef, MediaMetadata
 from .base import Contract, Digest, GenerationKind, MediaKind, ObjectVersion, Point, Positive, Revision, digest, unique
 from .canvas import CanvasItem
 from .editors import EditorDocument
+from opendirector.domain.rule_facts import PROMPT_MAX_LENGTH
 from .generation import GenerationSpec, Job, PromptPart, Reference
 
 
@@ -185,7 +186,7 @@ class NodeVersionApply(Contract):
 
 class SpecPromptWrite(Contract):
     specId: UUID = Field(description='Generation configuration ID.')
-    prompt: str = Field(max_length=20000, description='Generation prompt text.')
+    prompt: str = Field(max_length=PROMPT_MAX_LENGTH, description='Generation prompt text.')
     promptContent: tuple[PromptPart, ...] | None = Field(default=None, description='Structured prompt text and reference tokens.')
 
 
@@ -323,7 +324,7 @@ _COMMANDS = (
     ('AssetWriteTextCommand', 'asset.writeText', AssetWriteText, 'Write a text asset or a new version of an existing text asset.'),
     ('AssetMetadataCommand', 'asset.updateMetadata', AssetMetadataUpdate, 'Rename an asset.'),
     ('AssetDeleteCommand', 'asset.delete', AssetDelete, 'Delete assets after an impact preview.'),
-    ('CanvasCreateGenerationCommand', 'canvas.createGeneration', CanvasCreateGeneration, 'Create a visible generation node and references atomically; retain source node identity for pinned references too.'),
+    ('CanvasCreateGenerationCommand', 'canvas.createGeneration', CanvasCreateGeneration, 'Create a visible generation node and references atomically, preserving canvas source connections, including pinned ones.'),
     ('CanvasShowCommand', 'canvas.show', CanvasShow, 'Create or restore a canvas display item.'),
     ('CanvasMoveCommand', 'canvas.move', CanvasMove, 'Move one or more canvas items.'),
     ('CanvasUpdateCommand', 'canvas.update', CanvasPresentationUpdate, 'Update canvas presentation, grouping or lock state.'),
@@ -337,7 +338,7 @@ _COMMANDS = (
     ('CanvasEditorAttachCommand', 'canvas.attachEditor', CanvasEditorAttach, 'Attach an editor document to a canvas item.'),
     ('CanvasEditorDetachCommand', 'canvas.detachEditor', CanvasEditorAttach, 'Detach an editor document from a canvas item.'),
     ('SpecCreateCommand', 'generationSpec.create', SpecWrite, 'Create a generation configuration without submitting a job.'),
-    ('SpecUpdateCommand', 'generationSpec.update', SpecWrite, 'Replace the complete generation configuration; preserve unedited fields and submit its current expected version.'),
+    ('SpecUpdateCommand', 'generationSpec.update', SpecWrite, 'Replace the complete generation configuration; preserve unedited fields and use the current version. Jobs are unchanged.'),
     ('SpecRestoreCommand', 'generationSpec.restore', SpecRestore, 'Restore generation settings from a historical command.'),
     ('SpecPromptCommand', 'generationSpec.setPrompt', SpecPromptWrite, 'Update prompt text and structured references.'),
     ('ReferenceAddCommand', 'reference.add', ReferenceWrite, 'Add a generation reference; expectedVersions must include its target generation_spec.'),
@@ -393,9 +394,16 @@ def command_fingerprint(command: Command) -> str:
     return digest(command)
 
 
+from opendirector.domain.timeline_errors import TimelineIssueCode
+
+IssueCode = Literal[TimelineIssueCode, 'invalid_input', 'revision_conflict', 'role_restricted', 'missing_object', 'reference_invalid',
+                    'capability_unsupported', 'preview_expired', 'storage_unavailable', 'submission_unknown', 'provider_error',
+                    'moss_speech_text', 'moss_speech_voice', 'moss_speech_reference', 'moss_prompt_limit',
+                    'moss_image_size', 'moss_image_reference', 'moss_layout_reference']
+
+
 class ContractIssue(Contract):
-    code: Literal['invalid_input', 'revision_conflict', 'role_restricted', 'missing_object', 'reference_invalid',
-                  'capability_unsupported', 'preview_expired', 'storage_unavailable', 'submission_unknown', 'provider_error'] = Field(description='Stable error or issue code.')
+    code: IssueCode = Field(description='Stable error or issue code.')
     message: str = Field(min_length=1, max_length=500, description='Human-readable issue description.')
     objectId: UUID | None = Field(default=None, description='Target business object ID.')
     field: str | None = Field(default=None, max_length=200, description='Path of the field responsible for this issue.')

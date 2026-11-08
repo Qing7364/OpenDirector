@@ -31,21 +31,23 @@ import {
 import { mediaBlobDataUrl } from "../canvas/localMediaRuntime.ts";
 import { generationContentPatch } from "../canvas/generationReferenceContent.ts";
 import { assemblyResource } from "../canvas/editorAssembly.ts";
-import { MUSIC_SECONDS } from "./rules.ts";
+import { RULE_FACTS } from "../contracts/ruleFacts.generated.ts";
+import { canvasReferenceRole, MUSIC_SECONDS } from "./rules.ts";
 import {
   assetReference,
   CreationClient,
   CreationCommandError,
   currentAsset,
-  isCurrentCanvasReference,
   itemSpec,
   objectVersion,
   visibleItems,
   type CreationOperation,
 } from "./creationClient.ts";
+import { sameJsonValue } from "./sameJsonValue.ts";
 
-const same = (a: unknown, b: unknown) =>
-  JSON.stringify(a) === JSON.stringify(b);
+/** Every comparison here is over a document that carries its media inline, so
+ * it reads the values instead of serializing both sides to compare strings. */
+const same = sameJsonValue;
 const presentationFields = [
   "title",
   "width",
@@ -502,18 +504,6 @@ export class CreationProjection {
       ),
     );
     const visible = visibleItems(snapshot);
-    const previouslyVisible = new Set(
-      cached.document.nodes.map((node) => node.id),
-    );
-    // A source's visibility can change the content of another node's prompt.
-    if (
-      snapshot.references.some(
-        (ref) =>
-          isCurrentCanvasReference(ref, visible) !==
-          isCurrentCanvasReference(ref, previouslyVisible),
-      )
-    )
-      return;
     const ordered: CanvasNode[] = [];
     for (const item of snapshot.canvasItems) {
       const node = nodes.get(item.id);
@@ -559,9 +549,8 @@ export class CreationProjection {
     document.viewport = view.viewport;
     document.viewPersisted = this.client.hasPersistedView();
     const visible = visibleItems(snapshot);
-    const currentReferences = snapshot.references.filter((ref) =>
-      isCurrentCanvasReference(ref, visible),
-    );
+    // Canvas visibility changes the projection, never the accepted business inputs.
+    const currentReferences = snapshot.references.filter((ref) => ref.active);
     const currentReferenceById = new Map(
       currentReferences.map((ref) => [ref.id, ref]),
     );
@@ -920,7 +909,9 @@ export class CreationProjection {
           kind: "text",
           parameters: {
             thinking: node.data.agentSettings?.thinking ?? "auto",
-            maxTokens: node.data.agentSettings?.maxTokens ?? 8192,
+            maxTokens:
+              node.data.agentSettings?.maxTokens ??
+              RULE_FACTS.textDefaultMaxTokens,
           },
         };
       case "image":
@@ -1255,7 +1246,6 @@ export class CreationProjection {
     if (!this.baseline || document.id !== this.client.id)
       throw new Error(tNow("errors.backend.openUnifiedProject"));
     const basis = this.basis;
-    const visible = visibleItems(basis);
     const oldNodes = new Map(
       [...this.baseline.nodes, ...(this.baseline.hiddenNodes ?? [])].map(
         (n) => [n.id, n],
@@ -1738,24 +1728,7 @@ export class CreationProjection {
           ref.binding === "follow_current"
             ? items.get(ref.source.id)?.kind
             : ref.source.kind;
-        const role =
-          settings?.videoMode === "continuation" && sourceKind === "video"
-            ? "continuation"
-            : settings?.videoMode === "first-last" &&
-                ((ref.binding === "follow_current" &&
-                  ref.source.id === settings.firstFrameNodeId) ||
-                  (ref.binding === "pinned" &&
-                    ref.role === "first_frame" &&
-                    !settings.firstFrameNodeId))
-              ? "first_frame"
-              : settings?.videoMode === "first-last" &&
-                  ((ref.binding === "follow_current" &&
-                    ref.source.id === settings.lastFrameNodeId) ||
-                    (ref.binding === "pinned" &&
-                      ref.role === "last_frame" &&
-                      !settings.lastFrameNodeId))
-                ? "last_frame"
-                : "reference";
+        const role = canvasReferenceRole(settings, sourceKind, ref);
         if (role !== ref.role) {
           expect("reference", ref);
           operations.push({
@@ -1776,24 +1749,7 @@ export class CreationProjection {
               ? (document.nodes.find((item) => item.id === ref.source.id)
                   ?.type ?? items.get(ref.source.id)?.kind)
               : ref.source.kind;
-          const role =
-            settings?.videoMode === "continuation" && sourceKind === "video"
-              ? "continuation"
-              : settings?.videoMode === "first-last" &&
-                  ((ref.binding === "follow_current" &&
-                    ref.source.id === settings.firstFrameNodeId) ||
-                    (ref.binding === "pinned" &&
-                      ref.role === "first_frame" &&
-                      !settings.firstFrameNodeId))
-                ? "first_frame"
-                : settings?.videoMode === "first-last" &&
-                    ((ref.binding === "follow_current" &&
-                      ref.source.id === settings.lastFrameNodeId) ||
-                      (ref.binding === "pinned" &&
-                        ref.role === "last_frame" &&
-                        !settings.lastFrameNodeId))
-                  ? "last_frame"
-                  : "reference";
+          const role = canvasReferenceRole(settings, sourceKind, ref);
           operations[index] = {
             type: op.type,
             payload: { reference: { ...ref, role } },
@@ -1833,7 +1789,7 @@ export class CreationProjection {
       // from the prompt and must also precede any replacement additions.
       for (const ref of basis.references.filter(
         (ref) =>
-          isCurrentCanvasReference(ref, visible) &&
+          ref.active &&
           ref.targetSpecId === specId &&
           node.data.promptContent !== undefined &&
           (ref.binding === "pinned" || previousMentions.has(ref.id)) &&
@@ -2045,16 +2001,20 @@ export class CreationProjection {
   async save(document: CanvasDocument, options: { saveView?: boolean } = {}) {
     // Run inside the caller's save queue, after any pending acknowledgement.
     // A no-op must not advance the editing basis to unseen server changes.
-    if (
-      options.saveView === false &&
+    const unchanged =
       this.baseline &&
       document.id === this.baseline.id &&
-      same(
-        [document.nodes, document.hiddenNodes, document.edges],
-        [this.baseline.nodes, this.baseline.hiddenNodes, this.baseline.edges],
-      )
-    )
+      (document === this.baseline ||
+        same(
+          [document.nodes, document.hiddenNodes, document.edges],
+          [this.baseline.nodes, this.baseline.hiddenNodes, this.baseline.edges],
+        ));
+    if (unchanged) {
+      // The business content is already stored. Only a changed viewport or
+      // generation count needs the separate preference write.
+      if (options.saveView !== false) await this.saveView(document);
       return false;
+    }
     const { operations, versions } = await this.prepare(document);
     let expected = versions;
     for (let attempt = 0; ; attempt++) {
@@ -2091,17 +2051,25 @@ export class CreationProjection {
     this.viewError = "";
     try {
       const view = await this.client.view();
-      await this.client.view({
-        viewport: document.viewport,
-        generationCounts: {
-          ...view.generationCounts,
-          ...Object.fromEntries(
-            document.nodes
-              .filter((node) => node.data.settings)
-              .map((node) => [node.id, node.data.settings!.count ?? 1]),
-          ),
-        },
-      });
+      const generationCounts = {
+        ...view.generationCounts,
+        ...Object.fromEntries(
+          document.nodes
+            .filter((node) => node.data.settings)
+            .map((node) => [node.id, node.data.settings!.count ?? 1]),
+        ),
+      };
+      // Autosave, switch flushes and open all end here. Rewriting an unchanged
+      // viewport delays the next document without persisting any new fact.
+      const unchangedCounts =
+        Object.keys(view.generationCounts).length ===
+          Object.keys(generationCounts).length &&
+        same(
+          Object.entries(view.generationCounts).sort(),
+          Object.entries(generationCounts).sort(),
+        );
+      if (same(view.viewport, document.viewport) && unchangedCounts) return;
+      await this.client.view({ viewport: document.viewport, generationCounts });
     } catch (error) {
       this.viewError = error instanceof Error ? error.message : String(error);
     }

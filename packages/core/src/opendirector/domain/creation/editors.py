@@ -5,6 +5,10 @@ from uuid import UUID
 
 from pydantic import Field, StrictBool, StrictFloat, StrictInt, StrictStr, field_validator, model_validator
 
+from opendirector.domain.rule_facts import (
+    TIMELINE_FONT_LIMIT, TIMELINE_OVERLAY_LIMIT, TIMELINE_TEXT_MAX_LENGTH, TIMELINE_TEXT_TOTAL_LENGTH,
+)
+
 from .assets import AssetRef
 from .base import Contract, Identifier, NonNegative, Number, Point, Positive, PositiveInt, ProjectEntity, unique
 
@@ -121,7 +125,7 @@ class TimelineTextOverlay(Contract):
     id: Identifier = Field(description='Stable document-local text ID.')
     start: NonNegative = Field(description='Absolute start time in seconds.')
     end: Positive = Field(description='Exclusive absolute end time in seconds.')
-    text: str = Field(min_length=1, max_length=4096, description='Plain text normalized to LF, counted in Unicode code points.')
+    text: str = Field(min_length=1, max_length=TIMELINE_TEXT_MAX_LENGTH, description='Plain text normalized to LF, counted in Unicode code points.')
     x: Unit = Field(description='Normalized text box left position.')
     y: Unit = Field(description='Normalized text box top position.')
     maxWidth: Annotated[float, Field(strict=True, gt=0, le=1)] = Field(description='Text box width as a fraction of output width.')
@@ -155,8 +159,8 @@ class TimelineData(Contract):
     tracks: tuple[TimelineTrack, ...] = Field(min_length=1, description='Ordered timeline tracks.')
     importedAssets: tuple[TimelineResource, ...] = Field(default=(), description='Source assets available to timeline clips.')
 
-    fonts: tuple[TimelineFontResource, ...] = Field(default=(), max_length=16, exclude_if=lambda v: not v, description='Document-local registered font resources; omitted when empty.')
-    overlays: tuple[TimelineTextOverlay, ...] = Field(default=(), max_length=2000, exclude_if=lambda v: not v, description='Timed text ordered from bottom to top; omitted when empty.')
+    fonts: tuple[TimelineFontResource, ...] = Field(default=(), max_length=TIMELINE_FONT_LIMIT, exclude_if=lambda v: not v, description='Document-local registered font resources; omitted when empty.')
+    overlays: tuple[TimelineTextOverlay, ...] = Field(default=(), max_length=TIMELINE_OVERLAY_LIMIT, exclude_if=lambda v: not v, description='Timed text ordered from bottom to top; omitted when empty.')
 
     @model_validator(mode='after')
     def tracks_and_clips(self):
@@ -175,7 +179,7 @@ class TimelineData(Contract):
             if overlay.fontId not in fonts:
                 raise ValueError('Timeline text references an unknown font')
             timeline_text_frame_range(overlay.start, overlay.end, self.fps)
-        if sum(len(overlay.text) for overlay in self.overlays) > 200000:
+        if sum(len(overlay.text) for overlay in self.overlays) > TIMELINE_TEXT_TOTAL_LENGTH:
             raise ValueError('Timeline total text exceeds the code point limit')
         return self
 

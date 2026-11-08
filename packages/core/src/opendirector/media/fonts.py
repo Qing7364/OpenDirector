@@ -10,8 +10,9 @@ from typing import BinaryIO
 from fontTools.ttLib import TTFont
 
 from opendirector.domain.projects import ProjectError
+from opendirector.domain.timeline_errors import timeline_error, timeline_error_message
 
-MAX_FONT_BYTES = 32 * 1024 * 1024
+from opendirector.domain.rule_facts import TIMELINE_FONT_BYTES as MAX_FONT_BYTES
 FONT_MIMES = frozenset({'font/ttf', 'font/otf'})
 FONT_SIGNATURES = (b'\x00\x01\x00\x00', b'OTTO', b'true', b'ttcf', b'wOFF', b'wOF2')
 
@@ -35,23 +36,23 @@ def _bytes(path: Path | BinaryIO) -> bytes:
             path.seek(0)
         else:
             if path.stat().st_size > MAX_FONT_BYTES:
-                raise ProjectError('Font files must not exceed 32 MiB.', 413)
+                raise timeline_error('timeline_font_too_large', 413)
             with path.open('rb') as stream:
                 value = stream.read(MAX_FONT_BYTES + 1)
     except OSError:
-        raise ProjectError('Font file is unavailable.', 409, code='storage_unavailable') from None
+        raise timeline_error('timeline_font_unavailable', 409) from None
     if len(value) > MAX_FONT_BYTES:
-        raise ProjectError('Font files must not exceed 32 MiB.', 413)
+        raise timeline_error('timeline_font_too_large', 413)
     return value
 
 
 def _inspect(value: bytes) -> FontInspection:
     if value[:4] not in {b'\x00\x01\x00\x00', b'OTTO'}:
-        raise ProjectError('Only static TTF and OTF fonts are supported.')
+        raise timeline_error('timeline_font_unsupported', 400)
     try:
         with TTFont(BytesIO(value), lazy=False) as font:
             if any(table in font for table in ('fvar', 'gvar', 'avar', 'CFF2')):
-                raise ProjectError('Only static TTF and OTF fonts are supported.')
+                raise timeline_error('timeline_font_unsupported', 400)
             required = {'head', 'hhea', 'maxp', 'name', 'OS/2', 'hmtx', 'cmap'}
             if not required.issubset(font.keys()):
                 raise ValueError('Required font tables missing')
@@ -82,13 +83,13 @@ def _inspect(value: bytes) -> FontInspection:
     except Exception:
         # Third-party table parsers raise several format-specific exceptions.
         # Do not expose table contents, paths, or user text through the error.
-        raise ProjectError('Font data is invalid or incomplete.') from None
+        raise timeline_error('timeline_font_invalid', 400) from None
 
 
 def _cached_inspection(value: bytes, *, fingerprint: str | None = None) -> FontInspection:
     actual = 'sha256:' + sha256(value).hexdigest()
     if fingerprint is not None and actual != fingerprint:
-        raise ProjectError('Font content differs from its recorded fingerprint.', 409, code='storage_unavailable')
+        raise timeline_error('timeline_font_fingerprint', 409)
     with _cache_lock:
         inspection = _cache.get(actual)
         if inspection is not None:
@@ -110,4 +111,4 @@ def inspect_font(path: Path | BinaryIO) -> FontInspection:
 def require_font_characters(path: Path | BinaryIO, fingerprint: str, text: str) -> None:
     inspection = _cached_inspection(_bytes(path), fingerprint=fingerprint)
     if any(ord(char) not in inspection.characters for char in text if char not in '\n\t'):
-        raise ProjectError('The selected font does not cover all text characters.')
+        raise timeline_error('timeline_font_coverage', 400)

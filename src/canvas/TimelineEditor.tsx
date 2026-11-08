@@ -1,3 +1,4 @@
+import { RULE_FACTS } from "../contracts/ruleFacts.generated.ts";
 import {
   useEffect,
   useMemo,
@@ -33,6 +34,7 @@ import {
   placeTimelineClip,
   removeTimelineClip,
   timelineDuration,
+  timelineHasTextResources,
   timelineSegments,
   updateTimelineClip,
   splitTimelineClip,
@@ -308,6 +310,7 @@ export function TimelineEditor({
     [timeline, dragPreview],
   );
   const duration = timelineDuration(timeline);
+  const hasTextResources = timelineHasTextResources(timeline);
   const trackWidth = Math.max(
     viewportWidth,
     191 + (duration + 2) * pixelsPerSecond,
@@ -755,7 +758,7 @@ export function TimelineEditor({
     try {
       const signature = new Uint8Array(await file.slice(0, 4).arrayBuffer());
       if (
-        file.size > 32 * 1024 * 1024 ||
+        file.size > RULE_FACTS.timelineFontBytes ||
         file.size < 12 ||
         !/\.(otf|ttf)$/i.test(file.name) ||
         !(
@@ -1215,13 +1218,15 @@ export function TimelineEditor({
             {t("timeline.action.exportJson")}
           </button>
           <button
-            disabled={busy || !duration || !textInputValid || gesturePending}
+            disabled={busy || !duration || !textInputValid || gesturePending || hasTextResources}
+            title={hasTextResources ? t("timeline.text.unsupportedExchange") : undefined}
             onClick={exportXml}
           >
             {t("timeline.action.exportFcpXml")}
           </button>
           <button
-            disabled={busy || !duration || !textInputValid || gesturePending}
+            disabled={busy || !duration || !textInputValid || gesturePending || hasTextResources}
+            title={hasTextResources ? t("timeline.text.unsupportedExchange") : undefined}
             onClick={() => void exportPackage()}
           >
             {t("timeline.action.exportZip")}
@@ -1235,6 +1240,11 @@ export function TimelineEditor({
         </>
       }
     >
+      {hasTextResources && (
+        <p className="cw-domain-note">
+          {t("timeline.text.unsupportedExchange")}
+        </p>
+      )}
       {nativeMessage && (
         <p className="cw-domain-note" role="status">
           {nativeMessage}

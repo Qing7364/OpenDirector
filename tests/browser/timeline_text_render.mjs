@@ -78,7 +78,7 @@ try {
   );
   await until(async () => (await fetch(base)).ok);
   browser = await launchBrowser();
-  const page = await browser.newPage();
+  const page = await browser.newPage({ locale: "en-US" });
   page.setDefaultTimeout(180000);
   await page.route(base + "/text-render-fixture", (route) =>
     route.fulfill({

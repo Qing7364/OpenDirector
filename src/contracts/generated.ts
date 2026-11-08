@@ -386,7 +386,7 @@ export interface ContractInput {
 }
 
 export interface ContractIssueInput extends ContractInput {
-  readonly code: "invalid_input" | "revision_conflict" | "role_restricted" | "missing_object" | "reference_invalid" | "capability_unsupported" | "preview_expired" | "storage_unavailable" | "submission_unknown" | "provider_error";
+  readonly code: "timeline_package_invalid" | "timeline_package_too_large" | "timeline_revision_missing" | "timeline_import_missing" | "timeline_import_conflict" | "timeline_registration_rejected" | "timeline_font_too_large" | "timeline_font_unavailable" | "timeline_font_unsupported" | "timeline_font_invalid" | "timeline_font_fingerprint" | "timeline_font_coverage" | "timeline_font_total_bytes" | "timeline_font_unverified" | "timeline_font_mime" | "timeline_bundled_font_fingerprint" | "timeline_bundled_font_unavailable" | "invalid_input" | "revision_conflict" | "role_restricted" | "missing_object" | "reference_invalid" | "capability_unsupported" | "preview_expired" | "storage_unavailable" | "submission_unknown" | "provider_error" | "moss_speech_text" | "moss_speech_voice" | "moss_speech_reference" | "moss_prompt_limit" | "moss_image_size" | "moss_image_reference" | "moss_layout_reference";
   readonly message: string;
   readonly objectId?: string | null;
   readonly field?: string | null;
@@ -662,6 +662,9 @@ export interface ImageParametersInput extends ContractInput {
 
 export interface InputRulesInput extends ContractInput {
   readonly profile: string;
+  readonly maxPromptCharacters?: number | null;
+  readonly voiceRequired?: boolean | null;
+  readonly referencesAllowed?: boolean | null;
   readonly allowedKinds: ReadonlyArray<"text" | "image" | "video" | "audio">;
   readonly maxImages: number;
   readonly maxVideos: number;
@@ -1927,7 +1930,7 @@ export interface Contract {
 }
 
 export interface ContractIssue extends Contract {
-  readonly code: "invalid_input" | "revision_conflict" | "role_restricted" | "missing_object" | "reference_invalid" | "capability_unsupported" | "preview_expired" | "storage_unavailable" | "submission_unknown" | "provider_error";
+  readonly code: "timeline_package_invalid" | "timeline_package_too_large" | "timeline_revision_missing" | "timeline_import_missing" | "timeline_import_conflict" | "timeline_registration_rejected" | "timeline_font_too_large" | "timeline_font_unavailable" | "timeline_font_unsupported" | "timeline_font_invalid" | "timeline_font_fingerprint" | "timeline_font_coverage" | "timeline_font_total_bytes" | "timeline_font_unverified" | "timeline_font_mime" | "timeline_bundled_font_fingerprint" | "timeline_bundled_font_unavailable" | "invalid_input" | "revision_conflict" | "role_restricted" | "missing_object" | "reference_invalid" | "capability_unsupported" | "preview_expired" | "storage_unavailable" | "submission_unknown" | "provider_error" | "moss_speech_text" | "moss_speech_voice" | "moss_speech_reference" | "moss_prompt_limit" | "moss_image_size" | "moss_image_reference" | "moss_layout_reference";
   readonly message: string;
   readonly objectId: string | null;
   readonly field: string | null;
@@ -2203,6 +2206,9 @@ export interface ImageParameters extends Contract {
 
 export interface InputRules extends Contract {
   readonly profile: string;
+  readonly maxPromptCharacters?: number | null;
+  readonly voiceRequired?: boolean | null;
+  readonly referencesAllowed?: boolean | null;
   readonly allowedKinds: ReadonlyArray<"text" | "image" | "video" | "audio">;
   readonly maxImages: number;
   readonly maxVideos: number;

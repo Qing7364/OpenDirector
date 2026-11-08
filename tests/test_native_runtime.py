@@ -1,11 +1,14 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import faulthandler
 import json
 import os
 from pathlib import Path
 import socket
 import subprocess
 import sys
+import threading
+import time
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -33,7 +36,12 @@ if 'Continue plan' in prompt:
  assert 'Save a plan' not in prompt
  runtime = os.environ['TEST_RUNTIME']
  resume_args = {'codex': ['resume', 'test-native', '-'], 'claude': ['--resume', 'test-native']}
- assert sys.argv[1:] == resume_args.get(runtime, ['--session', 'test-native'])
+ assert sys.argv[2:] == resume_args.get(runtime, ['--session', 'test-native'])
+workspace_marker = Path('.continuation-test')
+if 'Continue plan' in prompt:
+ assert workspace_marker.read_text() == str(Path.cwd())
+else:
+ workspace_marker.write_text(str(Path.cwd()))
 work = Path(prompt.split('Execution directory: ', 1)[1].split(chr(10), 1)[0])
 assert list((work / '.agents/skills').glob('*/SKILL.md'))
 subprocess.run([sys.executable, '-c', 'from pathlib import Path; Path("environment-check.txt").write_text("native execution works")'], cwd=work, check=True)
@@ -114,10 +122,14 @@ def test_native_events_real_cli_and_shared_write(tmp_path, monkeypatch, runtime)
     monkeypatch.setattr(CreationAssets, 'preview', lambda self, project_id, asset_id, target:
         {'preview': {'path': str(preview), 'mimeType': 'image/webp'}})
     def command(kind, work, socket, token, model, model_url, catalog, **kwargs):
-        return [sys.executable, str(script)], {**os.environ, 'TEST_RUNTIME':kind,
+        return [sys.executable, str(script), "--"], {**os.environ, 'TEST_RUNTIME':kind,
             'PWD':str(kwargs.get('native_directory') or work), **(kwargs.get('bridge_env') or {'OPENDIRECTOR_AGENT_SOCKET':socket})}
     monkeypatch.setattr(native, 'command', command)
     monkeypatch.setattr(native, 'executable', lambda _: sys.executable)
+    async def fixture_skills(*args):
+        entry = tmp_path / '.opendirector/skills/character-replacement/SKILL.md'
+        return [{'name': 'character-replacement', 'description': 'Test', 'filePath': str(entry)}]
+    monkeypatch.setattr('opendirector_api.agent.skills', fixture_skills)
     with TestClient(create_app(local), headers={'X-OpenDirector-Request':'1','X-OpenDirector-Session':str(uuid4())}) as client:
         path = project(client)
         turn = {'id':str(uuid4()),'runtime':runtime,'runtimeModel':'test-model','text':'Save a plan','skills':['character-replacement']}
@@ -154,7 +166,7 @@ def test_native_events_real_cli_and_shared_write(tmp_path, monkeypatch, runtime)
             saved = json.loads(saved_session.read_text())
             assert saved['sessionId'] == 'test-native' and saved['directory'] == str(work)
         workspaces = list(local.root.rglob('agent-runs/*/work'))
-        assert len(workspaces) == 2
+        assert len(workspaces) == (1 if runtime in {'codex', 'claude'} else 2)
         assert all((directory / 'environment-check.txt').read_text() == 'native execution works' for directory in workspaces)
 
 
@@ -245,9 +257,51 @@ def test_opencode_resume_rejects_unexpected_or_changing_session_ids(tmp_path, mo
 
 @pytest.mark.parametrize("runtime", ["default"])
 @pytest.mark.parametrize("resume", [False, True])
-def test_real_opencode_native_skill_and_gateway_write(tmp_path, runtime, resume):
+def test_real_opencode_native_skill_and_gateway_write(tmp_path, runtime, resume, monkeypatch, request):
+    if os.environ.get('OPENDIRECTOR_REAL_CLI') != '1':
+        pytest.skip('Set OPENDIRECTOR_REAL_CLI=1 to run the bundled CLI integration')
     if native.executable('default') is None:
         pytest.skip('Bundled OpenCode is not installed')
+    if os.environ.get('OPENDIRECTOR_REAL_CLI_WORKER') != '1':
+        case = f'{__file__}::test_real_opencode_native_skill_and_gateway_write[{resume}-{runtime}]'
+        result = subprocess.run([sys.executable, '-m', 'pytest', case, '-s', '-q'],
+            env={**os.environ, 'OPENDIRECTOR_REAL_CLI_WORKER': '1'},
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=90)
+        assert result.returncode == 0, result.stdout
+        return
+
+    for name in ('XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME'):
+        monkeypatch.setenv(name, str(tmp_path / name.lower()))
+    # A watchdog in the isolated worker can report all thread stacks and kill
+    # CLI process groups even when TestClient is blocked waiting for a stream.
+    from opendirector.agent.process import _signal_tree
+    processes = []
+    spawn = asyncio.create_subprocess_exec
+    async def tracked_spawn(*args, **kwargs):
+        process = await spawn(*args, **kwargs)
+        processes.append((process, kwargs.get('start_new_session', False)))
+        if os.environ.get('OPENDIRECTOR_TEST_CLI_STALL') and 'run' in args:
+            Path(os.environ['OPENDIRECTOR_TEST_CLI_STALL']).write_text(str(process.pid))
+            await asyncio.Event().wait()
+        return process
+    monkeypatch.setattr(asyncio, 'create_subprocess_exec', tracked_spawn)
+    def timeout():
+        print('Real OpenCode integration timed out; thread stacks:', file=sys.stderr, flush=True)
+        faulthandler.dump_traceback(file=sys.stderr, all_threads=True)
+        for process, group in reversed(processes):
+            if process.returncode is None:
+                try:
+                    if group:
+                        _signal_tree(process, force=True)
+                    else:
+                        process.kill()
+                except OSError as error:
+                    print(f'Could not stop CLI process {process.pid}: {error}', file=sys.stderr, flush=True)
+        os._exit(1)
+    watchdog = threading.Timer(10 if os.environ.get('OPENDIRECTOR_TEST_CLI_STALL') else 60, timeout)
+    watchdog.daemon = True
+    watchdog.start()
+    request.addfinalizer(watchdog.cancel)
     requests = []
     def model(request):
         payload = json.loads(request.content)
@@ -255,6 +309,7 @@ def test_real_opencode_native_skill_and_gateway_write(tmp_path, runtime, resume)
             requests.append(payload)
         assert request.headers['authorization'] == 'Bearer server-only-key'
         count = len(requests)
+        print(f'stage: model request {count} (tools={bool(payload.get("tools"))})', flush=True)
         if not payload.get('tools'):
             call = None
         elif count == 1:
@@ -279,6 +334,7 @@ def test_real_opencode_native_skill_and_gateway_write(tmp_path, runtime, resume)
     provider = ChatCompletions(httpx.MockTransport(model))
     with TestClient(create_app(local, chat_provider=provider), headers={'X-OpenDirector-Request':'1','X-OpenDirector-Session':str(uuid4())}) as client:
         path = project(client)
+        print('stage: discover skills', flush=True)
         catalog = client.get(path + '/assistant/skills').json()
         assert {item['name'] for item in catalog} == {'character-replacement'}
         assert all(set(item) == {'name', 'description', 'source'} for item in catalog)
@@ -286,6 +342,7 @@ def test_real_opencode_native_skill_and_gateway_write(tmp_path, runtime, resume)
             'harnessModels': {'codex': 'test-model'}}).status_code == 200
         turn = {'id':str(uuid4()), 'modelId':config['id'], 'runtime':runtime,
             'text':'Use the skill and save a plan.', 'skills':['character-replacement']}
+        print('stage: fresh turn', flush=True)
         response = client.post(path + '/assistant/turns', json=turn)
         events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith('data: ')]
         assert events[-1]['error'] is None, events
@@ -302,6 +359,7 @@ def test_real_opencode_native_skill_and_gateway_write(tmp_path, runtime, resume)
         assert 'server-only-key' not in next(local.root.rglob('*.opencode.jsonl')).read_text()
         if not resume:
             return
+        print('stage: resumed turn', flush=True)
         response = client.post(path + '/assistant/turns', json={**turn, 'id': str(uuid4()), 'text': 'Continue the plan.'})
         events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith('data: ')]
         assert events[-1]['error'] is None, events
@@ -317,6 +375,31 @@ def test_real_opencode_native_skill_and_gateway_write(tmp_path, runtime, resume)
                 if json.loads(line).get('native', {}).get('sessionID')} for trace in traces]
         assert len(ids) == 2 and all(len(value) == 1 for value in ids)
         assert ids[0] == ids[1]
+
+
+def test_real_opencode_watchdog_cleans_up_stalled_cli(tmp_path):
+    if os.environ.get('OPENDIRECTOR_REAL_CLI') != '1':
+        pytest.skip('Set OPENDIRECTOR_REAL_CLI=1 to run the bundled CLI integration')
+    if native.executable('default') is None:
+        pytest.skip('Bundled OpenCode is not installed')
+    marker = tmp_path / 'pid'
+    case = f'{__file__}::test_real_opencode_native_skill_and_gateway_write[False-default]'
+    result = subprocess.run([sys.executable, '-m', 'pytest', case, '-s', '-q'],
+        env={**os.environ, 'OPENDIRECTOR_REAL_CLI_WORKER': '1', 'OPENDIRECTOR_TEST_CLI_STALL': str(marker)},
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=25)
+    assert result.returncode != 0
+    assert 'stage: fresh turn' in result.stdout
+    assert 'Real OpenCode integration timed out; thread stacks:' in result.stdout
+    pid = int(marker.read_text())
+    if sys.platform == 'linux':
+        # A killed process can briefly remain as a zombie until it is reaped.
+        for _ in range(100):
+            stat = Path(f'/proc/{pid}/stat')
+            if not stat.exists() or stat.read_text().split(') ')[1].startswith('Z'):
+                break
+            time.sleep(.05)
+        else:
+            pytest.fail(f'OpenCode process {pid} survived the watchdog')
 
 
 

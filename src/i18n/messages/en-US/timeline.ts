@@ -1,5 +1,6 @@
 /** Timeline editor, rendering, export and track labels. */
 export const timeline = {
+  "timeline.text.unsupportedExchange": "FCPXML and XML + media ZIP cannot retain text or fonts. Use an editable package to continue editing, or MP4 for the rendered video.",
   "timeline.player.sourceUnavailable": "The current media source is unavailable. Restore the source file and retry.",
   "timeline.package.export": "Export editable package",
   "timeline.package.importNew": "Import as new timeline",

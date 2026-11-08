@@ -82,3 +82,66 @@ test("submission unknown failures remain explicit", () => {
   );
   setActiveLocale("zh-CN");
 });
+
+for (const message of [
+  "当前账户没有调用该模型的权限。",
+  "生成服务拒绝了访问请求。",
+]) {
+  test(`403 access checks are useful in both languages for ${message}`, () => {
+    try {
+      const details = failure({
+        category: "permission",
+        httpStatus: 403,
+        providerCode: "permission_error",
+        message,
+      });
+      setActiveLocale("en-US");
+      const english = generationFailureMessage(details);
+      assert.match(english, /denied access/i);
+      assert.match(english, /API key/i);
+      assert.match(english, /permissions/i);
+      assert.match(english, /security polic/i);
+      assert.doesNotMatch(english, /[\u3400-\u9fff]/);
+      setActiveLocale("zh-CN");
+      const chinese = generationFailureMessage(details);
+      assert.match(chinese, /拒绝了访问请求/);
+      assert.match(chinese, /API Key/);
+      assert.match(chinese, /权限/);
+      assert.match(chinese, /安全策略/);
+    } finally {
+      setActiveLocale("zh-CN");
+    }
+  });
+}
+
+test("voice_not_found identifies the voice before generic 404 or input failures", () => {
+  try {
+    setActiveLocale("en-US");
+    assert.equal(generationFailureMessage(failure({ providerCode: "voice_not_found", httpStatus: 404 })),
+      "The voice was not found or is unavailable to this account. Check the Voice ID in the MOSS voice library.");
+    setActiveLocale("zh-CN");
+    assert.equal(generationFailureMessage(failure({ providerCode: "voice_not_found", httpStatus: 404 })),
+      "该音色不存在或当前账户无权使用，请在 MOSS 音色库核对音色 ID。");
+  } finally {
+    setActiveLocale("zh-CN");
+  }
+});
+
+test("provider moderation verdicts are explained in both languages", () => {
+  const moderated = (message: string) =>
+    failure({ stage: "poll", httpStatus: 200, providerStatus: "failed", providerCode: "1027", message });
+  setActiveLocale("en-US");
+  assert.match(
+    generationFailureMessage(moderated("供应商判定输入内容涉及敏感信息，已拒绝生成。")),
+    /flagged the input as sensitive/,
+  );
+  assert.match(
+    generationFailureMessage(moderated("供应商判定生成内容涉及敏感信息，已拒绝交付。")),
+    /flagged the generated content as sensitive/,
+  );
+  setActiveLocale("zh-CN");
+  assert.match(
+    generationFailureMessage(moderated("供应商判定生成内容涉及敏感信息，已拒绝交付。")),
+    /生成内容涉及敏感信息/,
+  );
+});

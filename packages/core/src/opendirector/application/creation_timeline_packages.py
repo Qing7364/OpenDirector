@@ -24,11 +24,10 @@ from opendirector.domain.creation.editors import TimelineData
 from opendirector.domain.creation.timeline_packages import (TimelinePackageManifest, TimelinePackageResource,
     TimelinePackageImportRequest, TimelinePackageImportReceipt)
 from opendirector.domain.projects import ProjectError
-from opendirector.infrastructure.creation_files import file_identity, CHUNK_BYTES
-from opendirector.infrastructure.creation_projects import sync_directory
-from opendirector.infrastructure.creation_uploads import inspect_file, asset_name, upload_asset_id
-from opendirector.infrastructure.local_projects import child
-from opendirector.infrastructure.timeline_package_imports import TimelinePackageImports
+from opendirector.domain.timeline_errors import timeline_error, timeline_error_message
+from opendirector.domain.rule_facts import TIMELINE_FONT_TOTAL_BYTES
+from opendirector.ports.files import CHUNK_BYTES
+from opendirector.ports.gateway import gateway
 from opendirector.installation import default_timeline_font
 from opendirector.media.fonts import FONT_MIMES, require_font_characters
 
@@ -56,14 +55,14 @@ def key(ref):
 
 
 def invalid():
-    return ProjectError('Invalid or unsupported editable timeline package.', 400, code='invalid_input')
+    return timeline_error('timeline_package_invalid', 400)
 
 
 class CreationTimelinePackages:
     def __init__(self, projects):
         self.projects = projects
         self.assets = CreationAssets(projects)
-        self.imports = TimelinePackageImports(projects)
+        self.imports = gateway().timeline_package_imports(projects)
 
     def export(self, project_id: UUID, editor_id: UUID, revision: int) -> Path:
         if type(revision) is not int or revision < 1:
@@ -71,7 +70,7 @@ class CreationTimelinePackages:
         selected = next(((record.snapshot, doc) for record in self.projects.records(project_id)
             for doc in record.snapshot.editorDocuments if doc.id == UUID(str(editor_id)) and doc.revision == revision), None)
         if selected is None or selected[1].kind != 'timeline':
-            raise ProjectError('Timeline revision does not exist.', 404, code='missing_object')
+            raise timeline_error('timeline_revision_missing', 404)
         snapshot, document = selected
         resources = []
         for ref in refs(document.data):
@@ -96,37 +95,35 @@ class CreationTimelinePackages:
                     if resource.path in written:
                         continue
                     if target.stat().st_size + resource.size > MAX_ARCHIVE_BYTES:
-                        raise ProjectError('Editable timeline packages must not exceed 512 MiB.', 413, code='invalid_input')
+                        raise timeline_error('timeline_package_too_large', 413)
                     stream, _ = self.assets.open_media(project_id, resource.source.assetId, snapshot=snapshot)
                     with stream, archive.open(resource.path, 'w', force_zip64=True) as output:
                         shutil.copyfileobj(stream, output, CHUNK_BYTES)
                     written.add(resource.path)
             if target.stat().st_size > MAX_ARCHIVE_BYTES:
-                raise ProjectError('Editable timeline packages must not exceed 512 MiB.', 413, code='invalid_input')
+                raise timeline_error('timeline_package_too_large', 413)
             return target
         except BaseException:
             target.unlink(missing_ok=True)
             raise
 
     def export_execution_file(self, project_id, request, *, execution_directory):
-        from opendirector.application.creation_artifacts import execution_file
         target = self.export(project_id, request.editorId, request.revision)
         try:
-            with execution_file(execution_directory, request.path, create=True) as output, target.open('rb') as incoming:
+            with gateway().execution_file(execution_directory, request.path, create=True) as output, target.open('rb') as incoming:
                 shutil.copyfileobj(incoming, output, CHUNK_BYTES)
             return dict(path=request.path, editorId=str(request.editorId), revision=request.revision)
         finally:
             target.unlink(missing_ok=True)
 
     def import_execution_file(self, project_id, request, *, execution_directory, session):
-        from opendirector.application.creation_artifacts import execution_file
         handle = uuid5(request.operationId, 'archive-upload')
         value = TimelinePackageImportRequest(**request.model_dump(exclude={'path'}), uploadHandle=handle)
         # Replays use the durable fixed request and never need to reopen input bytes.
         prior = self.imports.read(project_id, request.operationId)
         if prior is not None:
             return self.import_package(project_id, value, session=session, source='agent')
-        with execution_file(execution_directory, request.path) as stream:
+        with gateway().execution_file(execution_directory, request.path) as stream:
             before = os.fstat(stream.fileno())
             writer = self.assets.uploads.begin(project_id, handle, session, 'package.timeline.zip', expected_kind='file')
             try:
@@ -231,7 +228,7 @@ class CreationTimelinePackages:
                     raise invalid()
                 extracted, inspected = {}, {}
                 for index, resource in enumerate(manifest.resources):
-                    asset_name(resource.name)
+                    gateway().asset_name(resource.name)
                     if archive.getinfo(resource.path).file_size != resource.size:
                         raise invalid()
                     if resource.path not in extracted:
@@ -247,7 +244,7 @@ class CreationTimelinePackages:
                             raise invalid()
                         extracted[resource.path] = target
                     target = extracted[resource.path]
-                    kind, metadata = inspect_file(target, resource.name, expected_kind=resource.kind)
+                    kind, metadata = gateway().inspect_file(target, resource.name, expected_kind=resource.kind)
                     if kind != resource.kind or metadata.mimeType != resource.mimeType:
                         raise invalid()
                     inspected[key(resource.source)] = (target, metadata)
@@ -263,7 +260,7 @@ class CreationTimelinePackages:
                     if text:
                         used_fonts.add(font.asset.fingerprint)
                         require_font_characters(path, font.asset.fingerprint, text)
-                if sum(next(r.size for r in manifest.resources if r.fingerprint == fingerprint) for fingerprint in used_fonts) > 64 * 1024 * 1024:
+                if sum(next(r.size for r in manifest.resources if r.fingerprint == fingerprint) for fingerprint in used_fonts) > TIMELINE_FONT_TOTAL_BYTES:
                     raise invalid()
                 for track in data.tracks:
                     for clip in track.clips:
@@ -282,7 +279,7 @@ class CreationTimelinePackages:
         with self.imports.lock(project_id, request.operationId):
             prior = self.imports.read(project_id, request.operationId)
             if prior and prior['request'] != request.model_dump(mode='json'):
-                raise ProjectError('Import operation identity is already used by different input.', 409, code='invalid_input')
+                raise timeline_error('timeline_import_conflict', 409)
             if prior:
                 receipt = TimelinePackageImportReceipt.model_validate(prior['receipt'])
                 if receipt.status in {'applied', 'rejected'}:
@@ -295,24 +292,24 @@ class CreationTimelinePackages:
                 project_path, _, _ = self.projects._load(db, project_id)
                 self.projects._lease(db, project_id, project_path, session)
             folder = self.imports.folder(project_id, request.operationId)
-            archive = child(folder, 'package.zip')
+            archive = gateway().child(folder, 'package.zip')
             # A staged immutable copy keeps retries independent of the original upload.
             if not archive.exists():
                 with self.assets.uploads.lock(project_id, request.uploadHandle):
                     upload, _, record = self.assets.uploads.ready(project_id, request.uploadHandle, session)
                     if record.fingerprint != request.archiveFingerprint or record.metadata.size > MAX_ARCHIVE_BYTES:
                         raise invalid()
-                    incoming = child(upload, 'content')
-                    if file_identity(incoming) != (request.archiveFingerprint, record.metadata.size):
+                    incoming = gateway().child(upload, 'content')
+                    if gateway().file_identity(incoming) != (request.archiveFingerprint, record.metadata.size):
                         raise invalid()
-                    temporary = child(folder, 'package.partial')
+                    temporary = gateway().child(folder, 'package.partial')
                     with incoming.open('rb') as incoming_stream, temporary.open('wb') as output_stream:
                         shutil.copyfileobj(incoming_stream, output_stream, CHUNK_BYTES)
                         output_stream.flush()
                         os.fsync(output_stream.fileno())
                     os.replace(temporary, archive)
-                    sync_directory(folder)
-            if file_identity(archive)[0] != request.archiveFingerprint:
+                    gateway().sync_directory(folder)
+            if gateway().file_identity(archive)[0] != request.archiveFingerprint:
                 raise invalid()
             with tempfile.TemporaryDirectory(prefix='timeline-package-') as temporary:
                 try:
@@ -341,8 +338,8 @@ class CreationTimelinePackages:
                                 writer.abort()
                             result = self.assets.register(command, session=session, source=source, trusted_upload=True)
                         if result.status not in {'applied', 'noop'}:
-                            raise ProjectError('Timeline resource registration was rejected.', 409, code='invalid_input')
-                        asset = self.assets.get(project_id, upload_asset_id(project_id, handle))
+                            raise timeline_error('timeline_registration_rejected', 409)
+                        asset = self.assets.get(project_id, gateway().upload_asset_id(project_id, handle))
                         mapping[key(resource.source)] = asset_ref(asset).model_dump(mode='json')
                         registered = tuple(dict.fromkeys((*receipt.registeredAssetIds, asset.id)))
                         receipt = receipt.model_copy(update={'registeredAssetIds': registered, 'errorCode': None})

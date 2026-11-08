@@ -79,7 +79,7 @@ try {
   page.setDefaultTimeout(30000);
   globalThis.debugPage = page;
   const errors = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("pageerror", (e) => { errors.push(e.message); console.error("PAGE ERROR", e.message); });
   await page.addInitScript(() => {
     localStorage.setItem("opendirector.modelSetup.v1", "dismissed");
     localStorage.setItem("opendirector.locale.v1", "en-US");
@@ -341,6 +341,12 @@ try {
   );
   await content.fill("UI 接续");
   await content.blur();
+  for (const name of ["Export FCPXML", "XML + media ZIP"]) {
+    const button = page.getByRole("button", { name, exact: true });
+    assert.equal(await button.isDisabled(), true, `${name} cannot retain editable text`);
+    assert.match(await button.getAttribute("title"), /editable package.*MP4/);
+  }
+  assert.equal(await page.getByText("FCPXML and XML + media ZIP cannot retain text or fonts. Use an editable package to continue editing, or MP4 for the rendered video.", { exact: true }).isVisible(), true);
   const exportNames = [
     "Render MP4",
     "Export editable JSON",
@@ -651,6 +657,12 @@ try {
   await page.locator(".cw-timeline-text-move").first().click();
   await page.getByLabel("文字内容", { exact: true }).waitFor();
   await page.getByRole("button", { name: "添加文字", exact: true }).waitFor();
+  assert.equal(await page.getByText("FCPXML 和 XML + 素材 ZIP 无法保留文字或字体。请使用可编辑包继续编辑，或使用 MP4 导出渲染视频。", { exact: true }).isVisible(), true);
+  for (const name of ["导出 FCPXML", "XML + 素材 ZIP"]) {
+    const button = page.getByRole("button", { name, exact: true });
+    assert.equal(await button.isDisabled(), true);
+    assert.match(await button.getAttribute("title"), /可编辑包.*MP4/);
+  }
   await page.screenshot({ path: join(root, "text-ui-zh.png") });
   await page.getByRole("button", { name: "删除文字", exact: true }).click();
   assert.equal(await page.locator(".cw-timeline-text-inspector").count(), 0);

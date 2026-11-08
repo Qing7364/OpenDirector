@@ -19,7 +19,7 @@ OpenDirector 是一个在本地运行、通过浏览器使用的 AI 视频创作
 
 适合验证视觉创意、反复调整素材和制作短片。项目保存在本机，生成内容使用你选择的服务商 API 或自部署模型服务。
 
-[最新动态](#最新动态) · [短片示例](#短片示例我们还能赢) · [快速开始](#快速开始) · [文档](#文档) · [参与贡献](#参与贡献)
+[最新动态](#最新动态) · [短片示例](#短片示例我们还能赢) · [快速开始](#快速开始) · [文档](#文档) · [社区交流](#社区交流) · [参与贡献](#参与贡献)
 
 ## 最新动态
 
@@ -90,6 +90,27 @@ opendirector serve
 - [故障排查](docs/guides/user-guide.zh-CN.md#故障排查)：安装、生成、保存与导出问题。
 - [业务 CLI](docs/guides/cli.md)：通过终端或 Agent Shell 操作工程。
 - [文档索引](docs/README.md)：架构、开发与验证文档。
+
+## 社区交流
+
+欢迎加入 **OpenDirector** 交流群，交流 OpenDirector 的使用经验、分享创作。使用微信扫描下方二维码入群，点击图片可查看完整分辨率。
+
+<p align="center">
+  <a href="docs/guides/assets/opendirector-wechat-group-2.png">
+    <img src="docs/guides/assets/opendirector-wechat-group-2.png" alt="OpenDirector with vLLM-Omni (2) 微信群二维码" width="360" />
+  </a>
+</p>
+
+如果 OpenDirector 对你有帮助，欢迎[在 GitHub 上点亮 Star](https://github.com/ThinkFlowLab/OpenDirector)，支持项目，也让更多人发现它。
+
+<p align="center">
+  <a href="https://github.com/ThinkFlowLab/OpenDirector">
+    <picture>
+      <source media="(prefers-reduced-motion: reduce)" srcset="docs/guides/assets/star-opendirector.png" />
+      <img src="docs/guides/assets/star-opendirector.gif" alt="操作示意：打开 GitHub 上的 ThinkFlowLab/OpenDirector，点击 Star 支持项目" width="800" />
+    </picture>
+  </a>
+</p>
 
 ## 参与贡献
 

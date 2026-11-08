@@ -1,11 +1,12 @@
 """Business commands shared by every agent runtime."""
 import asyncio
+import difflib
 import shutil
 from pathlib import Path
+from typing import get_args
 from uuid import UUID, uuid5
 
-from pydantic import JsonValue, TypeAdapter
-
+from pydantic import JsonValue, TypeAdapter, ValidationError
 from opendirector.application.creation_artifacts import publish_artifact
 from opendirector.application.creation_assets import CreationAssets
 from opendirector.application.creation_timeline_packages import CreationTimelinePackages
@@ -24,6 +25,29 @@ from opendirector.installation import SOURCE_ROOT, BUNDLED
 ROOT = SOURCE_ROOT or BUNDLED
 EXCLUDED = {'project.create', 'project.trash', 'project.restore', 'asset.import', 'job.checkpoint',
             'canvas.applyEdit', 'canvas.publishMedia', 'timeline.publishRender'}
+
+QUERY_MODELS = get_args(get_args(Query)[0])
+#: The legal `type` values, read from the union itself. A new query type cannot
+#: leave the tool description or the error guidance behind.
+QUERY_TYPES = tuple(sorted(get_args(model.model_fields['type'].annotation)[0] for model in QUERY_MODELS))
+
+
+def query_guidance(failure):
+    """Explain an unusable query without losing the detail the caller needs.
+
+    A guessed type (`canvas_items`) is answered with the accepted values and the
+    closest match. Every other problem keeps pydantic's field-level message: the
+    field name and constraint are what let the caller fix the argument, so a
+    generic summary here would be a regression (see test_agent_artifacts, which
+    asserts that an unexpected `waitSeconds` is named).
+    """
+    for issue in failure.errors(include_input=False, include_url=False):
+        if issue['type'] == 'union_tag_invalid':
+            given = issue.get('ctx', {}).get('tag', '')
+            closest = difflib.get_close_matches(str(given), QUERY_TYPES, n=1, cutoff=0.4)
+            hint = f' Did you mean {closest[0]}?' if closest else ''
+            return f'Unsupported query type {given!r}.{hint} Valid types: {", ".join(QUERY_TYPES)}.'
+    return str(failure)
 COMMANDS = {name: model for name, model in COMMAND_MODELS.items()
             if name not in EXCLUDED}
 for command_name, command_model in COMMANDS.items():
@@ -210,7 +234,8 @@ def tools() -> list[dict]:
         for field in ('queryId', 'projectId'):
             definition['properties'].pop(field)
             definition['required'].remove(field)
-    result.append(tool_schema('query', 'Query objects, jobs, assets or versions. canvas.status can wait; asset.preview provides media for native viewing.', query_schema))
+    result.append(tool_schema('query', f'Query objects, jobs, assets or versions. Valid types: {", ".join(QUERY_TYPES)}. '
+                         'canvas.status waits and needs objectId; asset.preview returns media for native viewing.', query_schema))
     command_type = {'type': 'string', 'enum': list(COMMANDS)}
     result.append(tool_schema('command_schema', 'Read command help before the first execute_command call of that type in this turn. '
         'Find commands with read_project. For the first lookup, pass only the exact type, e.g. {"type":"canvas.show"}. '
@@ -238,11 +263,12 @@ class AgentTools:
         self.assets = CreationAssets(projects)
 
     async def execute(self, project_id: UUID, turn_id: UUID, session: str, call_id: str,
-                      name: str, arguments: dict, roots: list[Path], config: dict | None, native_runtime: str | None = None) -> JsonValue:
+                      name: str, arguments: dict, roots: list[Path], config: dict | None, native_runtime: str | None = None,
+                      execution_directory: Path | None = None) -> JsonValue:
         if name in {'timeline_package_export', 'timeline_package_import'}:
             with self.projects.local.transaction() as db:
                 project_directory, _, _ = self.projects._load(db, project_id)
-            work = project_directory / 'agent-runs' / str(turn_id) / 'work'
+            work = execution_directory or project_directory / 'agent-runs' / str(turn_id) / 'work'
             packages = CreationTimelinePackages(self.projects)
             if name == 'timeline_package_export':
                 request = TimelinePackageExportFile.model_validate(arguments)
@@ -257,13 +283,18 @@ class AgentTools:
         if name == 'query':
             if {'projectId', 'queryId'} & arguments.keys():
                 raise ProjectError('查询身份与工程范围由宿主提供。')
-            query = TypeAdapter(Query).validate_python({**arguments, 'projectId': project_id,
-                'queryId': uuid5(turn_id, call_id)})
+            try:
+                query = TypeAdapter(Query).validate_python({**arguments, 'projectId': project_id,
+                    'queryId': uuid5(turn_id, call_id)})
+            except ValidationError as failure:
+                # A rejected query must name the accepted types rather than echo a
+                # tag list the model has to reinterpret.
+                raise ProjectError(query_guidance(failure)) from None
             result = await CreationCanvas(self.projects).query(query)
             if query.type == 'asset.preview' and 'preview' in result:
                 with self.projects.local.transaction() as db:
                     project_directory, _, _ = self.projects._load(db, project_id)
-                target = directory(project_directory / 'agent-runs' / str(turn_id) / 'work' / 'previews')
+                target = directory((execution_directory or project_directory / 'agent-runs' / str(turn_id) / 'work') / 'previews')
                 target.mkdir(parents=True, exist_ok=True)
                 source = Path(result['preview']['path'])
                 # Asset IDs identify immutable content; repeating the source's
@@ -348,7 +379,7 @@ class AgentTools:
                 with self.projects.local.transaction() as db:
                     project_directory, _, _ = self.projects._load(db, project_id)
                 receipt = await asyncio.to_thread(publish_artifact, self.assets, command,
-                    execution_directory=project_directory / 'agent-runs' / str(turn_id) / 'work', session=session, provenance=provenance)
+                    execution_directory=execution_directory or project_directory / 'agent-runs' / str(turn_id) / 'work', session=session, provenance=provenance)
             else:
                 receipt = await asyncio.to_thread(self.assets.execute, command, session=session, source='agent', provenance=provenance)
         else:

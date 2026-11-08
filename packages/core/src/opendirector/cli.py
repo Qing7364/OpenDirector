@@ -22,6 +22,7 @@ from typer._click.exceptions import UsageError
 from opendirector.agent.tools import COMMANDS, command_help
 from opendirector.domain.creation.commands import COMMAND_MODELS, command_fingerprint, parse_command
 from opendirector.domain.projects import ProjectError
+from opendirector.domain.timeline_errors import timeline_error, timeline_error_message
 
 app = typer.Typer(no_args_is_help=True, help="Start OpenDirector and create or edit projects.",
     epilog="Run opendirector COMMAND --help for subcommands and usage. "
@@ -65,9 +66,9 @@ def timeline_default_font():
         manifest = json.loads((path.parent / "manifest.json").read_text(encoding="utf-8"))
         fingerprint = "sha256:" + sha256(path.read_bytes()).hexdigest()
         if fingerprint != manifest["fingerprint"]:
-            raise ProjectError("Bundled font fingerprint mismatch.", 409, code="storage_unavailable")
+            raise timeline_error('timeline_bundled_font_fingerprint', 409)
     except (OSError, ValueError, KeyError):
-        raise ProjectError("Bundled font is unavailable.", 409, code="storage_unavailable") from None
+        raise timeline_error('timeline_bundled_font_unavailable', 409) from None
     emit(dict(path=str(path), version=manifest["version"], fingerprint=fingerprint))
 
 
@@ -81,7 +82,8 @@ def timeline_export(ctx: typer.Context, editor_id: Annotated[UUID, typer.Option(
         return
     with client.http.stream("GET", client.path(f"/timelines/{editor_id}/package"), params={"revision": revision}) as response:
         if not response.is_success:
-            raise ProjectError(response.read().decode(), response.status_code)
+            response.read()
+            raise client.response_error(response)
         # Exclusive creation keeps a failed download from overwriting a user's file.
         try:
             with output.open("xb") as stream:
@@ -136,12 +138,24 @@ class Client:
         self.opened = False
         self.owns_session = session is None
         self.http = httpx.Client(base_url=url, trust_env=False, timeout=120,
-            headers={"X-OpenDirector-Request": "1", "X-OpenDirector-Session": self.session})
+            headers={"X-OpenDirector-Request": "1", "X-OpenDirector-Session": self.session,
+                     "Accept-Language": os.environ.get('OPENDIRECTOR_LANGUAGE', 'en-US')})
+
+    @staticmethod
+    def response_error(response):
+        try:
+            value = response.json()
+        except ValueError:
+            value = None
+        if isinstance(value, dict) and isinstance(value.get('detail'), str):
+            code = value.get('code')
+            return ProjectError(value['detail'], response.status_code, code=code if isinstance(code, str) else None)
+        return ProjectError(response.text, response.status_code)
 
     def request(self, method, path, **kwargs):
         response = self.http.request(method, path, **kwargs)
         if not response.is_success:
-            raise ProjectError(response.text, response.status_code)
+            raise self.response_error(response)
         return response.json()
 
     def path(self, suffix=""):
@@ -165,7 +179,7 @@ class Client:
             with connection.makefile("rb") as reader:
                 response = json.loads(reader.readline(64 * 1024 * 1024))
         if response.get("error"):
-            raise ProjectError(response["error"])
+            raise ProjectError(response["error"], code=response.get('code'))
         return response["value"]
 
     def models(self):
@@ -190,6 +204,11 @@ class Client:
             command = parse_command({**arguments, "commandId": operation, "projectId": self.project})
             if kind not in {'project.create', 'project.rename', 'project.trash', 'project.restore'}:
                 self.open()
+            # An accepted project.trash removes the directory and stores no
+            # receipt, so repeating it (including with the same --operation-id)
+            # is a 404. That 404 is reported here. The workspace maps it to
+            # success only because the project it already listed is gone; a CLI
+            # caller can pass a wrong id, and there is no receipt to replay.
             value = self.request("POST", self.path("/commands"), json=command.model_dump(mode="json"))
         if value.get("status") == "rejected":
             emit(value)
@@ -604,7 +623,11 @@ def main():
                        for item in error.errors(include_input=False, include_url=False, include_context=False)]})
         raise SystemExit(1)
     except (ProjectError, OSError, ValueError, httpx.HTTPError) as error:
-        emit({"error": str(error)})
+        value = {"error": str(error)}
+        if isinstance(error, ProjectError):
+            value['code'] = error.code
+            value['error'] = timeline_error_message(error.code, os.environ.get('OPENDIRECTOR_LANGUAGE', 'en-US')) or str(error)
+        emit(value)
         raise SystemExit(1)
 
 

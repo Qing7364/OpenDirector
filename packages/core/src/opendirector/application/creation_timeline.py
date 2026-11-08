@@ -6,7 +6,8 @@ from opendirector.domain.creation.project import ProjectSnapshot
 from opendirector.domain.creation.validation import ContractError
 from opendirector.media.fonts import FONT_MIMES, inspect_font, require_font_characters
 
-MAX_TIMELINE_FONT_BYTES = 64 * 1024 * 1024
+from opendirector.domain.rule_facts import TIMELINE_FONT_TOTAL_BYTES
+from opendirector.domain.timeline_errors import timeline_error_message
 
 
 def timeline_source_refs(data: TimelineData) -> tuple[AssetRef, ...]:
@@ -37,16 +38,16 @@ def validate_timeline_resources(data: TimelineData, snapshot: ProjectSnapshot, a
         text_by_font.setdefault(overlay.fontId, []).append(overlay.text)
     used = {font.asset.fingerprint: assets._reference(snapshot, font.asset).metadata.size
             for font in data.fonts if font.id in text_by_font}
-    if sum(used.values()) > MAX_TIMELINE_FONT_BYTES:
-        raise ContractError('invalid_input', 'Timeline fonts must not exceed 64 MiB in total.')
+    if sum(used.values()) > TIMELINE_FONT_TOTAL_BYTES:
+        raise ContractError('timeline_font_total_bytes', timeline_error_message('timeline_font_total_bytes', None))
     for font in data.fonts:
         asset = assets._reference(snapshot, font.asset)
         if asset.kind != 'file' or asset.metadata.mimeType not in FONT_MIMES:
-            raise ContractError('reference_invalid', 'Timeline font resource is not a verified static font.', asset.id)
+            raise ContractError('timeline_font_unverified', timeline_error_message('timeline_font_unverified', None), asset.id)
         stream, _ = assets.open_media(snapshot.project.id, asset.id, snapshot=snapshot)
         with stream:
             inspection = inspect_font(stream)
             if inspection.mimeType != asset.metadata.mimeType:
-                raise ContractError('reference_invalid', 'Timeline font format differs from its recorded MIME type.', asset.id)
+                raise ContractError('timeline_font_mime', timeline_error_message('timeline_font_mime', None), asset.id)
             if font.id in text_by_font:
                 require_font_characters(stream, asset.fingerprint, '\n'.join(text_by_font[font.id]))

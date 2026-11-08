@@ -1,5 +1,6 @@
 /** Timeline editor, rendering, export and track labels. */
 export const timeline = {
+  "timeline.text.unsupportedExchange": "FCPXML 和 XML + 素材 ZIP 无法保留文字或字体。请使用可编辑包继续编辑，或使用 MP4 导出渲染视频。",
   "timeline.player.sourceUnavailable": "当前媒体来源不可用，请恢复素材文件后重试。",
   "timeline.package.export": "导出可编辑包",
   "timeline.package.importNew": "导入为新时间线",

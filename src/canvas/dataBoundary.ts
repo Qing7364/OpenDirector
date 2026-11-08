@@ -1,4 +1,6 @@
 import { validTimelineText } from "./timelineText.ts";
+
+import { RULE_FACTS } from "../contracts/ruleFacts.generated.ts";
 import { parseImageCrop } from "./imageCrop.ts";
 import { tNow } from "../i18n/messages.ts";
 import { parseCanvasToolTaskValue, sameCanvasToolTask } from "./toolCatalog.ts";
@@ -676,7 +678,7 @@ export function parseNodeData(
       !["auto", "low", "medium", "high"].includes(String(agent.thinking)) ||
       !Number.isInteger(agent.maxTokens) ||
       Number(agent.maxTokens) < 1 ||
-      Number(agent.maxTokens) > 32768
+      Number(agent.maxTokens) > RULE_FACTS.textMaxTokens
     )
       return { ok: false, error: tNow("errors.data.agent") };
     result.agentSettings = {

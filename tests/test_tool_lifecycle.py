@@ -88,6 +88,7 @@ def test_queued_cancellation_is_durable_idempotent_and_never_submits(tool_projec
     _, _, _, pid, session, _, value, factory = tool_project
     async def run():
         service = factory()
+        service.limit = asyncio.Semaphore(1)
         await service.limit.acquire()
         try:
             await service.submit(pid, value, session)
@@ -344,6 +345,7 @@ def test_disconnected_submission_still_starts_its_accepted_execution(tool_projec
 def test_disconnected_cancel_keeps_the_durable_stop_request(tool_project, monkeypatch):
     _, _, _, pid, session, _, value, factory = tool_project
     service = factory()
+    service.limit = asyncio.Semaphore(1)
     entered, release = threading.Event(), threading.Event()
     original = service._request_cancel
     def request(*args):

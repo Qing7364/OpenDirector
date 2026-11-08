@@ -10,6 +10,7 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 from urllib.request import getproxies
+from uuid import UUID
 
 from opendirector.agent.model_gateway import ModelGateway
 from opendirector.agent import cli_transport, deepseek
@@ -116,8 +117,8 @@ def command(runtime: str, work: Path, socket: str, token: str, model: str | None
             args += ['-c', setting]
     else:
         plugin = work / 'plugin'
-        (plugin / '.claude-plugin').mkdir(parents=True)
-        (plugin / '.claude-plugin/plugin.json').write_text(json.dumps({'name': 'opendirector', 'version': '0.1.0'}))
+        (plugin / '.claude-plugin').mkdir(parents=True, exist_ok=True)
+        (plugin / '.claude-plugin/plugin.json').write_text(json.dumps({'name': 'opendirector', 'version': '0.1.1'}))
         skill_root = work / '.agents/skills'
         skill_root.mkdir(parents=True, exist_ok=True)
         link_directory(plugin / 'skills', skill_root)
@@ -161,8 +162,8 @@ class NativeRuntime:
         if config:
             selection.update(config=config.get('id'), modelId=config['modelId'])
         session_id = run.native_session_id(selection)
-        session_directory = run.native_session_directory() if session_id and runtime == 'opencode' else None
-        if session_id and runtime == 'opencode' and session_directory is None:
+        session_directory = run.native_session_directory() if session_id else None
+        if session_id and session_directory is None:
             # Unverifiable session directories cannot be resumed. Preserve the
             # old session and start with authoritative conversation context.
             session_id = None
@@ -171,8 +172,10 @@ class NativeRuntime:
         token = secrets.token_urlsafe(32)
         process = pump = stderr_task = None
         with TemporaryDirectory(prefix='od-agent-', dir=None if os.name == 'nt' else '/tmp') as temporary:
-            work = (directory / 'agent-runs' / str(turn_id) / 'work').resolve()
-            work.mkdir(parents=True, exist_ok=False)
+            reuse_workspace = session_directory is not None and runtime in {'codex', 'claude', 'deepseek'}
+            work = session_directory if reuse_workspace else (directory / 'agent-runs' / str(turn_id) / 'work').resolve()
+            work.mkdir(parents=True, exist_ok=reuse_workspace)
+            gateway.execution_directory = work
             # OpenCode emits session events in the session's original instance
             # directory. Keep that engine directory stable, while the gateway,
             # CLI, skills and all published outputs remain scoped to this turn.
@@ -181,7 +184,7 @@ class NativeRuntime:
             permissions = AsyncExitStack()
             try:
                 if runtime == 'deepseek':
-                    # Initialize this same fresh work directory before copying
+                    # Initialize this same validated work directory before copying
                     # skills/launchers. Files inherit access at creation; never
                     # rewrite a pre-existing file's shared security descriptor.
                     await permissions.enter_async_context(native_owner_access(work))
@@ -218,12 +221,12 @@ class NativeRuntime:
                     args += ['-c', f'model_reasoning_effort={json.dumps(thinking)}']
                 elif thinking != 'auto' and runtime == 'claude':
                     args += ['--effort', thinking]
-                if session_id:
+                if session_id and runtime != 'deepseek':
                     if runtime == 'codex':
                         args += ['resume', session_id, '-']
                     else:
                         args += ['--session' if runtime == 'opencode' else '--resume', session_id]
-                execution_context = (f'Execution directory: {work}\n'
+                execution_context = (f'Execution directory: {work}\nNative session directory: {native_work}\n'
                     'Set the native shell workdir to this execution directory for file and media operations. '
                     'Use inherited PATH to discover installed programs with command -v. '
                     'Read source assets at their supplied absolute paths; do not move or modify them. '
@@ -260,6 +263,13 @@ class NativeRuntime:
                     process.stdin.write(prompt.encode() + b'\n')
                     await process.stdin.drain()
                     process.stdin.close()
+                async def record_exit():
+                    await stderr_task
+                    diagnostic = stderr_tail.decode('utf-8', errors='replace').replace(token, '[redacted]')
+                    if config and config.get('apiKey'):
+                        diagnostic = diagnostic.replace(config['apiKey'], '[redacted]')
+                    await queue.put({'native': {'type': 'diagnostic', 'stderr': diagnostic,
+                                                'exitCode': process.returncode}})
                 async def output():
                     try:
                         reported_session = None
@@ -290,15 +300,16 @@ class NativeRuntime:
                                     raise ProjectError('Harness 返回了不同的会话 ID。', 502)
                                 await queue.put({'native': raw})
                         if await process.wait():
-                            await stderr_task
-                            diagnostic = stderr_tail.decode('utf-8', errors='replace').replace(token, '[redacted]')
-                            if config and config.get('apiKey'):
-                                diagnostic = diagnostic.replace(config['apiKey'], '[redacted]')
-                            await queue.put({'native': {'type': 'diagnostic', 'stderr': diagnostic}})
+                            await record_exit()
                             raise ProjectError(f'{runtime} 进程退出（{process.returncode}），请检查 CLI 登录和配置。', 502)
                         if reported_session:
                             run.save_native_session(reported_session, selection,
-                                engine_directory=native_work if runtime == 'opencode' else None)
+                                engine_directory=native_work,
+                                work_turn_id=run.turn_id if native_work == work and not reuse_workspace else UUID(native_work.parent.name))
+                    except ProjectError:
+                        if runtime == 'deepseek' and process.returncode:
+                            await record_exit()
+                        raise
                     finally:
                         await queue.put(None)
                 pump = asyncio.create_task(output())

@@ -494,12 +494,10 @@ try {
   }
   // Real visible controls and errors in both locales;正文 and business identities stay unchanged.
   await page.screenshot({ path: join(evidence, "text-package-en.png") });
-  await page
-    .getByRole("button", { name: "Export FCPXML", exact: true })
-    .click();
+  assert.equal(await page.getByRole("button", { name: "Export FCPXML", exact: true }).isDisabled(), true);
   await page
     .getByText(
-      "FCPXML cannot preserve timeline text. Use the native editable package or MP4.",
+      "FCPXML and XML + media ZIP cannot retain text or fonts. Use an editable package to continue editing, or MP4 for the rendered video.",
       { exact: true },
     )
     .waitFor();
@@ -519,9 +517,9 @@ try {
     await page.getByLabel("文字内容", { exact: true }).inputValue(),
     "跨工程续编 B",
   );
-  await page.getByRole("button", { name: "导出 FCPXML", exact: true }).click();
+  assert.equal(await page.getByRole("button", { name: "导出 FCPXML", exact: true }).isDisabled(), true);
   await page
-    .getByText("FCPXML 无法保留时间线文字，请使用原生可编辑包或 MP4。", {
+    .getByText("FCPXML 和 XML + 素材 ZIP 无法保留文字或字体。请使用可编辑包继续编辑，或使用 MP4 导出渲染视频。", {
       exact: true,
     })
     .waitFor();

@@ -26,10 +26,13 @@ from opendirector.domain.creation.base import MediaKind
 from opendirector.domain.creation.commands import Command, CommandReceipt, Query as CreationQuery
 from opendirector.domain.creation.project import ProjectSnapshot, ViewState
 from opendirector.domain.projects import ProjectError
+from opendirector.domain.timeline_errors import timeline_error, timeline_error_message
 from opendirector.infrastructure.creation_projects import CreationProjects
 from opendirector.media.fonts import MAX_FONT_BYTES, inspect_font
 from opendirector_api.models import AssetSource, Session
-from opendirector_api.localization import localized_timeline_font_receipt, localized_error_for_language
+from opendirector_api.localization import localized_receipt
+
+from opendirector_api.localization import localized_error_for_language
 
 
 class FontCoverageResponse(BaseModel):
@@ -69,11 +72,11 @@ def creation_routes(projects: CreationProjects, generation=None):
         # Read-only byte inspection also works for unregistered local drafts.
         # No filesystem paths, project changes, text, or session acquisition.
         if content_length is not None and content_length > MAX_FONT_BYTES:
-            raise ProjectError('Font files must not exceed 32 MiB.', 413)
+            raise timeline_error('timeline_font_too_large', 413)
         value = bytearray()
         async for chunk in request.stream():
             if len(value) + len(chunk) > MAX_FONT_BYTES:
-                raise ProjectError('Font files must not exceed 32 MiB.', 413)
+                raise timeline_error('timeline_font_too_large', 413)
             value.extend(chunk)
         response.headers['Cache-Control'] = 'no-store'
         return await run_in_threadpool(preview_font_coverage, bytes(value))
@@ -99,6 +102,15 @@ def creation_routes(projects: CreationProjects, generation=None):
     @router.post('/projects/{project_id}/open', response_model=ProjectSnapshot)
     def open_project(project_id: UUID, x_opendirector_session: UUID = Header()):
         return projects.open(project_id, str(x_opendirector_session))
+
+    @router.post('/projects/{project_id}/open-canvas')
+    def open_project_canvas(project_id: UUID, x_opendirector_session: UUID = Header()):
+        # The canvas needs its reference edges on first render too. Reuse the
+        # single snapshot this open read already published instead of making the
+        # page read the same project again through GET /canvas. The no-flag
+        # route above still returns a bare ProjectSnapshot.
+        snapshot = projects.open(project_id, str(x_opendirector_session))
+        return {'snapshot': snapshot, 'edges': canvas.reference_edges(project_id, snapshot)}
 
     @router.put('/sessions/{session_id}')
     def heartbeat(session_id: UUID, value: Session):
@@ -129,9 +141,10 @@ def creation_routes(projects: CreationProjects, generation=None):
         if value.type in {'generation.submit', 'job.cancel', 'job.recover'}:
             if generation is None:
                 raise ProjectError('任务服务不可用。', 503)
-            return await generation.execute(value, session=session)
-        result = await run_in_threadpool(projects.execute, value, session=session, imported_from=imported_from)
-        return localized_timeline_font_receipt(request.headers.get('accept-language'), result)
+            receipt = await generation.execute(value, session=session)
+        else:
+            receipt = await run_in_threadpool(projects.execute, value, session=session, imported_from=imported_from)
+        return localized_receipt(request, receipt)
 
     def package_display_receipt(request, result):
         if result.receipt is None:
@@ -220,7 +233,7 @@ def creation_routes(projects: CreationProjects, generation=None):
 
     @router.get('/projects/{project_id}/receipts/{command_id}', response_model=CommandReceipt)
     def receipt(project_id: UUID, command_id: UUID, request: Request):
-        return localized_timeline_font_receipt(request.headers.get('accept-language'), projects.receipt(project_id, command_id))
+        return localized_receipt(request, projects.receipt(project_id, command_id))
 
     @router.get('/projects/{project_id}/changes')
     def changes(project_id: UUID, after: int = Query(default=0, ge=0), limit: int = Query(default=100, ge=1, le=200)):

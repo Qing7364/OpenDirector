@@ -80,12 +80,17 @@ async def test_hidden_source_generation_frozen_history_restart_and_idempotent_co
     provider = Provider()
     runner, config = runtime(project, provider)
     source, asset = text_material(project)
+    assert send(store, pid, 'canvas.hide', session=session,
+        versions=[ver('canvas_item', source)], itemId=source.id).status == 'applied'
     target, spec = configure(project, config)
     ref_id = uuid4()
     assert send(store, pid, 'reference.add', session=session,
         versions=[ver('canvas_item', target), ver('generation_spec', spec)],
         reference=dict(id=ref_id, projectId=pid, binding='follow_current', source=dict(id=source.id), targetSpecId=spec.id)).status == 'applied'
-    assert send(store, pid, 'canvas.hide', session=session, versions=[ver('canvas_item', source)], itemId=source.id).status == 'applied'
+    spec = store.snapshot(pid).generationSpecs[-1]
+    assert send(store, pid, 'generationSpec.setPrompt', session=session, versions=[ver('generation_spec', spec)],
+        specId=spec.id, prompt='Use ', promptContent=[dict(type='text', text='Use '),
+            dict(type='reference', referenceId=ref_id)]).status == 'applied'
     snapshot = store.snapshot(pid)
     # Restore the original acceptance scenario: the source remains hidden
     # when the job is accepted, and its active reference is a real input.
@@ -118,6 +123,8 @@ async def test_hidden_source_generation_frozen_history_restart_and_idempotent_co
     assert snapshot.jobs[0].inputSnapshot == frozen
     assert len(snapshot.results) == 1
     assert snapshot.jobs[0].inputSnapshot.references[0].asset.assetId == asset.id
+    assert snapshot.generationSpecs[-1] == spec.model_copy(update={
+        'revision': spec.revision + 1, 'currentResultId': snapshot.results[0].id})
     assert not any(i.visible for i in snapshot.canvasItems)
     assert snapshot.references[0].active and snapshot.references[0].source.id == source.id
     assert (await runner.execute(command, session=session)) == receipt
@@ -236,3 +243,45 @@ def test_plain_text_video_freezes_effective_mode_without_rewriting_intent(projec
     assert job.execution.durationSeconds == 5
     assert runner.prepare(command, session=session) == receipt
     assert len(store.snapshot(pid).jobs) == 1
+
+
+@pytest.mark.anyio
+async def test_hiding_mentioned_source_during_generation_preserves_spec_and_adoption(project):
+    store, pid, session = project
+    provider = Provider()
+    runner, config = runtime(project, provider)
+    try:
+        source, asset = text_material(project)
+        target, spec = configure(project, config)
+        ref_id = uuid4()
+        assert send(store, pid, 'reference.add', session=session,
+            versions=[ver('canvas_item', target), ver('generation_spec', spec)],
+            reference=dict(id=ref_id, projectId=pid, binding='follow_current',
+                source=dict(id=source.id), targetSpecId=spec.id)).status == 'applied'
+        spec = store.snapshot(pid).generationSpecs[-1]
+        assert send(store, pid, 'generationSpec.setPrompt', session=session,
+            versions=[ver('generation_spec', spec)], specId=spec.id,
+            prompt='Use ', promptContent=[dict(type='text', text='Use '),
+                dict(type='reference', referenceId=ref_id)]).status == 'applied'
+        spec = store.snapshot(pid).generationSpecs[-1]
+        target = next(item for item in store.snapshot(pid).canvasItems if item.id == target.id)
+        command = parse_command(dict(commandId=uuid4(), projectId=pid, type='generation.submit',
+            expectedVersions=[ver('canvas_item', target), ver('generation_spec', spec)],
+            payload=dict(specId=spec.id, expectedSpecRevision=spec.revision, originItemId=target.id)))
+        assert (await runner.execute(command, session=session)).status == 'accepted'
+        await asyncio.wait_for(provider.started.wait(), 3)
+        assert send(store, pid, 'canvas.hide', session=session,
+            versions=[ver('canvas_item', source)], itemId=source.id).status == 'applied'
+        provider.finish.set()
+        await asyncio.gather(*(job.future for job in list(runner.jobs.values())))
+        snapshot = store.snapshot(pid)
+        assert snapshot.jobs[0].status == 'succeeded'
+        assert snapshot.jobs[0].adopted
+        assert snapshot.jobs[0].inputSnapshot.references[0].asset.assetId == asset.id
+        assert snapshot.generationSpecs[-1] == spec.model_copy(update={
+            'revision': spec.revision + 1, 'currentResultId': snapshot.results[0].id})
+        assert len(snapshot.results) == 1
+        assert len(provider.calls) == 1
+    finally:
+        provider.finish.set()
+        await runner.close()

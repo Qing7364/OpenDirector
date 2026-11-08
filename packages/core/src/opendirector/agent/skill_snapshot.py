@@ -32,6 +32,10 @@ def copy_skill_tree(source: Path, destination: Path) -> None:
 
 def prepare_skills(directory: Path, catalog: list[dict]) -> list[Path]:
     root = directory / '.agents/skills'
+    if any((path.exists() or path.is_symlink()) and _is_link(path) for path in (root.parent, root)):
+        raise ProjectError('技能快照目录不能是符号链接。')
+    if root.is_dir():
+        shutil.rmtree(root)
     root.mkdir(parents=True)
     for item in catalog:
         source = Path(item['filePath']).parent

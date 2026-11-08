@@ -12,6 +12,7 @@ export const errors = {
 
   "errors.render.fontLoad": "无法加载字体“{title}”。",
   "errors.render.fontMissing": "时间线字体“{fontId}”缺失。",
+  "errors.render.fontBudget": "时间线实际使用的字体总量不能超过 64 MiB。",
   "errors.render.fontCoverage": "所选字体未覆盖全部文字字符。",
   "errors.tools.error.submissionUnknown":
     "生成请求的提交结果不明。请先核对供应商是否已接收请求；不会自动重新提交。",
@@ -80,6 +81,8 @@ export const errors = {
   "errors.rules.segmentationModel":
     "视觉分割模型仅用于选区、分割和抠像，请选择生成模型。",
   "errors.rules.promptRequired": "请输入生成要求。",
+  "errors.rules.layoutReferences": "MOSS 布局 JSON 不支持附加文本参考，请将要求写入 JSON 或移除文本参考。",
+  "errors.rules.promptTooLong": "当前模型的提示词最多 {limit} 个字符，请缩短后重试。",
   "errors.rules.musicStyle": "请描述音乐风格。",
   "errors.rules.speechText": "请输入要合成的文字。",
   "errors.rules.productViews": "当前服务不支持产品三视图预设，请使用自由创作。",
@@ -92,8 +95,10 @@ export const errors = {
   "errors.rules.transcriptionRequired":
     "参照音乐需要先扒谱，请在“模型接入”中添加扒谱模型（vLLM-Omni 扒谱接口）。",
   "errors.rules.speechOnly": "当前语音服务仅支持文本朗读。",
-  "errors.rules.voiceId":
-    "请输入服务支持的音色标识（字母、数字、点、下划线或连字符）。",
+  "errors.rules.voiceId": "请输入服务支持的音色标识（字母、数字、点、下划线或连字符）。",
+  "errors.rules.voiceRequired": "请先填写服务音色库中有效的音色 ID，再开始生成。",
+  "errors.rules.referencesUnsupported": "当前模型不支持参考素材，请断开参考后再生成。",
+  "errors.generationFailure.voiceNotFound": "该音色不存在或当前账户无权使用，请在 MOSS 音色库核对音色 ID。",
   "errors.rules.audioDisable": "当前视频适配器不支持关闭生成音频。",
   "errors.rules.duration": "当前模型不支持所选时长，请重新选择。",
   "errors.rules.resolution": "当前模型或参考模式不支持所选分辨率，请重新选择。",
@@ -500,7 +505,7 @@ export const errors = {
   "errors.generationFailure.input": "生成服务拒绝了输入内容或参数。",
   "errors.generationFailure.reference": "生成服务拒绝了参考素材。",
   "errors.generationFailure.authentication": "生成服务鉴权失败。",
-  "errors.generationFailure.permission": "当前账户没有调用该模型的权限。",
+  "errors.generationFailure.permission": "生成服务拒绝了访问请求。请检查 API Key 是否正确及有效、模型调用权限和服务安全策略。",
   "errors.generationFailure.quota": "模型账户余额或套餐额度不足。",
   "errors.generationFailure.rateLimit": "模型调用频率或配额受限。",
   "errors.generationFailure.temporary": "生成服务暂时不可用。",
@@ -514,12 +519,11 @@ export const errors = {
   "errors.generationFailure.cancelled": "供应商任务已取消。",
   "errors.generationFailure.expired": "供应商任务已过期。",
   "errors.generationFailure.failed": "生成服务任务已失败。",
-  "errors.generationFailure.referenceAudio":
-    "音频参考不能单独使用，请搭配参考图片。",
-  "errors.generationFailure.referenceUnsupported":
-    "供应商拒绝了参考类型或输入组合。",
-  "errors.generationFailure.privacy":
-    "供应商判定参考图片可能包含真人，已拒绝生成。",
+  "errors.generationFailure.referenceAudio": "音频参考不能单独使用，请搭配参考图片。",
+  "errors.generationFailure.referenceUnsupported": "供应商拒绝了参考类型或输入组合。",
+  "errors.generationFailure.privacy": "供应商判定参考图片可能包含真人，已拒绝生成。",
+  "errors.generationFailure.sensitiveInput": "供应商判定输入内容涉及敏感信息，已拒绝生成。请修改提示词或参考素材后再生成。",
+  "errors.generationFailure.sensitiveOutput": "供应商判定生成内容涉及敏感信息，已拒绝交付。请调整提示词或参考素材后再生成。",
   "errors.history.failed": "生成失败，请检查服务日志。",
   "errors.connection.endpointMissing": "节点已不存在",
   "errors.connection.sourceEmpty": "当前节点内容为空，请先上传或生成节点内容",

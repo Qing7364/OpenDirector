@@ -2,6 +2,7 @@
 from uuid import UUID
 from filelock import FileLock
 from opendirector.domain.projects import ProjectError
+from opendirector.domain.timeline_errors import timeline_error, timeline_error_message
 from opendirector.domain.creation.timeline_packages import TimelinePackageImportReceipt
 from opendirector.infrastructure.creation_projects import directory, durable_json
 from opendirector.infrastructure.local_projects import child, read_json
@@ -38,5 +39,5 @@ class TimelinePackageImports:
     def receipt(self, project_id, operation_id):
         record = self.read(project_id, operation_id)
         if record is None:
-            raise ProjectError('Timeline package import does not exist.', 404, code='missing_object')
+            raise timeline_error('timeline_import_missing', 404)
         return TimelinePackageImportReceipt.model_validate(record['receipt'])

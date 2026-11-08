@@ -1,3 +1,4 @@
+import { RULE_FACTS } from "../contracts/ruleFacts.generated.ts";
 import { tNow } from "../i18n/messages.ts";
 import type { TimelineData, TimelineTextOverlayView } from "./model.ts";
 
@@ -80,9 +81,9 @@ export function validTimelineText(value: {
     overlays = value.overlays === undefined ? [] : value.overlays;
   if (
     !Array.isArray(fonts) ||
-    fonts.length > 16 ||
+    fonts.length > RULE_FACTS.timelineFontLimit ||
     !Array.isArray(overlays) ||
-    overlays.length > 2000
+    overlays.length > RULE_FACTS.timelineOverlayLimit
   )
     return false;
   const ids = new Set<string>(),
@@ -123,8 +124,8 @@ export function validTimelineText(value: {
     const length = Array.from(normalized).length;
     count += length;
     if (
-      length > 4096 ||
-      count > 200000 ||
+      length > RULE_FACTS.timelineTextMaxLength ||
+      count > RULE_FACTS.timelineTextTotalLength ||
       !range(overlay.x, 0, 1) ||
       !range(overlay.y, 0, 1) ||
       !range(overlay.maxWidth, Number.MIN_VALUE, 1) ||

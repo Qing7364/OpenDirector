@@ -24,6 +24,10 @@ const BY_MESSAGE: Record<string, MessageKey> = {
     "errors.generationFailure.referenceUnsupported",
   "供应商判定参考图片可能包含真人，已拒绝生成。":
     "errors.generationFailure.privacy",
+  "供应商判定输入内容涉及敏感信息，已拒绝生成。":
+    "errors.generationFailure.sensitiveInput",
+  "供应商判定生成内容涉及敏感信息，已拒绝交付。":
+    "errors.generationFailure.sensitiveOutput",
   "供应商任务已取消。": "errors.generationFailure.cancelled",
   "供应商任务已过期。": "errors.generationFailure.expired",
   "供应商未找到该任务。": "errors.generationFailure.notFoundTask",
@@ -54,6 +58,8 @@ export function generationFailureMessage(
   failure: GenerationFailure,
   t: Translate = defaultTranslate,
 ): string {
+  if (failure.providerCode === "voice_not_found")
+    return t("errors.generationFailure.voiceNotFound");
   const exact = BY_MESSAGE[failure.message];
   if (exact) return t(exact);
   if (failure.stage === "download")

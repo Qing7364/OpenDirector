@@ -944,13 +944,15 @@ test("reference replacement and hiding preserve the intended project relationshi
     ["canvas.hide"],
   );
   assert.equal(client.snapshot.references[0]!.id, ref.id);
-  // A hidden node source drops out of the current prompt. A reference pinned
-  // directly to an asset remains editable with its original identity.
-  for (const binding of ["follow_current", "pinned"] as const) {
+  // Display hiding must preserve every active business reference in the prompt.
+  for (const binding of ["follow_current", "pinned", "pinned_source"] as const) {
     const reference: Reference =
       binding === "follow_current"
         ? ref
-        : { ...ref, binding: "pinned", source: assetReference(asset) };
+        : {
+            ...ref, binding: "pinned", source: assetReference(asset),
+            ...(binding === "pinned_source" ? { sourceVersion: { objectType: "canvas_item" as const, id: source.id, revision: 1 } } : {}),
+          };
     const hidden = {
       ...basis,
       eventCursor: 2,
@@ -968,12 +970,12 @@ test("reference replacement and hiding preserve the intended project relationshi
     };
     client.install(hidden);
     const rendered = await projection.read();
-    assert.equal(rendered.edges.length, binding === "follow_current" ? 1 : 0);
+    assert.equal(rendered.edges.length, binding === "pinned" ? 0 : 1);
     assert.equal(rendered.hiddenNodes?.[0]?.id, source.id);
     const current = rendered.nodes[0]!;
     assert.equal(
       current.data.promptMentions?.[0]?.referenceId,
-      binding === "pinned" ? ref.id : undefined,
+      ref.id,
     );
     projection.baseline = rendered;
     projection.basis = hidden;
@@ -1039,7 +1041,7 @@ test("reference replacement and hiding preserve the intended project relationshi
         update.payload.promptContent?.some(
           (part) => part.type === "reference" && part.referenceId === ref.id,
         ),
-        binding === "pinned",
+        true,
       );
     const inactive = { ...reference, active: false, revision: 2 };
     const removed = {
@@ -1317,4 +1319,131 @@ test("clean business flush skips preparation and preserves the basis of unseen c
   // Normal saves still retain their independent view-state failure reporting.
   await projection.save(document);
   assert.match(projection.viewError, /must not save view/);
+});
+
+test("opening a project reads one snapshot that already carries reference edges", async () => {
+  const original = globalThis.fetch;
+  const snapshot = empty();
+  const edge = { referenceId: crypto.randomUUID(), state: "used" as const };
+  const requests: { path: string; method: string }[] = [];
+  globalThis.fetch = async (url, options = {}) => {
+    const path = String(url),
+      method = options.method ?? "GET";
+    requests.push({ path, method });
+    if (path.endsWith("/open-canvas"))
+      return Response.json({ snapshot, edges: [edge] });
+    if (path.includes("/views/")) return new Response(null, { status: 204 });
+    if (path.includes("/subscribe"))
+      return new Response(new ReadableStream({ start() {} }));
+    throw new Error(`Unexpected request ${method} ${path}`);
+  };
+  const client = new CreationClient(snapshot.project.id);
+  let duringInstall: string | undefined;
+  client.listen(() => {
+    duringInstall = client.referenceStates.get(edge.referenceId);
+  });
+  try {
+    await client.open();
+    assert.deepEqual(client.snapshot, snapshot);
+    assert.equal(client.referenceStates.get(edge.referenceId), "used");
+    // install() notifies listeners; they must already see the open-canvas edges.
+    assert.equal(duringInstall, "used");
+    assert.equal(
+      requests.filter((request) => request.path.endsWith("/open-canvas"))
+        .length,
+      1,
+    );
+    assert.equal(
+      requests.filter((request) => request.path.endsWith("/open")).length,
+      0,
+    );
+    // The canvas projection is not read again just to learn the edges.
+    assert.equal(
+      requests.filter((request) => request.path.endsWith("/canvas")).length,
+      0,
+    );
+    assert.equal(
+      requests.filter((request) => request.path.includes("/views/")).length,
+      1,
+    );
+  } finally {
+    client.close();
+    globalThis.fetch = original;
+  }
+});
+
+test("a server that returns a bare snapshot falls back to the canvas read", async () => {
+  const original = globalThis.fetch;
+  const snapshot = empty();
+  const edge = { referenceId: crypto.randomUUID(), state: "pending" as const };
+  const requests: string[] = [];
+  globalThis.fetch = async (url, options = {}) => {
+    const path = String(url);
+    requests.push(`${options.method ?? "GET"} ${path}`);
+    if (path.endsWith("/open-canvas")) return Response.json(snapshot);
+    if (path.endsWith("/canvas")) return Response.json({ snapshot, edges: [edge] });
+    if (path.includes("/views/")) return new Response(null, { status: 204 });
+    if (path.includes("/subscribe"))
+      return new Response(new ReadableStream({ start() {} }));
+    throw new Error(`Unexpected request ${path}`);
+  };
+  const client = new CreationClient(snapshot.project.id);
+  try {
+    await client.open();
+    assert.equal(client.referenceStates.get(edge.referenceId), "pending");
+    assert.equal(
+      requests.filter((request) => request.endsWith("/canvas")).length,
+      1,
+    );
+  } finally {
+    client.close();
+    globalThis.fetch = original;
+  }
+});
+
+test("a no-op save skips command batches and unchanged view writes", async () => {
+  const original = globalThis.fetch;
+  const snapshot = empty();
+  const client = new CreationClient(snapshot.project.id);
+  client.install(snapshot);
+  const projection = new CreationProjection(client);
+  const document = { ...createDocument("Test"), id: snapshot.project.id };
+  projection.baseline = document;
+  const requests: { path: string; method: string }[] = [];
+  globalThis.fetch = async (url, options = {}) => {
+    const path = String(url);
+    requests.push({ path, method: options.method ?? "GET" });
+    if (path.includes("/views/")) return new Response(null, { status: 204 });
+    throw new Error(`Unexpected request ${options.method ?? "GET"} ${path}`);
+  };
+  try {
+    assert.equal(await projection.save(document), false);
+    assert.equal(
+      requests.filter((request) => request.method === "PUT").length,
+      0,
+    );
+    assert.equal(
+      requests.filter((request) => request.path.endsWith("/commands")).length,
+      0,
+    );
+    // The one lazy view read is shared; the identical viewport is not rewritten.
+    assert.equal(
+      requests.filter((request) => request.path.includes("/views/")).length,
+      1,
+    );
+    // A real viewport change still persists, without touching the command log.
+    await projection.saveView({
+      ...document,
+      viewport: { x: 12, y: -4, zoom: 2 },
+    });
+    const puts = requests.filter((request) => request.method === "PUT");
+    assert.equal(puts.length, 1);
+    assert.ok(puts[0]!.path.includes("/views/"));
+    assert.equal(
+      requests.filter((request) => request.path.endsWith("/commands")).length,
+      0,
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
 });
