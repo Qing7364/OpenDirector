@@ -168,30 +168,22 @@ def reference_source_visible(ref, visible):
 
 
 def current_generation_inputs(snapshot, spec, rules, visible=None):
-    """Project current inputs while preserving saved references and history."""
-    if visible is None:
-        visible = visible_item_ids(snapshot)
-    excluded = {ref.id for ref in snapshot.references
-                if ref.active and ref.targetSpecId == spec.id and not reference_source_visible(ref, visible)}
-    references = resolved_inputs(snapshot, spec.id, rules, excluded_ids=excluded)
-    if spec.promptContent is not None and excluded:
-        parts = tuple(part for part in spec.promptContent if part.type == 'text' or part.referenceId not in excluded)
-        if parts != spec.promptContent:
-            data = snapshot.model_dump(mode='json', include={'references', 'canvasItems', 'assets'})
-            spec = spec.model_copy(update={'promptContent': parts})
-            spec = spec.model_copy(update={'prompt': prompt_projection(data, spec.model_dump(mode='json'))})
-    return spec, references
+    """Resolve active business references independently of canvas visibility.
+
+    ``visible`` remains a projection hint for callers; hiding a display object
+    does not deactivate references, remove prompt parts, or change adoption.
+    """
+    return spec, resolved_inputs(snapshot, spec.id, rules)
 
 
 def validate_frame_reference_limit(snapshot):
     items = {item.id: item for item in snapshot.canvasItems}
-    visible = visible_item_ids(snapshot)
     for spec in snapshot.generationSpecs:
         if spec.kind != 'video' or spec.parameters.videoMode != 'first_frame':
             continue
         images = set()
         for ref in snapshot.references:
-            if not ref.active or ref.targetSpecId != spec.id or not reference_source_visible(ref, visible):
+            if not ref.active or ref.targetSpecId != spec.id:
                 continue
             if ref.binding == 'pinned' and ref.source.kind == 'image' and ref.subjectRole is None:
                 images.add(('asset', ref.source.assetId))

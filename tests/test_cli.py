@@ -144,6 +144,27 @@ def test_parser_error_shows_specific_command_help():
         assert option in result.stderr
 
 
+def test_source_launcher_handoff_preserves_spaced_unicode_arguments_and_exit_status(tmp_path):
+    import os
+    import shutil
+    import venv
+    root = tmp_path / 'checkout with spaces 中文'
+    (root / 'scripts').mkdir(parents=True)
+    script = root / 'scripts/opendirector.py'
+    shutil.copyfile(Path(__file__).resolve().parents[1] / 'scripts/opendirector.py', script)
+    package = root / 'packages/core/src/opendirector'
+    package.mkdir(parents=True)
+    (package / '__init__.py').write_text('')
+    (package / 'cli.py').write_text(
+        'import json,sys\ndef main():\n print(json.dumps(sys.argv[1:]))\n raise SystemExit(17)\n')
+    venv.EnvBuilder(with_pip=False).create(root / '.venv')
+    arguments = ['中文 𠮷 with spaces', 'quotes"and&symbols', '--help']
+    result = subprocess.run([sys.executable, str(script), *arguments],
+        env={**os.environ, 'PYTHONUTF8': '1'}, capture_output=True, text=True, timeout=20)
+    assert result.returncode == 17, result.stderr
+    assert json.loads(result.stdout) == arguments
+
+
 
 def test_model_selector_requires_a_unique_exact_name():
     identity = str(uuid4())

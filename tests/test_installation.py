@@ -26,7 +26,9 @@ def test_default_timeline_font_is_readonly_installation_resource(monkeypatch, tm
     from opendirector.media.fonts import inspect_font, require_font_characters
     monkeypatch.setenv('OPENDIRECTOR_ROOT', str(tmp_path / 'workspace'))
     path = installation.default_timeline_font()
-    assert path.parent == installation.SOURCE_ROOT / 'public/fonts'
+    resources = (installation.SOURCE_ROOT / 'public' if installation.SOURCE_ROOT is not None
+                 else installation.BUNDLED / 'web')
+    assert path.parent == resources / 'fonts'
     manifest = json.loads((path.parent / 'manifest.json').read_text(encoding='utf-8'))
     fingerprint = 'sha256:' + sha256(path.read_bytes()).hexdigest()
     assert manifest['fingerprint'] == fingerprint
@@ -53,6 +55,8 @@ def test_production_server_serves_packaged_fonts_without_exposing_other_files(mo
     """Missing /fonts mount broke default text only after an installed build."""
     from pathlib import Path
     import shutil
+    import os
+    from process_helpers import directory_link
     from hashlib import sha256
     from fastapi.testclient import TestClient
     from opendirector.infrastructure.local_projects import LocalProjects
@@ -64,7 +68,12 @@ def test_production_server_serves_packaged_fonts_without_exposing_other_files(mo
     (web / 'assets/app.js').write_text('export {};', encoding='utf-8')
     (web / 'index.html').write_text('<html>App</html>', encoding='utf-8')
     (web / 'private.txt').write_text('not public', encoding='utf-8')
-    (web / 'fonts/escape.txt').symlink_to(web / 'private.txt')
+    if os.name == 'nt':
+        directory_link(web / 'fonts/escape', web)
+        escape_path = '/fonts/escape/private.txt'
+    else:
+        (web / 'fonts/escape.txt').symlink_to(web / 'private.txt')
+        escape_path = '/fonts/escape.txt'
     monkeypatch.setattr(installation, 'SOURCE_ROOT', None)
     monkeypatch.setattr(installation, 'BUNDLED', bundled)
     client = TestClient(create_app(LocalProjects(tmp_path / 'data')))
@@ -74,7 +83,7 @@ def test_production_server_serves_packaged_fonts_without_exposing_other_files(mo
     assert font.status_code == 200
     assert 'sha256:' + sha256(font.content).hexdigest() == manifest.json()['fingerprint']
     assert 'SIL OPEN FONT LICENSE' in client.get('/fonts/LICENSE.txt').text
-    for path in ('/fonts/%2e%2e/private.txt', '/fonts/escape.txt', '/private.txt', '/fonts/missing.otf'):
+    for path in ('/fonts/%2e%2e/private.txt', escape_path, '/private.txt', '/fonts/missing.otf'):
         assert client.get(path).status_code == 404
     assert client.post('/fonts/manifest.json').status_code == 405
     assert client.get('/assets/app.js').status_code == 200

@@ -18,6 +18,8 @@ click==8.5.0
     # via uvicorn
 colorama==0.4.6 ; sys_platform == 'win32'
     # via pytest
+distlib==0.4.4
+    # via opendirector
 fastapi==0.143.2
     # via opendirector
 filelock==3.32.7

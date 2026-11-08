@@ -3,6 +3,7 @@ from uuid import uuid4
 import json
 import zipfile
 from pathlib import Path
+import os
 import pytest
 from test_creation_canvas_service import project, send, ver
 from test_timeline_fonts import timeline_document
@@ -23,6 +24,54 @@ def stage(store, pid, session, path):
             writer.write(chunk)
     info = writer.finish()
     return dict(operationId=uuid4(), uploadHandle=handle, archiveFingerprint=info.fingerprint)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize('component', ['work', 'turn', 'agent-runs'])
+async def test_agent_package_tools_reject_replaced_execution_root_and_ancestors(project, tmp_path, component):
+    import hashlib
+    import shutil
+    from opendirector.agent.context import RunContext
+    from opendirector.agent.gateway import ToolGateway
+    from opendirector.agent.tools import AgentTools
+    from opendirector.infrastructure.model_configs import ModelConfigs
+    from process_helpers import directory_link
+    store, pid, session = project
+    document, _, _ = timeline_document(project, tmp_path)
+    assert send(store, pid, 'editor.create', session=session, document=document).status == 'applied'
+    before = store.snapshot(pid)
+    folder, turn = store.root / 'Unified', uuid4()
+    work = folder / 'agent-runs' / str(turn) / 'work'
+    work.mkdir(parents=True)
+    anchor = {'work': work, 'turn': work.parent, 'agent-runs': work.parent.parent}[component]
+    outside = tmp_path / 'outside'
+    outside_work = outside / work.relative_to(anchor)
+    outside_work.mkdir(parents=True)
+    archive = outside_work / 'input.timeline.zip'
+    exported = service(store).export(pid, document['id'], 1)
+    try:
+        shutil.copyfile(exported, archive)
+    finally:
+        exported.unlink()
+    contents = archive.read_bytes()
+    fingerprint = 'sha256:' + hashlib.sha256(contents).hexdigest()
+    anchor.rename(anchor.with_name(anchor.name + '-original'))
+    directory_link(anchor, outside)
+    run = RunContext(runtime='codex', project_id=pid, turn_id=turn, session=session,
+        directory=folder, config=None, messages=[], selected_skills=[])
+    gateway = ToolGateway(AgentTools(store, None, ModelConfigs(tmp_path)), run)
+    try:
+        result = await gateway.call('export', 'timeline_package_export', dict(
+            editorId=str(document['id']), revision=1, path='output.timeline.zip'))
+        assert result.error and not (outside_work / 'output.timeline.zip').exists()
+        result = await gateway.call('import', 'timeline_package_import', dict(
+            path='input.timeline.zip', operationId=str(uuid4()), archiveFingerprint=fingerprint))
+        assert result.error
+        assert archive.read_bytes() == contents
+        assert store.snapshot(pid) == before
+    finally:
+        await gateway.close()
+        anchor.rmdir() if os.name == 'nt' else anchor.unlink()
 
 
 def test_package_exports_exact_revision_readonly_and_imports_real_resources(project, tmp_path):
@@ -222,26 +271,46 @@ async def test_live_agent_gateway_package_roundtrip_scopes_files_without_large_j
     arguments = dict(path='saved.timeline.zip', operationId=str(uuid4()), archiveFingerprint=fingerprint)
     imported = await gateway.call('import', 'timeline_package_import', arguments)
     assert imported.error is None and imported.value['status'] == 'applied', imported
+    replay = await gateway.call('replay', 'timeline_package_import', arguments)
+    assert replay.error is None and replay.value == imported.value
+    assert (await gateway.call('overwrite', 'timeline_package_export',
+        dict(editorId=str(document['id']), revision=1, path='saved.timeline.zip'))).error
+    assert file_identity(archive) == (fingerprint, size)
     outside = await gateway.call('outside', 'timeline_package_export', dict(editorId=str(document['id']), revision=1, path=str(tmp_path / 'outside.zip')))
     assert outside.error and not (tmp_path / 'outside.zip').exists()
-    alias = work / 'symlink.zip'; alias.symlink_to(archive)
-    assert (await gateway.call('symlink', 'timeline_package_import', {**arguments, 'operationId': str(uuid4()), 'path': 'symlink.zip'})).error
+    if os.name == 'nt':
+        import _winapi
+        alias = work / 'junction'; _winapi.CreateJunction(str(work), str(alias))
+        alias_path = 'junction/saved.timeline.zip'
+    else:
+        alias = work / 'symlink.zip'; alias.symlink_to(archive)
+        alias_path = 'symlink.zip'
+    try:
+        assert (await gateway.call('symlink', 'timeline_package_import', {**arguments, 'operationId': str(uuid4()), 'path': alias_path})).error
+    finally:
+        alias.rmdir() if os.name == 'nt' else alias.unlink()
     # Actual CLI subprocess uses the turn socket; an invalid HTTP URL makes bypass visible.
     import tempfile
-    socket_dir = tempfile.TemporaryDirectory(prefix='od-', dir='/tmp')
+    socket_dir = tempfile.TemporaryDirectory(prefix='od-', dir=None if os.name == 'nt' else '/tmp')
     async with turn_environment(work, gateway, asyncio.Queue(), socket_dir.name) as env:
         env['OPENDIRECTOR_API_URL'] = 'http://127.0.0.1:1'
-        process = await asyncio.create_subprocess_exec(str(work / '.opendirector-bin' / 'opendirector'),
+        launcher = work / '.opendirector-bin' / ('opendirector.cmd' if os.name == 'nt' else 'opendirector')
+        prefix = [os.environ['COMSPEC'], '/d', '/c', str(launcher)] if os.name == 'nt' else [str(launcher)]
+        process = await asyncio.create_subprocess_exec(*prefix,
             'timeline', 'export', '--editor-id', imported.value['editorId'], '--revision', '1', '--output', 'cli.timeline.zip',
             cwd=work, env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         stdout, stderr = await process.communicate()
-        assert process.returncode == 0, stderr.decode()
+        assert process.returncode == 0, (stdout.decode(), stderr.decode())
         assert (work / 'cli.timeline.zip').is_file()
-        process = await asyncio.create_subprocess_exec(str(work / '.opendirector-bin' / 'opendirector'),
+        # The read-only export does not renew edit ownership. Refresh this
+        # live session through the real open operation before the next mutation,
+        # as the UI heartbeat does; keep lease expiry and ownership checks intact.
+        store.open(pid, session)
+        process = await asyncio.create_subprocess_exec(*prefix,
             'timeline', 'import', 'cli.timeline.zip', '--operation-id', str(uuid4()),
             cwd=work, env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         stdout, stderr = await process.communicate()
-        assert process.returncode == 0, stderr.decode()
+        assert process.returncode == 0, (stdout.decode(), stderr.decode())
         assert json.loads(stdout)['status'] == 'applied'
 
     socket_dir.cleanup()

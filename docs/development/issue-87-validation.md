@@ -132,3 +132,635 @@ PYTHON=/absolute/path/to/wheel-venv/bin/python node tests/browser/timeline_text_
 本轮七个浏览器脚本均退出 0，实际监听关闭已检查。首个编辑脚本成功后的临时 bind-only 检查曾因 TCP TIME_WAIT 误报，随后通过 lsof 无监听和 ECONNREFUSED 确认清理完成，改用连接拒绝检查后继续；未修改产品代码或删减测试。日志、环境/架构、源码快照、原生 wheel、MP4、PNG 和报告位于可再生成的 `test-results/issue87/arm64`。原有 x64 证据保留。
 
 本次补验没有运行真实付费模型或重跑已知停滞的长原生 Agent 集成，也不将既有完整 Python 失败改报为通过。当前已验证范围扩展为本机 macOS x64/Rosetta 与原生 arm64；Windows 仍未验收。应用未留作后台常驻服务，原工作区仍未暂存、提交或推送。
+
+## Windows 原生补验：PR #193（2026-11-06）
+
+本节保留指定提交的修复前验收；后续本机修复及新 wheel 复验见下一节。
+
+**结论：源码与 Windows wheel 安装、所覆盖的 UI/CLI 创作流程通过；#87 的 Windows 完整验收未通过。** 新增 Agent 包工具依赖的安全执行目录文件访问在 Windows 明确拒绝，不能用 UI↔CLI 包往返通过来代替内置 Agent 工具可用性。另有三项基线存储检查失败和一次桌面内存采样失败，以下分别记录。
+
+English summary: native Windows source and clean-wheel installation, Chinese preview and decoded MP4, real edit/save/restart/reopen, UI↔CLI editable-package exchange and the no-text regression passed. Full Windows acceptance is **not green**: both Agent package tools reject execution-directory access on Windows. Focused Python checks returned 291 passed, 4 failed and 4 skipped; three storage failures were reproduced on the untouched baseline. The desktop runner exited 1 on an external memory-sampling error; its actual media passed the original ffprobe/frame assertions in a separate verification. No paid model was called and no code was committed, pushed or merged.
+
+### 代码、机器与安装
+
+- 目录为 `C:\Users\Qing Peng\OpenDirector`。开始时为干净 `main`，HEAD `9d057721e2f5e1fcf89fcc1e958a7b50da0f367d`；无已暂存、未暂存或未跟踪改动，无需 stash。
+- 安装 GitHub CLI 并由用户完成认证后，实际执行 `gh pr checkout 193` 成功。检出后本地 HEAD 为 **`9834c1cc0d56abece57d815de53f78a501e698d0`**，工作区干净；验收期间未切换到其他提交。未合入更新的 upstream main。
+- Windows 11 原生 x64，build 26200，PowerShell 7.6.9；Intel i7-11850H，8 核/16 线程，约 32 GiB 内存；不使用 WSL。Chrome 156.0.8078.80，Node 24.22.1 / npm 11.19.1，Python 3.12.10，FFmpeg/ffprobe 9.0.2（Gyan full build，实际检测到精确的 `libx264` 编码器）。
+- 复用 fnm 中的 Node 和已有 Python；通过 WinGet 安装 gh 2.103.3、用户级 FFmpeg，安装器校验哈希成功。补充用户 PATH 且保留原条目；用刷新后的用户/系统 PATH 启动新的无 profile PowerShell，验证工具发现和版本。未更改执行策略、Developer Mode 或系统安全设置。
+- 新建 `.venv`，实际运行 `python -m pip install -v -e ".[test]"`；安装钩子依次完成 npm ci、TypeScript/Vite 生产构建和 OpenCode **1.19.5** 执行校验。`pip check`、安装技能的 `check_environment.py --installed`、正式 `serve` 的 health/生产页面/资源及 CLI 持久化检查通过。
+- 实际依赖包括 fontTools 4.68.0、FastAPI 0.162.0、Pydantic 2.14.3、Pillow 13.0.0、Starlette 1.10.0。安装依照 pyproject 范围解析，未声称与 requirements.txt 中全部版本一致；未修改锁文件、全局 registry 或凭证内容。
+
+### 检查与实际产物
+
+| 检查 | Windows 实际结果 |
+| --- | --- |
+| Node、双语、契约 | `npm test`：621 passed；`npm run check:i18n`：2,921 keys、零问题；`scripts/generate_contracts.py --check` 通过。前端生产构建由安装钩子完成 |
+| 聚焦 Python | 十个文件共 299 项：291 passed、4 failed、4 skipped，333.99 秒；完整套件和已知长原生 Agent 集成未重跑，不宣称全绿 |
+| 文字编辑 | Windows 宿主适配后的 `timeline_text_editing.mjs` 退出 0；真实 UI 组合输入事件、撤销重做、移动/改时长、保存、共用命令修改、UI 接续、冲突/锁、实际 API 停止再启动、重开及中英切换通过。组合输入采用脚本合成事件，不等同于人工使用 Windows IME 候选窗口 |
+| 中文预览及 MP4 | `timeline_text_render.mjs` 退出 0；真实字体与 MP4 解码帧 23/24/47/48/71/72/95/96、起止时刻、换行与覆盖层、纯文字/片尾、混音与既有 MP4 回归通过；位置修改不重复读取字体来源 |
+| 缺字与恢复 | `timeline_text_coverage.mjs` 退出 0；默认 Noto 对不覆盖的 emoji、实际 Latin-only 字体对中文均在中英界面诊断；正文保留、零绘制/零错误排版测量、取消隔离、重试与同会话恢复通过 |
+| 可编辑包 UI↔CLI | `timeline_text_archive.mjs` 退出 0；UI A→真实 CLI B→UI C，资源重新登记且字节指纹相同，服务重启后续编；A/B 成片为不同资产，编辑依据版本分别为 2/3，旧文件/历史保持。双语拒绝未知能力包及含文字 FCPXML，通过；这不是 AgentTools 包工具通过 |
+| 无文字回归 | `timeline_workflow.mjs` 退出 0；顺序/变速、1.5 秒真实 MP4、混音、正式发布、取消无结果、缺失来源拒绝、实际服务重启及第二份可播放输出通过 |
+| 可见桌面输出 | 隔离可见 Chrome 实际生成 1920×1080、1080×1920 H.264，24 fps、60 帧、2.5 秒；中文清晰、层次正确。独立保留原脚本的 ffprobe/解码帧 11/12/24/36/48/59 断言，复核通过；预览含独占结束帧 60 |
+| 2,000 条/600 秒 | 两份真实 H.264 640×360、24 fps、14,400 帧/600 秒产物通过独立 ffprobe 断言；不是以缩小分辨率代替上面的横竖 1080p 检查 |
+
+Python 聚焦命令为：
+
+```powershell
+& .\.venv\Scripts\python.exe -m pytest tests/test_creation_timeline_text.py tests/test_creation_timeline_render.py tests/test_timeline_fonts.py tests/test_timeline_packages.py tests/test_creation_contracts.py tests/test_creation_storage.py tests/test_creation_history_service.py tests/test_creation_media_publication.py tests/test_creation_api.py tests/test_agent_metadata.py -q
+```
+
+### 未通过项及归因
+
+1. **Agent 包导出/导入在 Windows 不可用。** `test_live_agent_gateway_package_roundtrip_scopes_files_without_large_json[asyncio]` 在首次导出失败。后续独立隔离探针分别调用真实 `ToolGateway` 的 `timeline_package_export` 和 `timeline_package_import`，两者均返回“当前平台不支持安全的执行产物文件读取。”，拒绝后工程快照保持不变。`application/creation_artifacts.py::execution_file` 要求 `os.open` 支持 `dir_fd` 和 `O_NOFOLLOW`，否则拒绝为 501；新增包工具复用了该限制。未采用降低安全校验的临时绕过，也未修改产品代码。该结果不满足本项在 Windows 上的 UI/Agent 能力等价门槛。
+2. **三项存储基线失败。** `test_symlinks_and_missing_commit_records_are_not_followed_or_replaced` 在创建 symlink 时得到 WinError 1314；本机没有所需权限。`test_byte_verified_cache_detects_rewrites_with_unchanged_file_signature[head/ancestor]` 未抛出预期的损坏错误：缓存命中直接返回旧记录。将未修改的 `28f30454` 归档到独立目录，明确以其 core/API 源码导入，使用同一依赖重跑这三项，均再次失败（2.71 秒）；这三个测试及存储实现相对该基线无差异。没有启用 Developer Mode，也没有将权限失败当作业务校验通过。另四项测试由仓库已有 Windows/POSIX change-time 条件跳过。
+3. **桌面 runner 的采样断言失败。** 外部内存读取替换为 Windows `GetProcessMemoryInfo`，只读取该隔离 Chrome 经 CDP 报告的 PID。基线阶段一次 `OpenProcess` 返回 WinError 87；该 PID 在后续进程列表中已不存在，符合进程退出与读取间的竞态，但本轮未进一步证明原因。原 runner 保留错误并退出 1，不能记成整套通过。后续独立脚本读取其实际输出，完整执行原有媒体参数、像素和样例成功断言并退出 0，未删改原采样失败。
+
+### Windows wheel
+
+从指定 HEAD 的 Git 归档创建独立源码目录，以全新构建目录运行 `pip wheel -v --no-deps`，由同一构建钩子执行 npm ci、生产构建及 OpenCode 版本检查。产物为 **`opendirector-0.1.0-py3-none-win_amd64.whl`，97,527,809 字节**，SHA-256 **`bbfe2db5303a54db2027bb3d57a0f837c0b974dba797af068ea6b98f97cab2a5`**。包内 22 个 web 文件（其中 18 个 assets）的名称与全部字节均与该次构建的 dist 一致；OpenCode 是实际 Windows AMD64 PE（machine 0x8664），不是其他系统二进制改标签。
+
+在另一个全新 venv 安装该 wheel，`pip check`、原 `scripts/verify_install.py` 通过。独立字体检查确认从 site-packages 导入（`SOURCE_ROOT is None`），真实正式服务的 manifest、16,437,364 字节默认字体和 4,301 字节许可证均为 HTTP 200，并与安装内容逐字节一致；字体 SHA-256 与本记录上文相同。首次自编字体探针误请求 `LICENSE` 得到 404，改为仓库实际的 `LICENSE.txt` 后复验通过；保留初次日志，此 404 不作为产品缺陷。
+
+Windows 宿主适配后的 `timeline_text_installed.mjs` 退出 0：不启动 Vite，后台 PATH 排除 Node，实际 UI 添加时间线/文字、可见中文预览、缺字诊断/正文保留/修正、保存、停止实际 API 监听、重启和重开通过。wheel 平台标签仅对应本机实际测试的 Windows 11 x64，不表示其他 Windows 版本或架构已验收。
+
+### 测量、宿主适配与证据边界
+
+桌面样例单次顺序测量，无文字为 **49.361 秒 / 496,550 字节**，2,000 条文字为 **50.380 秒 / 1,468,866 字节**。对应进度回调采样 JS 已用堆最大值为 42,997,810 / 51,681,874 字节。Windows working-set 总和采样成功 98/101 次，采样最大值 1,021,096 / 927,760 KiB；基线另有上述一次读取错误。working set 可重复计算共享页，采样会遗漏瞬时峰值，外部 Python 查询自身亦有开销；这些不是独占内存或可靠的完整峰值。该桌面测量期间本任务的构建与其他检查已结束，但不能排除用户/系统后台负载；不据此作跨平台性能比较或效率提升承诺。
+
+归档脚本另在完整 UI 打开 2,000 条文档并做十次 fill/blur 编辑：打开 3.915 秒，编辑样本中位数 3.035 秒，最小 2.819 秒、最大 3.936 秒，保留所有原始样本与 JS 堆。该段与本任务部分其他检查/构建重叠，包含 CDP 往返和两次动画帧等待，只作功能与响应诊断，不是隔离性能基准，也不宣称即时响应。
+
+本轮没有改动产品或原始浏览器测试文件。为运行现有 POSIX 宿主脚本，在忽略目录生成七个 Windows 测试副本，记录原文件与副本 SHA-256：将 PYTHONPATH 的冒号换为分号、相对 helper import 定位回原测试、通过 taskkill 回收自己启动的完整进程树；wheel 测试以 venv Scripts 和 Windows 系统目录组成无 Node PATH；RSS 使用上述 Win32 查询。业务场景、断言和媒体规格保留。桌面媒体补验另复用原脚本的媒体断言，独立报告，不覆盖 runner 的退出码。直接在 Windows 复现原脚本前必须处理这些宿主差异；原脚本未因此成为已修复的跨平台测试入口。
+
+本机忽略目录 `test-results/issue87/windows` 保存安装/构建与每项运行日志、源码归档、Windows wheel、可复查宿主适配副本及清单、字体/包/桌面报告、PNG/MP4 和原始采样失败。它们是本轮本机证据，不是其他开发者的源码、安装或理解文档的必需依赖。文字编辑和无文字流程的临时工程/输出位置也记录于各自日志。所有 13 个固定浏览器测试端口最终连接拒绝，独立字体探针亦确认自有监听释放；未留下本任务应用服务。
+
+未调用真实付费模型、未覆盖真实模型对话驱动完整创作，未重跑全套 Python 或长原生 Agent 集成，未提供后台渲染验收。Git HEAD 保持指定提交；仅补充本验收文档，未暂存、提交、推送、合并或更新 GitHub Issue/PR。
+
+## Windows Agent 包访问修复及复验（2026-11-06）
+
+**本次包导入/导出阻塞已修复并通过 Windows 原生复验；不将此前或更宽范围的失败改报为全部通过。** 代码基于 HEAD `9834c1cc0d56abece57d815de53f78a501e698d0` 的本机未提交修改，保留前一轮验收文档。以下结果不是对未修改 HEAD 的通过声明。
+
+English summary: Windows Agent package import/export now passes through the real ToolGateway and CLI subprocess transport, including replay, exclusive export creation and boundary refusal. The shared execution-file layer uses handle-relative Windows file access, rejects reparse points and special filename aliases, and removes failed new outputs by handle. Source security/package tests passed (53 passed, 1 privilege-dependent symlink test skipped); an independent clean Windows wheel passed the Agent round trip and security tests (21 passed, 1 skipped) with Node absent from PATH. UI↔CLI exchange, actual MP4 publication, installed UI save/restart/reopen and bilingual diagnostics also passed. Broader Agent regressions still have unrelated preview, symlink-permission and metadata failures; this is not a full-suite green claim. Nothing was staged, committed, pushed or merged.
+
+### 实现及安全边界
+
+- 执行文件访问移到共用的 `infrastructure/execution_files.py`，产物发布和原生可编辑包继续调用同一入口；未在包服务或 Agent 入口增加跳过校验的 Windows 特例。范围仍由宿主提供的执行目录决定，命令身份、资源限制、字体检查、导入指纹、回执和重放语义不变。
+- POSIX 保留目录 fd 逐级打开、`O_NOFOLLOW`、普通非空文件校验和独占创建。Windows 在 `windows_execution_files.py` 使用 [NtCreateFile 的 RootDirectory](https://learn.microsoft.com/windows/win32/api/winternl/nf-winternl-ntcreatefile) 对已打开的目录句柄执行单组件查找，不将用户子路径重新拼成绝对路径打开。以 `FILE_OPEN_REPARSE_POINT` 打开对象本身，并查询返回句柄，拒绝所有 reparse tag（包括 symlink/junction）；保留目录句柄直至操作结束。
+- Windows 打开时不共享写入或删除访问，实际测试确认已打开目录/文件无法在查找、读取或写入期间被重命名、覆盖或删除；文件描述符不可继承。输出使用 `FILE_CREATE` 独占创建，写入或 fsync 失败通过 [SetFileInformationByHandle](https://learn.microsoft.com/windows/win32/api/fileapi/nf-fileapi-setfileinformationbyhandle) 标记本次创建的对象删除，不按可能已变化的路径删除。
+- 在 `abspath` 规范化前拒绝 Windows 设备别名、ADS、尾部点/空格等特殊名称，避免规范化将危险名称改写成另一对象；打开每个组件前再次校验。UTF-16 名称测试包含中文、空格和非 BMP 字符。没有按路径检查后普通 open 的降级分支，没有改变系统安全设置或要求管理员权限。
+- 测试宿主适配保留业务断言：Windows 用真实 junction 测试目录穿透；实际 Agent CLI 测试改用 Windows 临时目录和 `.cmd`，仍故意将 HTTP URL 设为不可达，证明 CLI 通过本轮 Agent 网关完成操作。
+
+### 实际检查
+
+| 范围 | 结果及依据 |
+| --- | --- |
+| 安全访问、产物发布及包服务 | `test_execution_files.py`、`test_creation_artifacts.py`、`test_timeline_packages.py`：53 passed、1 skipped，93.39 秒。覆盖越界、空文件/目录、独占创建、复制/fsync 失败清理、Windows ADS/设备名/尾部别名、真实 junction、路径替换及读写/删除互斥。唯一 skip 是本机无 symlink 权限；junction 场景实际运行通过 |
+| 真实 Agent 包及 CLI | 上述包测试中的真实 ToolGateway 及 CLI 子进程均通过导出、导入、同 operationId 重放、拒绝覆盖并保留旧指纹、拒绝越界及链接路径；大于 4 MiB 的真实包在磁盘往返，不以大 JSON 替代包字节 |
+| 产物与 CLI 定向回归 | 五个产物发布场景及 `test_cli.py`：18 passed，38.37 秒；覆盖重放、丢失回执恢复、真实图片/音频/视频发布及来源关联 |
+| UI/CLI 与实际成片 | 重跑 Windows 宿主适配的 `timeline_text_archive.mjs`，退出 0；跨工程重新登记资源、UI↔CLI 往返、服务重启后续编、A/B MP4/编辑版本依据、双语格式拒绝及 2,000 条文档可编辑检查通过 |
+| 干净 wheel 中的 Agent/安全检查 | 从 site-packages 导入修复实现，PATH 无 Node，实际运行执行文件测试和真实 Agent/CLI 包往返：21 passed、1 skipped，16.55 秒。该次还验证了包含中文和非 BMP 字符的文件名 |
+| wheel 启动、字体及 UI | pip check、原 verify_install、内置 OpenCode 1.19.5、正式服务及静态资源通过；默认字体/manifest/许可证 HTTP 字节一致。实际安装 UI 的中文预览、缺字保留/恢复、保存、停止真实监听再重启和重开通过；浏览器 pageerror 为空 |
+| 双语与构建 | check:i18n：2,921 keys、零问题；新 wheel 的安装钩子实际执行 npm ci、TypeScript/Vite 构建及 OpenCode 版本检查。没有新增显示词条，继续使用既有业务错误；真实 UI 中英文拒绝流程也已重跑 |
+
+最终较宽回归同时运行上述三个文件及 `test_agent_artifacts.py`、`test_agent_gateway.py`、`test_cli.py`，结果为 **87 passed、6 failed、1 skipped，115.63 秒**。四项预览失败为 `test_asset_id_preview_is_bounded_and_preserves_project[image/video/audio]` 和 `test_public_queries_share_http_and_agent_results[asyncio]`，均在预览路径读取时得到文件不存在；另两项为 `test_skill_read_resolves_directory_alias_and_preserves_boundary` 的 WinError 1314，以及 `test_batch_hide_is_atomic_and_replayable` 的描述长度断言（161 > 120）。这些不是本次目标检查的通过项；本轮未将这六项全部放到未修改 HEAD 上重现，因此不笼统标记为“已证明的基线失败”。原始失败日志保留，完整 Windows 验收仍不能宣称全绿。
+
+定向服务检查可在已安装源码环境直接复现，不依赖前一轮本机测试副本：
+
+```powershell
+$env:PYTHONUTF8 = '1'
+& .\.venv\Scripts\python.exe -m pytest tests/test_execution_files.py tests/test_creation_artifacts.py tests/test_timeline_packages.py -q -ra
+```
+
+### 修复版 Windows wheel 与范围
+
+从当前源码（含未提交修改及新增 Python 模块）创建独立源码快照，再在全新构建目录运行 `pip wheel -v --no-deps`。本机保留 755 个文件的快照清单及逐文件 SHA-256。修复产物为 **`opendirector-0.1.0-py3-none-win_amd64.whl`，97,531,237 字节**，SHA-256 **`b1c860642ae22f8b281c9d8fa5d55ff8265c78498759cb340c544da0ccb7b8c1`**。22 个 web 文件（18 个 assets）与该次 dist 的名称/字节一致，内置 OpenCode 为 AMD64 PE；三个改动的生产 Python 文件与当前源码逐字节一致。重新创建 venv 安装该包，没有覆盖前一轮 wheel 或安装环境。
+
+本次针对文件访问和包工具重新验收，没有重新运行完整 Python、真实付费模型或长原生 Agent 集成；没有重测横竖 1080p 和 600 秒性能，因此上节的媒体结果及采样限制仍按原轮次归属，不宣称为本轮新测量。更宽 Agent 检查发现的预览路径失败、技能 symlink 权限和元数据长度断言仍需单独处理；未删除相关测试或修改无关产品代码来取得全绿。详细最终结果及本机材料保留于忽略目录 `test-results/issue87/windows-fix`，含每项日志、快照清单、wheel、字体/浏览器/包报告和实际 MP4，不是其他开发者的必要源码依赖。
+
+最终未留下本任务测试服务，工作区只保留代码、测试及本验收文档修改（包括新增模块），HEAD 未变；未暂存、提交、推送、合并或修改 GitHub 内容。
+
+## Windows 剩余六项修复与完整 Python 套件（2026-11-06）
+
+**本节为上一轮历史结果；50 项后续修复见下节。原六项失败已修复；该轮完整 Python 套件仍未全绿。** 本轮在同一 Windows 原生 x64 机器、同一 HEAD 加未提交修改上继续，保留先前所有代码和验收材料。没有删除测试、新增 skip/xfail 或扩大既有跳过条件。
+
+English summary: all six previously reported failures now pass, both in focused tests and in the full Python run. The related Agent/artifact/metadata/CLI checks passed 54 tests without skips. The complete, unfiltered `tests` suite finished with **983 passed, 50 failed and 8 skipped** (1,041 collected, exit 1, 1,094.28 seconds). The remaining failures span storage integrity, generation, runtime execution/catalog/readiness, filesystem privileges and lifecycle checks; they are not all classified as environment limitations or proven baseline failures. Node tests (621), generated-contract consistency and i18n checks passed. A new Windows wheel was built and installed; its related run had 53 passes and one source-launcher handoff failure, while the installed module CLI and production startup checks passed. Nothing was staged, committed, pushed or merged.
+
+### 六项修复及未削弱的校验
+
+1. **四项预览失败：** 预览缓存和 Agent 执行目录都重复使用 `asset UUID + 完整 SHA-256` 作为文件名。在本机 pytest 深层目录中，普通 Windows 路径超限，实际复制/读取报文件不存在。缓存及 Agent 投影改用完整的 `asset.id.hex` 加媒体后缀；不是截断内容指纹，也没有改变 Asset、AssetRef 或项目持久化身份。每次预览仍先经过 `open_media` 的项目范围、实际文件及指纹校验，预览尺寸/音频时长限制不变，HTTP 与 Agent 返回字节一致。没有关闭源文件验证或更改 Windows 全局长路径设置；此修改不宣称解决任意超深目录的所有 Windows 文件操作。
+2. **技能别名测试：** Windows 使用真实 junction 构造已发现技能目录别名及向目录外的逃逸，POSIX 保留原符号链接路径。实际验证通过别名/规范路径读取同一内容，以及拒绝遍历和链接逃逸；没有把权限异常改成通过或跳过。预览的 Windows 恶意路径场景同样使用真实目录 junction，并核对目录外哨兵文件和源文件均未被覆盖。
+3. **命令简介长度：** 两条命令简介分别收敛到 111/112 字符，保留 `<=120` 断言。固定/跟随参考的来源身份要求仍在 `references` 参数说明；完整配置替换、未编辑字段保留、当前 expected version 及已接受任务快照不变仍在 `SpecWrite.spec` 说明中，新增测试防止压缩简介时丢掉这些约束。CLI 简介继续明确“Replace the complete generation configuration”。业务校验、操作身份与保存语义未改变。
+4. **生成文件：** 重新生成共享契约 JSON；生成器显式写入 UTF-8/LF，遵守仓库 `.gitattributes`，避免 Windows 生成无语义的 CRLF 差异。生成的 TypeScript 类型没有语义变化。
+
+对应文件为 `application/creation_assets.py`、`agent/tools.py`、`domain/creation/commands.py`、`scripts/generate_contracts.py`、生成的契约及相关测试。前轮执行文件安全访问实现保留。
+
+### 运行结果
+
+| 检查 | 本轮实际结果 |
+| --- | --- |
+| Agent/artifact/gateway/metadata/CLI 相关测试 | `test_agent_artifacts.py`、`test_agent_gateway.py`、`test_agent_metadata.py`、`test_cli.py`：54 passed、零跳过，37.29 秒 |
+| 完整 Python | 1,041 collected，983 passed、50 failed、8 skipped、1 warning，1,094.28 秒；正常完成并写出 JUnit，退出 1，无测试筛除 |
+| 原六项在完整套件中的结果 | 从最终 JUnit 逐项核对：三种媒体预览、HTTP/Agent 共用查询、技能别名边界、批量隐藏原子/重放，六项全部 passed |
+| Node | 621 passed、零失败、零跳过；最终代码再次执行 |
+| 契约与双语 | `generate_contracts.py --check` 通过；check:i18n 为 2,921 keys、零问题；没有新增显示词条 |
+
+完整执行入口（需要已安装项目测试依赖和 FFmpeg/ffprobe）：
+
+```powershell
+$env:PYTHONUTF8 = '1'
+New-Item -ItemType Directory -Force test-results/issue87/windows-regression | Out-Null
+& .\.venv\Scripts\python.exe -m pytest tests -vv --tb=short -ra -o faulthandler_timeout=180 --junitxml=test-results/issue87/windows-regression/python-full.xml
+```
+
+`faulthandler_timeout` 只提供长测试的堆栈诊断，不跳过或终止测试。第一次完整尝试在约 29% 时因发现 CLI “complete configuration” 措辞回归而中止；修正后，从头执行上述最终完整套件，期间没有再改动产品代码。前次部分日志单独保留，不计作完整结果。独立 wheel 构建及部分安装检查与最终套件重叠；本轮运行时长不是性能基准。
+
+### 完整套件的 50 项失败
+
+下表是最终 JUnit 按模块统计的全部失败（合计 50），不是仅列代表性通过项。详细用例名、异常和堆栈保留在完整日志/JUnit 及其 JSON 摘要中。
+
+| 模块 | 失败数 | 实际失败特征／本轮边界 |
+| --- | ---: | --- |
+| `test_creation_assets.py` | 1 | 构造符号链接时 WinError 1314，未执行到该场景的拒绝断言 |
+| `test_creation_generation_service.py` | 1 | 隐藏来源生成、历史、重启及幂等场景出现 tuple IndexError |
+| `test_creation_storage.py` | 3 | 一项 symlink 权限失败；两项相同文件签名下的提交改写没有触发预期 ProjectError。后两项是实际存储完整性检查失败，不能算作环境通过；前轮已在未修改基线复现这三项 |
+| `test_deepseek_runtime.py` | 7 | CLI 安装/发现失败、列表 IndexError、ACP 版本断言及取消场景未达到预期 |
+| `test_installation.py` | 1 | 创建字体目录逃逸链接时 WinError 1314；独立真实安装/字体 HTTP 检查通过不代替该失败测试 |
+| `test_jiuwenswarm_runtime.py` | 10 | CLI 查询、正文/最终回复、取消、stderr、交互及错误传播场景失败 |
+| `test_native_runtime.py` | 11 | 模拟或真实原生流程的进程退出、技能链接权限、四种运行时取消检查中的 WinError 87；包括两个真实内置 OpenCode 测试，未将其记作通过 |
+| `test_runtime_catalog.py` | 8 | CLI 启动失败或 WinError 193（不是有效的 Win32 程序）；目录、默认模型选择等预期未满足 |
+| `test_runtime_readiness.py` | 6 | 返回 unknown/not_installed，而测试期望 ready/needs_login/checking |
+| `test_self_hosted.py` | 1 | 视频参考接入规则没有抛出预期 ProjectError |
+| `test_tool_lifecycle.py` | 1 | 活跃 worker 场景得到 running，预期 queued |
+
+部分 runtime 测试构造的是 POSIX shebang/可执行脚本夹具，尚未适配本机 Windows 启动方式；另有实际服务断言及权限失败。仅凭这些报错不足以将全部失败归为测试宿主问题。本轮没有对新增发现的 50 项逐项执行未修改 HEAD 的对照，因此不把它们笼统描述为“均已证明是基线失败”，也没有安装或登录外部 Harness 来隐去测试结果。
+
+8 个跳过均来自原有条件：4 个依赖 POSIX change-time 的存储缓存场景、1 个缺少 Windows symlink 权限的执行文件场景、3 个需要真实 dsh/JiuwenSwarm CLI 的引擎/媒体集成。实际 junction 防护测试运行通过。本轮没有扩大这些条件；未启用 Developer Mode 或改变系统安全设置。
+
+### 新 wheel 与额外限制
+
+从本轮当前源码快照重新构建 **`opendirector-0.1.0-py3-none-win_amd64.whl`，97,531,441 字节**，SHA-256 **`1f77ecc4e5bb5e6354969a1581f7e7dfe44eec3047252a1eca19416b9a144a5d`**。22 个 web 文件（18 个 assets）与该次 dist 名称/字节一致，六个改动的生产 Python 文件与当前源码逐字节一致。全新 venv 安装后 pip check、正式 serve/健康检查、内置 OpenCode 1.19.5、字体/manifest/许可证 HTTP 字节检查通过。
+
+该安装环境排除 Node、保留真实 FFmpeg，再运行同一组 54 项相关测试，实际为 **53 passed、1 failed**。失败是 `test_parser_error_shows_specific_command_help`：它调用仓库 `scripts/opendirector.py`，从 wheel venv 重入源码 `.venv` 时出现带空格路径错误，并返回 0 而非预期的 2。该跨虚拟环境源码启动脚本问题未在本轮修复，不能将这组测试改报为全绿。独立调用安装环境的 `python -m opendirector.cli video create --asset unknown` 则按预期返回 2，stderr 包含具体选项帮助；这个补充证明正式模块入口可用，不消除上述失败。
+
+本机材料位于忽略目录 `test-results/issue87/windows-regression`：最终完整日志、JUnit、全部 50 项失败和 8 项跳过摘要、六项逐项通过核对、源码快照清单、最终 Node/契约/双语日志、新 wheel 及安装结果。材料用于本机复查，不是其他开发者的源码依赖。未调用真实付费模型；没有以文件生成或工具成功代替创作质量批准。本轮没有重测桌面 1080p/600 秒性能，也不沿用那些旧值冒充新结果。
+
+所有改动保持未暂存、未提交、未推送、未合并，HEAD 仍为指定提交。最终检查未发现本轮 pytest 临时目录下的残留测试进程；独立安装字体探针已确认自有监听释放。
+
+## Windows 50 项失败与启动脚本修复复验（2026-11-06）
+
+本节继续上一轮记录，保留全部既有改动。HEAD 仍为 `9834c1cc0d56abece57d815de53f78a501e698d0`，结果针对该提交加当前未提交修改；没有暂存、提交、推送或合并。
+
+English summary: All 50 previously reported Python failures now pass in both the related checks and the final complete suite. The complete, unfiltered run collected 1,054 cases and finished with **1,046 passed, zero failed and 8 skipped** (exit 0, 1,482.58 seconds). The rebuilt Windows wheel passed 180 related tests with five existing skips; the former launcher failure and real native OpenCode continuation also passed. No tests were deleted and no skip/xfail conditions were widened. Real child processes, directory junctions, installed native OpenCode and actual files were exercised; model responses used local doubles. The eight existing platform/integration skips remain explicit limitations. No paid model service was called, and nothing was staged, committed, pushed or merged.
+
+### 实现修复与安全边界
+
+- **提交缓存：** 原 Windows 分支计算了文件摘要，但在比对摘要前就按文件签名返回缓存。现将实际字节读取、读取前后签名一致性检查和摘要比对放在缓存复用之前；摘要不同则重新解析并验证提交。相同 size/mtime/模拟签名下的 head 和 ancestor 改写均必须报错，暖缓存仍不重复解析未变化快照。未关闭完整性校验。
+- **私有技能副本：** 深层工程中的技能资源可达到普通 Windows 路径上限。复制私有快照时使用扩展长度路径，公开路径保持普通格式；新增真实资源路径超过 260 字符的测试。同时忽略符号链接和 Windows reparse point，不复制链接到目录外的私有资源；没有修改系统长路径策略或 Developer Mode。
+- **Harness 目录映射：** Claude/Jiuwen 的私有目录映射在 Windows 使用 junction，在 POSIX 保留目录 symlink。只创建新别名，移除时只移除 symlink/junction，拒绝替换普通文件或目录；外部哨兵、真实目标目录及其内容保留。
+- **OpenCode 续聊：** 真实 CLI 首轮成功后，在新目录直接恢复同一个原生会话会出现模型已返回而 CLI 结束事件不可见的挂起。结合真实 trace 及 [OpenCode 1.19.5 的会话/事件订阅实现](https://github.com/anomalyco/opencode/blob/v1.19.5/packages/opencode/src/cli/cmd/run.ts#L769) 定位，最终保留该原生会话原有的引擎目录，并继续为每轮创建新的执行目录。CLI 通道、技能目录、预览和可发布文件仍按当前轮授权；提示要求文件/媒体操作显式使用当前执行目录作为 shell workdir。恢复目录必须属于本工程的 `agent-runs/<UUID>/work`、存在且无重定向。缺失或未通过校验的目录不用于恢复，原生会话保留，当前轮以完整权威对话创建新会话。原生会话 ID 在续聊及事件流中仍必须一致，任意变化拒绝且不覆盖会话记录。没有添加自动批准、关闭权限或扩大文件发布范围的参数。
+- **源码启动脚本：** Windows 的跨虚拟环境重入改由参数列表形式的 subprocess 调用完成，并传播真实子进程退出码，修复带空格路径的 CRT execv 参数丢失。新增真实 venv/中文及补充平面字符/空格/引号和 `&` 参数/退出 17 的回归，原 parser-error 测试继续要求退出 2 和具体子命令帮助。POSIX 保留 execv。
+
+### 测试修正的依据
+
+没有把上述 50 项全部归因于环境，也没有通过减小断言范围取得通过。Windows 测试用 distlib 原生控制台启动器运行 Python 替身，保留真实 stdin/stdout、协议版本、错误回执、stderr、共享工程写入及取消检查；生产环境没有新增“把非可执行文件当脚本执行”的回退。故意损坏的内置程序夹具仍保留，安装完整性拒绝测试照常执行。新增测试依赖 `distlib` 同步到测试 extra 和 requirements。
+
+需要 symlink 权限的三项失败夹具在 Windows 改用真实 junction；POSIX 保留原 symlink 场景。上传目录重定向会在写恢复日志前被拒绝，测试验证未产生工程事实或外部写入；POSIX 最终文件链接仍验证安装阶段拒绝并保留恢复日志。字体目录逃逸仍必须 HTTP 404，提交目录逃逸仍必须拒绝且外部字节不变。没有新增 skip。
+
+三项旧测试预期按现有业务规则纠正并加强：
+
+1. 隐藏来源保留逻辑引用，但新任务的有效输入排除隐藏来源。冻结输入测试先验证该区别，再恢复来源接受任务，分别覆盖接受后隐藏来源与完成后隐藏来源：前者保留候选、后者可采用；两者均保留实际输入、历史、重启和幂等断言。
+2. 当前 Seedance 2.0 配置明确支持视频参考。原测试错误地要求它拒绝视频；现同时验证自托管与 Seedance 接受，以及明确不支持 reference 模式/视频输入的模型拒绝，拒绝不增加 Job。
+3. 活跃 worker 的排队测试原来只占用一个许可，而服务默认并发为 2。夹具显式使用并发 1 后保留 queued、未误标中断/取消等断言。运行时可用性测试也分别替换实际负责查询的 native 与 Jiuwen executable 入口。
+
+取消测试改用 Windows 进程句柄等待状态核对退出，避免用不具有 POSIX 探活语义的 `os.kill(pid, 0)`；加强为同时验证真实父进程及其创建的子进程停止。没有将异常视为成功，也没有跳过取消。
+
+### 最终运行结果
+
+| 检查 | 实际结果 |
+| --- | --- |
+| 完整 Python | **1,054 collected，1,046 passed、0 failed、8 skipped、1 warning**；退出 0，1,482.58 秒（24 分 42.58 秒） |
+| 原 50 项在完整套件中的结果 | 最终 JUnit 逐项核对 50/50 通过；隐藏来源旧场景对应两个加强的参数场景，均通过 |
+| 相关业务测试 | 201 passed、0 failed、4 个既有跳过 |
+| 相关 runtime/目录/会话测试 | 49 passed、0 failed、零跳过；包含真实内置 OpenCode 首轮/续聊和四种运行时的父子进程取消 |
+| 两组相关测试去重 | 247 passed、4 个既有跳过（251 个不同用例，不重复计算共享用例） |
+| Node | 621 passed、0 failed、零跳过 |
+| 契约与双语 | `generate_contracts.py --check` 通过；2,921 keys、0 problems，Chinese source lines 168/168 |
+| 安装环境相关测试 | 180 passed、0 failed、5 个既有跳过；真实 wheel、无 Node PATH |
+| 测试范围审计 | 67 个受 Git 管理的 Python 测试文件中无测试函数删除、无既有 skip/xfail 装饰器变化；完整收集数比上一轮增加 13；最终跳过集合未增加 |
+
+完整命令如下，未用 `-k`、`--ignore` 或其他筛除：
+
+```powershell
+$env:PYTHONUTF8 = '1'
+& .\.venv\Scripts\python.exe -u -m pytest tests -vv --tb=short -ra -o faulthandler_timeout=180 --junitxml=test-results/issue87/windows-completion/python-full.xml
+```
+
+`faulthandler_timeout` 仅输出诊断，不结束或跳过测试。修复过程中保留了失败的中间日志；第一次完整尝试在约 17% 时因真实 OpenCode 续聊阻塞而停止，修复后重新从头执行最终完整套件。最终完整运行期间 Python 源码与测试未再改动，源码快照哈希另行核对。构建、安装和部分相关检查与完整套件有重叠，运行时长不作为性能结论。
+
+原有 8 项跳过保持不变：4 项 POSIX change-time 缓存场景、1 项需要 Windows file-symlink 权限的执行文件场景、3 项需要真实 dsh/JiuwenSwarm CLI 的引擎/媒体场景。junction、安全发布、真实文件和内置 OpenCode 场景实际运行，没有用这些跳过替代。
+
+### 最终 wheel 与限制
+
+从冻结的当前源码构建 `opendirector-0.1.0-py3-none-win_amd64.whl`，**97,533,027 字节**，SHA-256 **`6d4431d0e868f4a744ee3d6b54c599a3ae8e625d4b3ecfa402642633a2cd19e0`**。22 个 web 文件（18 个 assets）与本次 dist 逐字节一致，内置 OpenCode 为 x64 PE/1.19.5，12 个改动的生产 Python 文件与工作区逐字节一致。
+
+全新 venv 安装后 pip check 通过。在无 Node 的 PATH 中，正式 CLI/OpenCode/skills/serve、健康检查、web 资源、工程保存重开和字体/manifest/LICENSE.txt 的真实 HTTP 字节检查均通过；字体仍为已记录的 Noto Sans CJK 2.004 指纹，字体探针自有监听已释放。
+
+**安装环境相关测试实际为 180 passed、0 failed、5 skipped（185 collected，208.65 秒）**，覆盖 Agent/artifact/gateway/metadata/CLI、执行文件安全、可编辑包、提交缓存、目录/会话边界，以及真实内置 OpenCode 的首轮和续聊。`SOURCE_ROOT is None`，PATH 中实际没有 Node，但保留 Git 与 FFmpeg；没有把源码 editable 导入误当 wheel。原来失败的 `test_parser_error_shows_specific_command_help` 和新增的真实跨虚拟环境参数/退出码测试均通过。5 个跳过就是上述既有 4 项 POSIX change-time 与 1 项 symlink 权限场景；未扩大条件。
+
+模型回复使用 HTTP/进程替身，真实内置 OpenCode、CLI、文件系统、媒体探测及业务写入实际执行；没有调用真实付费模型。未安装外部 dsh/JiuwenSwarm 来冒充真实引擎集成通过。此次修复在 Windows 原生环境验证，未执行 Linux/macOS 套件；也未重做桌面 1080p、600 秒时间线或创作质量审看，不把历史记录当作本轮新结果。依赖的 Starlette TestClient 弃用警告如实保留。
+
+本机完整日志、JUnit、50 项逐项核对、测试覆盖审计、源码快照、wheel 及安装证据保留在忽略目录 `test-results/issue87/windows-completion`，它们不是其他开发者的必读依赖。最终进程检查未发现本轮遗留的 pytest、Harness 或媒体子进程；字体探针确认自有监听已释放。全部工作保持未暂存、未提交、未推送、未合并。
+
+## 当前全部未提交改动的最终审查（2026-11-06）
+
+**审查结论：暂不签收。存在一项 Windows 文件范围安全阻断和一项 POSIX 回归，需要修复后复审。** 上节的 1,046 passed、8 skipped 是真实的既有套件结果；下述补充探针发现了其未覆盖的问题，不能据套件通过推断安全边界完整或跨平台均通过。本轮只审查、补充隔离探针和记录，没有修复产品代码或改动仓库测试。
+
+只读核对远端 [Draft PR #193](https://github.com/ThinkFlowLab/OpenDirector/pull/193)：仍为 open/draft，head 与本地指定提交一致。本轮范围是该 head 上全部未提交的 41 个文件，不等同于重新审查 PR 的全部 92 个远端变更文件。PR 描述中原有的基线助手面板改动拆分、整合最新 upstream main 等待办仍未完成，也不由本次局部审查自动豁免。
+
+English summary: final review found two actionable defects: **P1**, resolving an attacker-replaced execution root permits Windows Agent package reads/writes outside the current turn; **P2**, the extracted POSIX helper calls `fdopen(dup(fd))` before rejecting directories, changing the exception and leaking the duplicate on failure. Existing focused checks passed 29 tests with one existing skip; three review-only assertions failed as expected against the current implementation. No test functions were removed or existing skip/xfail decorators widened. The eight skips limit the claims described below; they do not excuse these defects. Acceptance remains blocked. No product/test source was changed, staged, committed, pushed or merged during review.
+
+### 必须修复的发现
+
+1. **[P1] 执行根被重定向时仍可读写目录外文件。** 位置：`infrastructure/execution_files.py:39`。`execution_directory.resolve()` 先跟随根目录/祖先中的重定向，再以解析后的地址作为可信根；后续逐组件拒绝 reparse point 只保护新根的子项。拥有原生文件操作能力的 Agent 可把尚未被固定句柄持有的当前 `work` 移开，原位置换成指向其他目录的 junction。该条件在 OpenCode 续聊时尤其需要覆盖：引擎 cwd 是旧轮目录，当前轮 `work` 没有因该 cwd 而固定。
+
+   本机原生 Windows 隔离复现：仅在一个临时工程中创建有效文字时间线和临时“目录外”资源，将 `agent-runs/<当前 turn>/work` 移开后换成 junction。共用 helper 读出了外部普通文本并创建了外部输出；**正式 `ToolGateway` 的 `timeline_package_export` 返回 `error=null`，包真实写在当前轮目录之外；`timeline_package_import` 也从该位置成功导入并产生第二份编辑文档**。归档本身合法，因此不是 ZIP 校验缺失。整个探针未访问用户文件。
+
+   影响：当前轮文件授权可被突破，#87 的 Agent 可编辑包安全验收不能签收。此 `.resolve()` 信任模式在旧 POSIX 实现已存在；本次新增 Windows 路径从原先拒绝执行变成可用时继承了该缺口，不能描述为 Windows 安全边界已完备。修复应从创建当前轮时固定并持有可信目录身份，或从已验证的工程锚点逐级打开并持有句柄，拒绝根及祖先重定向；不能仅增加一个容易竞态的路径预检。需补当前轮根/祖先替换的读取、创建及正式 Agent 包导入导出拒绝测试，保留已存在输出不覆盖和失败回滚保护。
+
+2. **[P2] POSIX 目录输入在普通文件校验前进入 `fdopen`，并泄漏复制 fd。** 位置：`infrastructure/execution_files.py:24`、`:54`。原实现先 `fstat` 拒绝目录，再复制 fd；抽取后 `_posix_file` 先执行 `os.fdopen(os.dup(fd), ...)`，外层才检查普通文件。POSIX 的 `os.open` 可以打开目录，CPython 的 `fdopen` 会先抛 `IsADirectoryError`，外层预期的 `ProjectError` 检查无法执行。复制的 fd 未登记到清理栈，`fdopen` 对调用者传入 fd 的初始化失败也不会接管/关闭它，重复非法请求可耗尽进程描述符。
+
+   证据：本机用真实 Windows 目录句柄转换成 CRT fd，确认 `fstat` 为目录、`fdopen(dup)` 抛 `IsADirectoryError(errno=21)`，错误后 `fstat(duplicate)` 仍成功；随后以 Windows 目录打开适配器执行**未修改的 POSIX Python 分支控制流**，复现同一异常。另核对 [CPython 3.12.10 FileIO 的目录拒绝与失败清理实现](https://github.com/python/cpython/blob/v3.12.10/Modules/_io/fileio.c#L430)。这是 Windows 支撑的适配探针与源码核对，**不是实际 Linux/macOS 套件实跑**。需恢复在 fdopen 前的普通文件/非空检查，并在所有包装失败路径关闭复制 fd；随后在真实 POSIX 环境验证目录输入、重复错误调用的 fd 数量和正常发布/回滚。
+
+### 安全保留情况与测试修改审查
+
+机械核对覆盖全部 **41 个未提交文件（33 个受 Git 管理的修改、8 个未跟踪文件）**，包含生产实现、生成契约、测试和验收文档。受修改的既有 Python 测试未删除测试函数，既有 skip/xfail 装饰器未改变；生成契约去掉 `description` 后与 HEAD 的业务结构完全相同。没有发现移除 ZIP 路径/重复项/资源指纹/预算、版本/锁定、操作幂等或依赖保护校验的改动。
+
+Windows 新实现中，子路径逐级 handle-relative 打开、所有 reparse tag 拒绝、ADS/设备名/尾点空格预检、独占创建、非继承 fd、打开期间禁止写/删除替换、按创建句柄回滚等保护仍在。提交缓存现在确实先比较实际字节摘要再复用，head/ancestor 固定签名改写测试未被改弱。上述保留项不消除 P1 的根锚定问题。
+
+| 测试修改 | 审查结论 |
+| --- | --- |
+| POSIX shebang 替身改为 Windows 原生启动器；路径比较改用 `samefile`；显式发现实际 CLI | 具有平台依据，仍执行真实子进程和原协议/写入/错误断言；生产程序未增加执行任意脚本的回退 |
+| symlink 改为 Windows junction | 可无提权验证目录重定向拒绝，但不是最终文件 symlink 的完全等价覆盖。文件链接场景仍有一个跳过；根目录被替换也未覆盖，补充探针已证实 P1 |
+| 上传目录重定向不再要求恢复日志存在 | 因新夹具在暂存目录预检阶段拒绝，早于写日志；仍断言工程无新资产及外部字节不变。POSIX 原最终文件链接/日志断言保留，不能将两者描述为相同故障阶段 |
+| 隐藏来源生成测试 | 与现有 `current_generation_inputs` 的有效输入策略一致，额外验证逻辑引用保留、接受后隐藏不改固定输入且保留候选、完成后隐藏不抹去已采用结果。没有修改生产可见性规则来放行测试 |
+| Seedance 视频参考拒绝改为接受，并增加不支持模型拒绝 | 与既有明确 Seedance 2.0 profile（`maxVideos=3`、允许 reference）一致；拒绝场景及不新增 Job 断言仍在，未扩大模型能力声明 |
+| 排队夹具显式并发 1；Windows 用进程句柄核对退出 | 单许可门闩与 queued 断言相符；Windows `os.kill(pid,0)` 不能按 POSIX 探活解释。新测试还验证真实子进程退出，没有把异常当成功 |
+| OpenCode 续聊的 cwd 断言修改 | 与复用原生引擎目录的设计一致，但 FAKE 主动指定当前工作目录，而真实 OpenCode 测试第二轮只回复文字。它们不能证明真实续聊中的文件生成→发布/包往返闭环；应补此场景，并将当前轮根替换纳入安全测试 |
+
+因此未发现以删测试或扩大 skip 造绿的证据；但“未删测试”不等于覆盖充分。Windows 单平台运行没有执行 POSIX 分支，既有安全用例又只测试根下的链接，确实未捕获本轮两个发现。
+
+### 8 项跳过是否影响 #87
+
+重新对照 [Issue #87 正文](https://github.com/ThinkFlowLab/OpenDirector/issues/87)及[实施范围评论](https://github.com/ThinkFlowLab/OpenDirector/issues/87#issuecomment-6680337540)：核心是 UI/Agent 共用文字编辑、保存重开/撤销重做、中文预览与 MP4、新旧成片依据、依赖与可编辑包，以及无文字回归；不要求所有外部 Harness 或真实付费模型均验收。
+
+| 跳过项 | 数量 | 对结论的影响 |
+| --- | ---: | --- |
+| POSIX change-time 提交缓存正确性/200 提交缓存复用 | 4 | Windows 使用字节摘要策略，已有固定签名 head/ancestor 改写等实际执行覆盖；不直接否定 Windows #87 的代表性保存重开。但不能据此宣称 POSIX 和长历史性能均通过。P2 也不能由这些跳过豁免，它来自另一条未在 Windows 执行的 POSIX 文件分支 |
+| Windows 最终文件及目录 symlink 访问 | 1 | 无 symlink 权限；junction、ADS/设备名、子路径替换等用例实际执行，但最终文件 symlink 仍需在具备该权限的 Windows CI/测试机补验。它限制安全覆盖完整性的声明，不能用 junction 直接等同替代 |
+| 真实 dsh 引擎 | 1 | 缺少外部 CLI，不阻止默认 Agent/共用业务服务的 #87 核心验收；不能宣称真实 DeepSeek Harness 已验证 |
+| 真实 Jiuwen 引擎 | 1 | 同上，不能宣称真实 JiuwenSwarm 已验证 |
+| 真实 Jiuwen 媒体发布/重开 | 1 | 保留该外部入口的端到端限制；默认内置 OpenCode、正式网关和 UI/CLI 证据不能冒充这个入口通过 |
+
+**8 项跳过未增加，本身不直接推翻已记录的 #87 核心功能证据；一项文件链接跳过仍留下安全证据缺口。但当前不签收的直接原因是 P1 的真实目录外读写，另有 P2 共享实现回归。** 应修复并补充对应回归，再重跑相关/完整套件；最终签收需同时保留既有 UI/MP4/保存重开/包往返和无文字证据的适用范围，不能只看通过数。
+
+### 本轮实际验证与改动边界
+
+- 既有执行文件、会话目录、目录别名和技能快照检查：**29 passed、1 个既有 skip**，26.37 秒。
+- 新增的本机审查用例：**3 failed**，10.91 秒；两项为真实 Windows 执行根 junction 的读取/创建拒绝断言未触发，一项为 POSIX 控制流的 Windows fd 适配探针得到错误异常。它们位于忽略目录，并未加入或改写仓库测试来改变上一轮计数。
+- 正式 Agent 包探针：目录外导出成功、目录外导入 `applied`；这是应当拒绝却成功的负面结果，不记为验收通过。探针数据和输出均属于一个自动回收的临时工程，junction 单独移除后再回收真实测试目录。
+- 本机材料为 `test-results/issue87/final-review` 内的原始差异、逐文件指纹、AST/契约审计、探针脚本、JSON、日志和 JUnit。关键复现条件与修复方向已在本文说明，这些本机材料不是其他开发者的必读依赖。
+- 本轮没有再次运行 24 分钟完整套件、构建新 wheel 或重做浏览器媒体；仅记录上一轮实际结果并补充上述审查。产品代码、依赖声明和仓库测试保持审查开始时的内容，没有关闭系统安全设置；没有创建 GitHub 评论/审查、提交、推送或合并。
+
+## P1 执行根与 P2 文件描述符修复复验（2026-11-06）
+
+本节承接上节两个发现，保留此前的未提交工作与负面复现记录。修复针对当前源码；HEAD 仍为 `9834c1cc0d56abece57d815de53f78a501e698d0`。没有暂存、提交、推送或合并。
+
+English summary: P1 now anchors file access at the filesystem/volume root and opens every directory component without following links, including the execution root and its ancestors. Windows retains the bound execution-root handle while releasing lookup-only ancestors so normal project commits remain possible; sharing protections are unchanged. P2 checks the original descriptor before duplication and closes the duplicate on every fdopen construction failure. Twenty-eight regression cases were added without removing tests or widening skips. The final complete run collected **1,082 cases: 1,074 passed, zero failed and the same eight skips** (exit 0, 1,310.61 seconds). The first complete run exposed one existing depth-conversion failure; isolated, whole-module and complete reruns passed without source or assertion changes, so its cause is not established. Both complete-run outcomes remain recorded below. No real POSIX host is available here: the Windows CRT adapter exercises ownership/control flow only, and native Linux/macOS verification remains outstanding. No new wheel or browser/media acceptance was performed, and nothing was staged, committed, pushed or merged.
+
+### 修复及保留的安全边界
+
+- **P1：** 不再对执行根调用 `resolve()` 并把链接目标当作授权根。执行目录只做词法绝对化；Windows 从卷/共享根、POSIX 从文件系统根开始，逐个目录组件相对已打开的父句柄/fd 打开，包括执行根的全部祖先。Windows 检查每个句柄的 reparse 属性，POSIX 使用 `O_DIRECTORY | O_NOFOLLOW`，拒绝根或祖先上的 junction/symlink。宿主提供已规范化的工程路径；后来出现的路径别名拒绝执行，不通过解析链接扩大授权范围。
+- Windows 在根绑定后保留根及用户子目录句柄，之后的文件操作始终相对该根进行。只释放查找阶段使用的上层祖先句柄，避免在素材登记期间阻挡工程 `project.json` 的原子替换。**没有放宽 `SHARE_READ`，没有加入路径式打开回退。** 根绑定后的祖先改名只能被系统拒绝，或仍访问原有绑定对象，不能转到替换后的目录外目标。
+- **P2：** POSIX 分支在 `dup`/`fdopen` 前先对原始 fd 做 `fstat`，拒绝目录、其他非普通文件和空输入；`fdopen` 构造失败时显式关闭复制 fd，原始文件及目录 fd 由清理栈关闭。创建过程的失败仍回滚新建文件，原有文件不覆盖。
+- 原有的目录包含校验、子路径无链接打开、Windows ADS/设备名/尾点空格拒绝、非继承 fd、独占创建、普通文件/非空校验、flush/fsync、失败回滚均保留；ZIP 路径/重复项/资源指纹/预算、业务版本/锁定/幂等校验未改动。
+
+### 回归覆盖与测试修改依据
+
+新增 **28 个参数展开后的仓库用例**，没有删除测试或扩大 skip/xfail：
+
+| 覆盖 | 新增用例数 | 实际检查 |
+| --- | ---: | --- |
+| 替换 `work`、turn、`agent-runs` | 12 | 读取/创建 × 相对/绝对输入路径；真实 Windows junction，POSIX 上使用真实 symlink；拒绝后外部哨兵不变且无外部输出 |
+| 根打开前及根绑定后替换目录 | 4 | 在实际底层打开调用边界插入替换；允许系统拒绝替换或继续访问已绑定的原对象，禁止读取/写入外部目标 |
+| 正式 Agent 包导入/导出 | 3 | 对三层根/祖先分别替换，合法 ZIP 与真实指纹仍必须被文件授权边界拒绝；无外部导出、无导入事实变更、归档字节不变 |
+| POSIX 目录/空文件、包装错误、正常往返 | 9 | 每类非法输入重复 100 次、四种 fdopen 错误组合各重复 30 次，以及 dup 错误、中文二进制文件往返、独占创建；核对清理调用及真实 fd 的 `EBADF`，保留已有字节 |
+
+既有 Windows 查找中改名测试的拦截条件增加 `name == 'nested'`：逐级打开祖先后，首个目录打开不再是该测试的目标子目录。测试仍在真正打开 `nested` 句柄后尝试改名，保留系统拒绝、确实执行替换尝试、文件不变和最终可改名的全部断言。不是跳过新的祖先检查。
+
+机械审计对比既有测试函数及 skip/xfail 装饰器，未发现删除或扩大；新增 POSIX 文件也没有 skip。修复前后审查探针、正式仓库回归与完整套件分别记录，不将同一用例重复计入完整套件总数。
+
+### 真实 POSIX 环境与适用范围
+
+本机 `wsl.exe --list --quiet` 实际退出 1，提示 WSL 未安装；没有 Docker CLI，也没有本任务可用的远程 POSIX 执行环境。因此**本轮没有在真实 Linux/macOS 内核上执行 P2 验证**，没有安装 WSL/虚拟机或改动系统功能。
+
+Windows 下新增测试用目录句柄到 CRT fd 的适配器执行 POSIX Python 分支，`fstat`、`dup`、`fdopen` 和 `close` 使用真实 Windows CRT 描述符；这能检查类型判断顺序、复制 fd 所有权和错误清理，**不等于验证 POSIX 的 `openat`/`O_NOFOLLOW`/目录 fd 语义**。同一文件在 POSIX 会直接使用真实系统调用，不启用此适配器。后续需在原生 Linux/macOS 环境运行，例如：
+
+```sh
+.venv/bin/python -m pytest tests/test_execution_files.py tests/test_posix_execution_files.py tests/test_creation_artifacts.py tests/test_timeline_packages.py -q
+.venv/bin/python -m pytest tests -q
+```
+
+本轮只修改共用文件访问实现、对应回归测试和本文；没有新增依赖、用户界面文案或契约字段。没有重建含本轮修复的 wheel，也没有重做浏览器中文预览/MP4；前述 wheel 和媒体证据继续按其原有源码范围解释，不能作为本轮新 wheel 的验证结果。
+
+### 运行记录与最终结果
+
+首版根遍历修复曾在文件读取期间保留全部 Windows 祖先句柄。相关测试通过后，较广范围的完整运行暴露素材登记时 `project.json` 原子替换报 `WinError 32`；这次运行在约 17% 停止，相关旧运行也停止，日志保留为失败的中间记录，不计为完整通过。最终实现如上所述，在绑定根后释放查找用祖先，根与子路径仍由原保护句柄固定。发布、重放和根绑定后替换的回归通过后，从头重跑完整套件；运行期间实现和测试保持指纹一致，只补充本文。
+
+| 检查 | 真实结果 |
+| --- | --- |
+| 最终完整 Python 复跑 | **1,082 collected；1,074 passed、0 failed、8 个既有 skip、1 warning**；退出 0，1,310.61 秒（21 分 50.61 秒） |
+| 根修复后的首次完整 Python 运行 | **1,082 collected；1,073 passed、1 failed、8 个既有 skip、1 warning**；退出 1，1,369.01 秒。新增 28 项均通过；唯一失败为既有 `test_depth_capture_turns_metric_depth_into_inverse_depth[255-0-12]`，任务返回通用失败消息 |
+| 最终相关测试（文件访问、素材发布、包、网关、运行时、会话、目录别名、技能快照） | **137 passed、0 failed、1 个既有 skip、1 warning**；退出 0，298.82 秒 |
+| 深度图三个参数单独复跑 | **3 passed、0 failed**，退出 0，34.67 秒；单次复跑通过不能确定首次失败根因 |
+| 整个工具任务模块诊断复跑 | **48 passed、0 failed、0 skipped、1 warning**；退出 0，123.33 秒；未捕获后台异常 |
+| 上轮失败的三个独立审查探针 | **3 passed、0 failed**；退出 0，2.73 秒；不并入完整套件计数 |
+| 契约生成检查 | `generate_contracts.py --check` 通过 |
+| 双语检查 | `npm run check:i18n`：2,921 keys、0 problems、Chinese source lines 168/168 |
+
+这些运行使用原生 Windows/Python 3.12.10。OpenCode 模型响应来自本地替身，不是付费服务验证；P2 的 Windows fd 适配器限制如上。原始日志、JUnit、源码指纹、测试审计和环境探测保存在本机忽略目录 `test-results/issue87/root-fix`，关键条件与结果直接记在本文，不要求其他开发者依赖该本机目录。
+
+首次完整运行中的深度图错误没有被当作通过。测试辅助函数使用 `gather(return_exceptions=True)` 等待后台任务，没有展示该任务再次抛出的原始异常，且默认 pytest 临时目录在下一轮自动回收后已移除。后续诊断仅在本机忽略目录添加一个 pytest 观察插件，记录后台异常后原样重新抛出，不改变源码、断言、收集范围或 skip。诊断运行曾因手动选择过深的 `--basetemp` 触发 Windows 长路径夹具错误（4 passed、44 setup errors）；这属于验证路径选择问题，保留日志，并改用新建的短临时目录。不能将这些夹具错误计为原深度图缺陷的复现，也没有据此放宽产品校验。
+
+随后完整复跑仍使用默认 pytest 临时路径，只把临时目录保留数量提高到 10，以便再次失败时检查原始材料；不是缩短完整套件的测试路径。使用 `tests -vv --tb=short -ra -o faulthandler_timeout=180 -o tmp_path_retention_count=10 -p task_error_diagnostics`，没有 `-k`、忽略文件或失败重试插件。深度图首次失败的根因尚未确定，不能因单项/模块复跑成功而描述为已修复一个新的媒体问题。
+
+最终核对 JUnit：上一轮 1,054 个用例的身份全部保留，新增 28 项全部通过；**8 个跳过的用例身份及原因与上一轮完全一致**，仍为 4 个 POSIX change-time、1 个 Windows symlink 权限、3 个外部 dsh/Jiuwen 集成条件，影响范围沿用上节说明。没有新增跳过或 xfail。唯一 warning 来自 FastAPI/Starlette testclient 的 httpx 弃用提示。最终完整复跑中的深度图三项均通过，观察插件没有捕获后台异常；这不能还原首次异常，也不消除其偶发失败记录。
+
+最终源码清单核对覆盖 761 个文件：完整执行期间只有本文改变，实现和测试字节未变，没有新增未纳入运行清单的源文件。`git diff --check` 通过，暂存区为空，HEAD 未变；本轮 pytest/原生 CLI 临时进程检查无匹配遗留。P1 的真实 Windows 目录外读写复现现已被拒绝，P2 的目录输入与 fd 所有权回归在 Windows 适配层通过；**真实 POSIX 复验、Windows 最终文件 symlink 的权限场景和首次深度图失败根因仍是明确限制**，不据此宣称全部平台或所有外部入口已完成 #87 验收。
+
+## Windows 剩余失败收敛与最新 wheel 复验（2026-11-07）
+
+本节记录暂停前尚未归档的故障分析，以及从保存点恢复后的最终复验。恢复时核对了 762 个源码/测试/文档文件，内容与暂停清单一致；全部既有未提交改动保留。HEAD 始终为 `9834c1cc0d56abece57d815de53f78a501e698d0`，未暂存、提交、推送或合并。
+
+**本轮不能描述为全部验证全绿。** 最终完整 Python 运行显式开启三个外部 CLI 集成用例，收集 **1,093 项：1,087 passed、1 failed、5 skipped、1 warning，退出 1，789.17 秒**。两项真实 Jiuwen 用例通过；唯一失败是 dsh 原生 Windows 沙箱拒绝执行目录写入，未产生预期资产。最新 wheel 的 295 项相关测试、两项真实 Jiuwen 用例和下列浏览器验收通过。P1/P2 也完成了真实 Linux 内核验证；Windows 最终文件 symlink 仍受系统权限限制。
+
+English summary: the final unfiltered Python run enabled all three real external-CLI tests and collected 1,093 cases: **1,087 passed, one failed, five skipped** (exit 1; 789.17 seconds). Both real Jiuwen tests passed after correcting native Windows shell quoting and strictly decoding the CLI's successful stdout transcript. The remaining failure is dsh's native workspace-write sandbox denial; no extra permission was granted. The latest Windows wheel passed 290 related tests plus both real Jiuwen tests, with five original platform/privilege skips. Five browser suites passed, including Chinese preview/MP4, save/reopen, editable-package exchange, no-text behavior and installed-wheel UI without Node. Native Linux passed 155 selected cases; a real fd probe stayed at four descriptors across 2,000 rejected inputs and 100 binary roundtrips. Security checks, existing test identities and skip conditions were retained. No staging, commit, push or merge occurred.
+
+### 实际修复与安全边界
+
+- **媒体任务的真实后台异常：** 将工具任务测试等待器改为传播非预期后台异常后，实际捕获了视频抠像登记任务 JSON 时的 `WinError 5`，位置是 `local_projects.write_json` 的原子替换。用真实 Windows 打开读句柄可以确定性复现同类拒绝。共用写入器现在只对 Windows 错误 5/32/33 最多等待 0.5 秒，重用同一份已 flush/fsync 的临时文件；每次尝试重新检查链接，永久拒绝及其他错误继续抛出。原目标不删除，不回退为原地覆盖，失败临时文件仍清理。真实读句柄、永久拒绝、无关错误及重试期间链接变化均有回归。
+- **原深度图失败的证据边界：** 历史通用失败对应的临时材料已经回收，不能唯一还原该次异常。本轮修复的是新捕获、可独立复现的共用媒体元数据写入故障，未据此声称已证明历史深度图错误的唯一原因。最终完整运行的深度转换三项及视频抠像均通过；原失败日志保留。
+- **Windows 长元数据路径：** 实际复现了超过 MAX_PATH 的原子替换/读取失败。读取、链接检查、临时创建和替换现在使用一致的 Windows 扩展路径拼写；转换仅做词法绝对化，不解析链接。新增长提交路径的真实工程创建/重开及长元数据读写回归。普通文件授权入口仍使用原有 handle/fd-relative 保护，没有引入绝对路径打开回退。
+- **Jiuwen 二次技能复制：** 私有运行时的第二次复制复用共用技能复制函数，保留长路径处理，拒绝源目录别名并过滤目录/文件 reparse 或 symlink。长资源、外部目录哨兵和复制后字节均被检查，原技能不改写。
+- **P1/P2 保持：** 执行根及其祖先仍从卷/文件系统根逐级无链接打开；Windows 根与用户子目录句柄保持原共享限制，根绑定后才释放查找祖先。POSIX 仍在复制 fd 前检查原描述符，并在 fdopen 构造失败时关闭副本。独占创建、非继承 fd、非空普通文件、flush/fsync、失败回滚及 ZIP 路径/重复项/指纹/预算、版本/锁定/幂等校验均保留。
+
+### 测试修改为何不掩盖缺陷
+
+| 修改 | 依据及保留的验证 |
+| --- | --- |
+| 后台任务等待器不再吞掉非预期异常 | 新回归注入真实配方调用中的 RuntimeError，核对同一异常对象抛出、任务失败且无输出；业务拒绝仍按原回执检查 |
+| 媒体准备、只读大字体包导出后重新打开同一编辑会话 | 首次完整复验有一项准备耗时 266.833 秒，超过 60 秒租约；导出不续租，后台导入也不续租。夹具调用真实 `store.open`，对应 UI 的打开心跳；没有改 TTL、时间函数、授权来源或租约校验。锁定、版本及拒绝断言保留 |
+| 安装包假引擎调用改为 `python -m opendirector.cli` | wheel 不携带源码启动脚本；仍运行真实业务 CLI，保留写入、重放、预览、技能及会话断言。源码启动脚本另有测试 |
+| 默认字体测试支持 wheel 资源根 | 仍检查真实字体版本 2.004、内容指纹、MIME、中文 cmap 及只读查询不创建工作区 |
+| Jiuwen 命令夹具按 Windows cmd / POSIX shell 分别引用 | 单引号和 shlex 命令串在 Windows 原生 shell 下不能表达相同 argv。Windows 管道用 Python 输出同一份 JSON 字节；选定技能、故意退出 7、真实 FFmpeg、素材发布及持久化断言均保留 |
+| Jiuwen 原生工具回执解包 | 当前 CLI 将真实 stdout 放在 `Command / Stdout / Stderr / Exit Code` 文本中。只有完整、空 stderr、退出 0、stdout 为有效 JSON 的记录可被解包；负面探针确认非零退出、stderr、坏 JSON、尾随内容均拒绝作为回执。最终仍核对实际工程资产、源文件/输出字节、编码参数和重开 |
+| 活动数量按业务意图核对 | 两次 `canvas.show` 后，当前 CLI 各做一次 `object.get` 回读，六条同名显示活动不等于六次写入。断言现在要求恰好按顺序两次发布、两次 canvas.show，全部完成；另外要求两次回读对应这两个 canvas 对象及 revision 1。没有把“四次写入”放宽为六次 |
+| dsh 增加确切资产数量检查 | 预期一项真实写入就必须有一个资产；即使原生模型正常结束、工具活动显示完成，也不能冒充业务写入成功。本机该断言实际失败并保留在完整套件中 |
+
+最终 AST 审计覆盖 **23 个被修改的既有 Python 测试文件**：未删除既有测试函数，原 skip/xfail 装饰器没有变化。JUnit 核对保留上一轮全部 **1,082 个用例身份**，新增 **11 项全部通过**。新一轮五个跳过身份全部来自原八项；其余三个门槛显式开启后得到两项通过、一项失败。生成契约去掉 description 后，业务结构与 HEAD 相同。
+
+### 完成的验证
+
+| 检查 | 实际结果与适用范围 |
+| --- | --- |
+| 最终完整 Python | `pytest tests`，未过滤文件/用例，未使用失败重试插件；1,093 collected，**1,087 passed、1 failed、5 skipped、1 warning**，退出 1，789.17 秒。显式设置 `DEEPSEEK_ENGINE_TEST=1`、`JIUWENSWARM_ENGINE_TEST=1` |
+| 最新已安装 wheel 相关 Python | 16 个模块、295 项；**290 passed、5 skipped、0 failed**，601.75 秒；隔离 venv，server/CLI 的 PATH 无 Node，保留 Git 和 FFmpeg |
+| 最新 wheel 的真实 Jiuwen | **2 passed、0 failed**，75.99 秒；原生 CLI、实际 shell/技能/FFmpeg、业务 CLI、媒体发布及新后端重开，模型为本地协议夹具；PATH 无 Node |
+| 真实 POSIX 相关 Python | Alpine 3.24.4、Linux 6.18.60-0-virt、Python 3.14.10，QEMU TCG；8 个模块、170 项，**155 passed、15 个既有 Windows-only skip、0 failed**，442.60 秒。包含 P1 根/祖先链接及竞态、正式 Agent 包、9 项 P2、元数据/技能长路径及原四项 POSIX 提交缓存用例 |
+| 真实 POSIX fd 探针 | 实际 O_NOFOLLOW / 目录 fd；2,000 次非法目录/空输入拒绝、100 次中文二进制创建/读取，`/proc/self/fd` 起点、十次采样、终点均为 **4** |
+| 浏览器编辑接续 | 真实 IME、撤销重做、共用 editor.save、Agent 接续、UI 再编辑及 API 重启/重开通过 |
+| 中文预览及 MP4 | 真实中文/英文文字及层次、结束帧、纯文字、预览/解码帧比较和实际混音通过；音频 RMS 3516.07。选定 PNG 人工查看，中文可读 |
+| 可编辑包 | UI A 导出→真实 CLI B 导入/导出→UI C 导入，服务重启后继续编辑、生成两份不同 MP4、核对历史发布依据和中英文拒绝；2,000 cue UI 场景通过 |
+| 无文字回归 | 时间线编排/变速、音频混合、真实 MP4、发布、取消、缺失来源拒绝及重开通过 |
+| 已安装 wheel UI | 实际已安装服务，server PATH 无 Node、无 Vite；添加文字、预览、缺字诊断、保留不支持草稿、恢复、保存、服务重启/重开通过，浏览器错误列表为空 |
+| 其他检查 | 契约检查通过；i18n 为 2,921 keys、0 problems、168/168 Chinese source lines。此前 621 项 Node 测试和构建通过；其前端源码与本次冻结版本相同 |
+
+本机为原生 Windows 11 x64、Python 3.12.10、Node 24.22.1、Chrome 156、FFmpeg/ffprobe 9.0.2。最新 wheel 为 `opendirector-0.1.0-py3-none-win_amd64.whl`，97,534,317 字节，SHA-256：
+
+`9a70c1ae777dbee203f73299eb16b0e39aae82dc50e33a1bc0d92295960c11c6`
+
+从干净隔离 venv 安装后逐字节核对 **105 个生产 Python 模块和 22 个前端文件**；模块位于该 venv 的 site-packages，SOURCE_ROOT 为 None。从仓库外、无 Node PATH 执行原生 `opendirector.exe --help` 退出 0。后续仓库变更只涉及三个 CLI 测试夹具及本文，wheel 的生产模块仍与最终源码一致。
+
+### 失败记录与当前限制
+
+1. **dsh 尚未通过。** 安装的 `@deepseek-ai/dsh 0.2.2-rc.1` 确实运行 ACP 和原生 pwsh，但原生 workspace-write 沙箱拒绝 marker 写入，随后无法发现轮次内的 opendirector CLI，工程资产数为 0。默认临时目录、独立用户临时目录及标准 CPython 对照均保留了失败材料。仅进行了 ACL 读取调查；未关闭沙箱、额外批准权限或运行会修补 ACL 的厂商诊断脚本。具体受限 token/ACL 组合原因尚未唯一证明，不能声称真实 DeepSeek Harness 业务闭环已验收。
+2. **Windows 最终文件 symlink 仍缺权限。** 错误 1314，开发人员模式开关由用户反馈为灰色；未修改注册表或系统策略。Windows junction、根重定向、路径命名空间及句柄替换检查实际通过，Linux 的真实文件/目录 symlink 也通过；这些不替代该 Windows 权限场景。
+3. **另外四项跳过是 POSIX change-time 缓存检查。** 已在上述真实 Linux 运行中全部执行通过。Linux 中十五项跳过均是既有 Windows 命名空间/junction/共享句柄条件，相关 Windows 分支在本机执行；没有新增跳过或 xfail。
+4. **临时目录和路径范围。** 本机 AppData 临时目录的 junction 子目录创建曾返回错误 183；同版本 Python.org 对照也复现，不能简单归因于 Store 版 Python。另一次刻意加深的临时根触发了私有会话目录的 WinError 206。本轮最终外部 CLI/完整运行使用进程级 TEMP/TMP 指向用户自有 `od-tmp`，每轮使用全新的子目录。未更改系统 TEMP。元数据及技能资源超过 260 字符的显式回归保留并通过，不据此宣称所有 API/任意深工程根均具备完整长路径支持。
+5. **模型与环境范围。** 模型响应来自本地协议夹具，真实的是原生引擎进程、文件、字体、FFmpeg、项目提交、浏览器及 MP4；没有验证真实付费生成服务或后台自主渲染。Linux 为真实内核虚拟机，不是裸机性能结论。虚拟机及其仅监听 loopback 的输入服务器已关闭。
+
+暂停前有一轮 1,090 项完整运行得到 1,082 passed、8 skipped，随后另一轮得到 1,081 passed、1 failed、8 skipped；后一项是媒体准备后租约已过期，已按上表修正夹具。暂停/追加夹具修复而中断的完整尝试均未作为完整通过记录。本次浏览器准备也先后出现输出目录未创建、Windows taskkill 对已退出后代返回错误的脚本问题；保留原始日志后补齐目录，并以真实进程句柄确认退出，未更改业务断言，随后五组全部通过。
+
+最终完整执行期间冻结清单的 **762 个文件字节未改变**；执行结束后才补充本文。原始差异、指纹、JUnit、负面复现、安装/构建日志、截图、MP4 和最终审计在本机忽略目录 `test-results/issue87/depth-failure-fix` 与 `test-results/issue87/resume-20261107`，关键条件及结果已在本文直接说明，这些本机材料不是其他开发者的必读依赖。
+
+**可确认 P1/P2 修复及上表 #87 核心闭环在所列环境通过；当前全部验证仍非全绿，保留 dsh 和 Windows symlink 权限限制，不据此签收所有外部入口。**
+
+## dsh Windows 原生沙箱定位与最终复验（2026-11-07，续）
+
+本节更新上一节的 dsh 失败结论。**正常私有用户工作目录中的真实 dsh 业务闭环已通过；完整 Python 最终为 1,093 passed、0 failed、5 个既有 skipped，最新已安装 wheel 为 306 passed、0 failed、5 个既有 skipped。** 本轮修正的是 Windows 验收夹具的目录 ACL 与命令假设，没有修改生产代码、关闭沙箱或修补既有工程权限。外部 SDK 对 `OWNER RIGHTS` 临时目录的兼容限制及 Windows 文件符号链接权限限制仍须保留，不能将本节解释为任意目录权限配置均已支持。
+
+English summary: native dsh validation now passes in an ordinary private user workspace. The final unfiltered Python run collected 1,098 cases: **1,093 passed, zero failed, five original skips** (817.21 seconds, exit 0). The installed wheel passed **306 cases, zero failures and five original skips** (445.55 seconds, exit 0), including real dsh and both Jiuwen integrations. The fix corrects the Windows fixture's ACL assumptions and uses a PowerShell cmdlet compatible with constrained language; production sandbox policy is unchanged. Five new fixture regressions also passed on real Linux. The tested external SDK still fails with OWNER RIGHTS-only temporary-directory ACLs; Windows final-file symlink creation still returns error 1314. No tests were removed, skip conditions broadened, files staged, commits created, pushes made or merges performed.
+
+### 根因对照与修正范围
+
+1. **命令必须适用于原生沙箱。** 原夹具的 `[IO.File]::WriteAllText` 在本机 Windows PowerShell 5.1 的 ConstrainedLanguage 中被拒绝。独立使用真实 `AclSandbox` 对照，在正常目录中也可复现该拒绝。Windows marker 改用 `Set-Content -LiteralPath ... -NoNewline`，保持文件名及预期字节 `native bash` 不变；POSIX 原 `printf` 命令保留。没有改变语言模式或请求额外执行权限。
+2. **Python 私有临时目录并不等同于应用的普通用户目录。** 同一父目录、同一 SDK 和同一 PowerShell cmdlet 下，普通 `mkdir` 继承当前用户具体 SID 的私有目录可写，Python `0700` 临时目录使用 `OWNER RIGHTS` 的对照不可写。该现象也出现在 Python.org 3.12.10，不能归因于 Store Python。为隔离变量，仅在本轮自建、确认为当前用户所有且无 reparse 的空实验目录，为同一所有者增加等价的具体 SID ACE；保留原 deny 和沙箱保护后，相同写入成功，目录外哨兵不变。这是故障诊断，不是交付的 ACL 修补方案。
+3. **正式夹具使用真实、普通且私有的用户工程目录。** Windows dsh 集成在用户主目录下新建 `.opendirector-validation/dsh-<随机 id>`，通过普通目录继承创建，不执行 chmod、ACL grant、ACL repair 或 SDK 诊断修复。原 pytest 目录保存 `native-workspace.txt` 指针，便于定位实际文件。运行前只读检查所有者、普通目录及祖先无 reparse，并要求允许项仅为 SYSTEM、Administrators 和当前用户具体 SID；遇到额外主体或不满足的 ACL 直接断言失败，不增加 skip。这个输入对应应用普通用户工程目录；它不声称修复任意 `0700`/OWNER RIGHTS 工程根。
+4. **没有将写入成功降格为工具结束。** 保留原技能加载、未授权技能不可见、精确一个资产、Agent 来源、真实文件字节及会话结束断言。新增执行目录外的文件哨兵，实际尝试覆盖；必须保持原字节，工具须正常完成且结果未截断，结构化结果仅含一段 text，stdout 逐行必须恰为 `NATIVE_OUTSIDE_DENIED`。不是只在输入或混合错误文本中搜索标记。
+5. **另行检查只读模式。** 直接运行安装 SDK 的真实 `read-only` 沙箱，`writableDirs=[]`，在一个此前已有 workspace-write 授权的目录中尝试改写内部文件和外部哨兵。两次均实际返回 UnauthorizedAccess，进程退出 0，文件仍分别为 `YES`、`KEEP`。没有通过残留目录授权获得只读写入能力。
+
+`tests/process_helpers.py` 的新增目录检查最终只使用只读目录句柄和安全描述符查询，关闭所有句柄及分配的缓冲区；没有 ACL setter。开发过程中的权限投影辅助实现未纳入最终代码。五项新增回归覆盖所有者与重复检查、非空目录拒绝、文件拒绝、目录别名拒绝、已有 deny 与父目录权限保持；Windows 上实际加入更严格的 deny 后核对描述符与父目录不变，POSIX 上核对权限位不变。
+
+生产 `deepseek.Client` 对权限请求仍选择 `reject_once` 或取消，原生命令参数没有新增沙箱覆盖项。P1/P2 的逐级无链接打开、执行根绑定、目录/非空普通文件校验、fd 所有权与错误清理，以及 ZIP 路径、重复项、指纹、预算、锁定、版本和幂等检查均保持原代码。本轮 105 个生产 Python 模块与上轮 wheel 及其实际安装文件逐字节相同。
+
+### 最终结果及证据边界
+
+| 检查 | 实际结果 |
+| --- | --- |
+| 最终相关测试 | 4 个模块、51 项；**50 passed、0 failed、1 个既有 symlink skip、1 warning**，50.77 秒，退出 0 |
+| 最终完整 Python | `pytest tests`，未过滤文件/用例、未使用失败重试插件；**1,098 collected，1,093 passed、0 failed、5 个既有 skipped、1 warning**，817.21 秒，退出 0 |
+| 最新已安装 wheel | 隔离 CPython 3.12.10 venv，21 个模块、311 项；**306 passed、0 failed、5 个既有 skipped、1 warning**，445.55 秒，退出 0；包含真实 dsh、两项真实 Jiuwen、Agent 包/时间线包、根重定向、fd、存储和安装入口 |
+| 真实 Linux 的新增回归 | QEMU 的真实 Alpine/Linux 内核、Python 3.14.10；**5 passed、0 failed、0 skipped**，0.76 秒。输入文件指纹与最终仓库一致；不是 Windows fd 适配器运行 |
+| 原生 SDK 沙箱探针 | 普通目录可写、目录外写入被拒绝；OWNER RIGHTS 对照失败；隔离单变量对照成功；只读模式内外写入均被拒绝且文件字节不变 |
+| wheel 启动脚本 | 从仓库外、无 Node PATH 执行已安装 `opendirector.exe --help`，退出 0；包从隔离 site-packages 导入，SOURCE_ROOT 为 None |
+| 用例及源码审计 | 保留上一轮全部 **1,093 个用例身份**，新增 **5 项全部通过**；23 个已修改既有测试文件无函数删除、原 skip/xfail 装饰器无变化；最终两组运行期间 **763 个文件字节不变** |
+
+两组最终运行都显式设置 `DEEPSEEK_ENGINE_TEST=1`、`JIUWENSWARM_ENGINE_TEST=1`，原先门控的三项外部 CLI 用例均实际执行通过。进程级 TEMP/TMP 使用用户自有 `od-tmp`，每组全新 basetemp；未改系统 TEMP。唯一 warning 仍是 FastAPI/Starlette testclient 的 httpx 弃用提示。
+
+本轮只改测试夹具、增加五项测试和补充本文，继续复验既有最新 wheel，未因测试文件变化重建相同产品字节。该 wheel 仍为 97,534,317 字节，SHA-256 `9a70c1ae777dbee203f73299eb16b0e39aae82dc50e33a1bc0d92295960c11c6`；压缩包及实际安装中的 **105 个 Python 模块、22 个前端文件**均与当前生产文件一致。应用测试 PATH 不含 Node；外部 dsh 通过安装时固定的绝对路径使用其 Node 24.22.1 运行时。中文预览/MP4、编辑保存重开、可编辑包 UI/CLI 往返及无文字浏览器证据沿用上一节相同生产字节的五组验收，本轮没有重新执行这些浏览器组。
+
+五个跳过的身份与上一轮完全一致：四个 POSIX change-time 检查和一个 Windows 最终文件 symlink 权限检查。前四项在上一节真实 Linux 的 155 项运行中已实际通过，相应生产代码和测试未变；本轮 Linux 五项是新增夹具回归，不能表述为重跑了全部 Linux 套件。Windows 文件 symlink 的独立重试仍为 **WinError 1314**；未修改开发人员模式、注册表或安全策略。Windows junction、执行根重定向及共享句柄拒绝已实际运行通过。
+
+保留中间失败和中断记录：将 ACL 投影到具体所有者 SID 的早期测试方案仍遇到受限临时祖先下 PowerShell 当前目录异常，随后移除该方案。最终普通用户目录方案先通过相关测试；对新增拒绝断言进行复核后，进一步收紧为精确结构化 stdout，一次进行中的完整运行因此中断，不计为完整通过。收紧前 wheel 的 306 passed 记录仍保留；上表只计收紧后从头运行的最终结果。没有通过删除测试、降低资产数量或扩大 skip 获得通过。
+
+原始 JUnit、日志、ACL 对照、源码指纹、wheel 字节审计、只读模式探针及符号链接权限结果位于本机忽略目录 `test-results/issue87/dsh-sandbox-fix`，关键条件和结果已直接记入本文。Linux 虚拟机及仅监听 loopback 的输入服务器已关闭。模型响应来自本地协议夹具，真实的是原生引擎、文件、项目提交及业务 CLI；真实付费模型服务仍不在本轮范围。
+
+HEAD 保持 `9834c1cc0d56abece57d815de53f78a501e698d0`，所有既有未提交改动保留，暂存区为空。**所列普通私有工作目录中的源码及 wheel 验证均无失败；OWNER RIGHTS 目录兼容性、Windows 文件 symlink 权限及上一节的路径/服务范围限制继续保留。未提交、推送或合并。**
+
+## OWNER RIGHTS 产品修复及 #87 最终核对（2026-11-07）
+
+本节更新上一节的目录规避方案和 OWNER RIGHTS 未修复结论，历史失败记录保留。**当前工作区实现已在原生 Windows 的原 OWNER RIGHTS 测试目录通过真实 dsh、#87 五项业务验收及下表检查；完整 Python 为 1,128 passed、0 failed、5 个既有 skipped，最新已安装 wheel 为 341 passed、0 failed、同样 5 个 skipped。** 不是对未修改 HEAD 的通过声明，也不表示所有平台和外部服务均已实测。
+
+English summary: the production fix supports caller-owned OWNER RIGHTS execution trees on the tested native Windows/NTFS environment without moving the workspace, disabling the sandbox or changing restricted-token capabilities. All five issue #87 acceptance requirements have passing UI/shared-command, real-file, MP4 and package-exchange evidence. The unfiltered source suite collected 1,133 cases: **1,128 passed, zero failed, five original skips**. The freshly installed wheel passed **341 cases, zero failures and five original skips** across 22 affected modules. All 621 Node tests and seven browser suites passed. Thirty-five added Python cases passed; all previous 1,098 case identities and existing skip conditions were retained. Windows final-file symlink creation remains unavailable (error 1314); four other Windows skips are POSIX change-time cases already passed on real Linux. No paid model service or autonomous background renderer was validated. No files were staged, committed, pushed or merged.
+
+### 产品修复及安全边界
+
+新增 `opendirector.agent.owner_rights.native_owner_access`，由 DeepSeek 原生运行服务在启动子进程前调用；其他平台直接通过该上下文，不修改 POSIX 文件。撤销了上一节 dsh 测试将 `tmp_path` 换成用户主目录普通目录的做法，正式集成直接使用 pytest 原目录，并断言它确实含有 OWNER RIGHTS。进程级 TEMP/TMP 仍使用前述用户自有 `od-tmp` 和每轮全新 basetemp；这是原测试目录的实际父路径，没有在用例内换目录或移走失败工程，系统 TEMP 未改。
+
+- 保留所有既有 ACE，包括 OWNER RIGHTS 与 deny，只把现有 owner 权限的保守子集投影到同一当前用户 SID。祖先仅暂时增加**不继承的读取/遍历权限**，执行树仅增加必要 Modify 子集；不增加 `WRITE_DAC`、`WRITE_OWNER` 或 `FILE_DELETE_CHILD`，不更换所有者、组、SACL 或完整性标签。继承使用 CREATOR OWNER，将普通新子对象映射到其自己的所有者。原 OWNER RIGHTS ACE 保留，未恢复其所抑制的隐式 ACL 修改权限。
+- 计算允许项时扣除所有适用 deny 位，包括继承的组 deny；不通过新显式 allow 的顺序越过 deny。未知复杂 OWNER RIGHTS ACL 拒绝处理；当前投影只适用于所有者等于调用进程 TokenUser 的对象，不接管其他所有者的权限。
+- 从卷/共享根逐级通过目录句柄打开和验证，拒绝 reparse、文件硬链接及 DOS 别名/ADS；在规范化之前检查原输入。实际写 ACL 使用短时重新打开的句柄，并比较文件身份后才设置。以 `MAXIMUM_ALLOWED` 句柄调用 SetSecurityInfo，逐个处理已验证对象，避免隐式传播到未检查的子树。相关 Windows 行为参见 [SetSecurityInfo](https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-setsecurityinfo) 与 [ACE inheritance rules](https://learn.microsoft.com/en-us/windows/win32/secauthz/ace-inheritance-rules)。
+- 同一文件身份的并发操作通过私有目录中的、句柄相对打开的 LockFileEx 锁协调，拒绝协调目录别名和锁文件硬链接，不截断或写锁文件内容。等待取消不释放别人的授权。准备失败时回滚所有修改；正常结束仅移除本轮祖先读权限，保留同时发生的其他 ACL 更新。成功执行树的等价 owner 投影会保留，属于明确的持久化 ACL 变化，与 SDK 的 standing workspace grant 共存；不是退出后所有 ACL 都逐字节恢复。
+- 原生沙箱参数、SDK 及受限 token 的写 capability 列表均未修改。权限请求仍 `reject_once` 或取消，未开启提权、切换语言模式或关闭沙箱。P1/P2 的根绑定、逐级无链接文件打开、目录/非空普通文件检查、fd 清理，以及包路径、重复项、指纹、预算、锁定、版本及幂等校验保留。
+
+真实 SDK 回归将 A/B 两个工作区都预先授予 standing capability，并让 B 处于 Low 完整性级别。A 的 token 可以在 A 创建/读取文件和普通继承子目录，但仍不能写 B 或目录外哨兵；因此拒绝不能仅由完整性级别解释。对 A 执行实际 `icacls` 修改 DACL 返回 5。另一个无可写目录的 read-only token 可以读取 A，不能改写 A/B。正式 dsh 业务测试同时保留技能加载、未授权技能不可见、精确一个资产、Agent 来源、实际字节及会话结束检查，目录外写入工具的完整、未截断 stdout 必须精确为 `NATIVE_OUTSIDE_DENIED`。
+
+新增 31 项 owner ACL/真实 WinAPI 回归及 1 项真实 SDK 回归，覆盖 deny、继承、重复规划、准备失败回滚、根/祖先/子目录 junction、硬链接、外来所有者拒绝、并发取消、50 次失败遍历句柄数无增长、路径替换、文件身份不符、并发 ACL 更新、协调文件别名和原始路径拒绝。额外实际安全描述符审计确认所有者、组、DACL protected 位和完整性标签未变，目录外完整描述符未变；祖先新增 ACE 已移除，Windows 自动继承 bookkeeping 标记可能规范化，不声称原 SDDL 文本完全相同。
+
+### 最终执行结果
+
+| 检查 | 实际结果 |
+| --- | --- |
+| owner 回归 | **31 passed、0 failed、0 skipped**，3.12 秒 |
+| 产品冻结版本相关检查 | 6 个模块、93 项，**92 passed、0 failed、1 个既有 symlink skip**，84.23 秒；随后新增心跳回归与真实 Jiuwen 媒体验证另为 **9 passed**，62.38 秒 |
+| 最终完整源码 Python | `pytest tests`，**1,133 collected，1,128 passed、0 failed、5 个既有 skipped、1 warning**，退出 0；JUnit 耗时 26,011.03 秒包含下述近七小时系统休眠，不作为性能测量 |
+| 最新已安装 wheel Python | 全新 CPython 3.12.10 venv、22 个受影响模块、346 项，**341 passed、0 failed、5 个既有 skipped、1 warning**，381.77 秒，退出 0；包含两项真实 dsh、两项真实 Jiuwen，以及包、根重定向、fd、存储及安装检查 |
+| Node、契约、双语、构建 | **621 passed、0 failed、0 skipped**，13,967.21 ms；契约检查退出 0，i18n 为 **2,921 keys、0 problems**；干净 wheel 构建实际执行 npm ci、TypeScript 与 Vite，退出 0 |
+| 七组浏览器 | editing、render、archive、coverage、desktop、workflow、installed **全部最终退出 0**；保留原 184 条业务 assert，未修改仓库浏览器脚本以取得通过 |
+| 本轮真实 POSIX | QEMU TCG 中实际 Alpine 3.24.4/Linux 6.18.60-0-virt/Python 3.14.10；owner 测试 **13 passed、0 failed、18 个新增 Windows API-only skipped**，6.27 秒；另实际调用 POSIX no-op，inode、0500 权限、mtime 及中文文件 SHA-256 全部不变 |
+| 用例及源码审计 | 上轮 **1,098 个用例身份全部保留**，新增 **35 项全部通过**；23 个修改的既有测试文件无 test 函数删除、原 skip/xfail 装饰器无变化；两组最终运行期间 **766 个源码/测试文件字节不变**，结束后才追加本文 |
+
+两组 Python 均开启 `DEEPSEEK_ENGINE_TEST=1`、`JIUWENSWARM_ENGINE_TEST=1`，不使用用例过滤、失败重试或新增 xfail。唯一 warning 为既有 FastAPI/Starlette testclient 的 httpx 弃用提示。新增 35 项为 owner 31 项、真实 SDK 1 项、测试驱动心跳 3 项。本轮 Linux 使用的 owner 产品文件与测试文件匹配最终仓库；快照中的 process_helpers 在之后只新增心跳，其本次实际使用的 directory_link 及原四个辅助函数 AST 均未变，不将 Linux 结果表述为运行过新心跳测试或完整 Python 套件。
+
+此前真实 Linux 的 **155 passed、15 个既有 Windows-only skip** 及 P2 的 2,000 次非法输入/100 次往返、fd 始终为 4 的结果继续保留；相应安全文件访问产品字节本轮未变。本轮没有重跑那整组 Linux 检查，不能将旧证据标作新执行。
+
+### 对照 Issue #87 的五项验收
+
+| Issue 要求 | 当前实现和实际验收 |
+| --- | --- |
+| UI/Agent 编辑正文、样式和时间，保存重开、撤销重做，遵守锁和对象版本 | editing 的真实 IME、单步手势撤销重做、共用 editor.save、Agent 接续、UI 再编辑、冲突/锁及实际 API 停止重启/重开通过；完整服务套件验证正式持久化对象及命令拒绝 |
+| 中文预览与 MP4 的内容、层次、位置和时序一致 | render/desktop 直接合成并解码 MP4，与预览核对；包括中文/英文、重叠层、独占结束帧、纯文字黑底、媒体之后的文字及混音，实际音频 RMS 3516.07；横向 1920×1080、纵向 1080×1920 均为 H.264、60 帧、2.5 秒，并检查选定解码帧，中文截图人工核对可读 |
+| 修改后输出新成片，旧文件及旧编辑依据保持不变 | archive 在目标工程分别编辑 A/B、实际生成和发布不同 MP4，核对解码帧差异；历史 object.get 返回精确编辑版本，旧文件 SHA-256 与 provenance 不变 |
+| 文字/字体依赖可查并保护删除，原生包可继续编辑，不支持交换格式清晰拒绝 | archive 完成 UI A→真实 CLI B→UI C 往返、目标新资源身份与字节指纹、关闭来源视图后重启目标续编；Agent 包与恶意输入/锁/版本回归在源码和已安装 wheel 均通过；实际切换中英文核对未知能力包和含文字 FCPXML 的拒绝提示；coverage/installed 验证真实字体缺字诊断、草稿保留及恢复 |
+| 既有剪辑、音频及无文字导出无回归 | workflow 实际完成顺序/变速、混音、MP4、发布、取消、缺失来源拒绝、服务重启及第二份输出；原无文字格式/指纹回归和全部 Node 套件通过 |
+
+桌面组另实际完成 2,000 cue/600 秒、640×360、24fps、14,400 帧输出：该次无文字 61.218 秒/496,550 字节，文字 66.314 秒/1,468,866 字节。与完整测试并发，单次顺序样例不能作为独立性能对比或一般性能承诺。installed 组连接本轮新 wheel 的实际服务，服务 PATH 无 Node、无 Vite、无仓库 Python 导入，实际预览、诊断、保存和停止监听后重启/重开均通过。
+
+### wheel 及失败过程复核
+
+新 wheel 为 `opendirector-0.1.0-py3-none-win_amd64.whl`，**97,539,388 字节**，SHA-256：
+
+`86304665e0c0ecb73873dc1c8a1234e68ab5c6e68ae06f836204448f01ed9f3f`
+
+从干净源码快照构建，独立 Python.org 3.12.10 venv 安装及 pip check 通过。压缩包、实际 site-packages 中 **106 个生产 Python 模块、22 个前端文件**逐字节匹配当前源码/dist；最终三项心跳相关改动仅涉及测试，不改变 wheel 产品字节。包的 SOURCE_ROOT 为 None。从仓库外、无 Node PATH 执行原生 PE `opendirector.exe --help` 退出 0；实际 `serve` 的 health 为 200、字体版本为 2.004，之后确认监听已关闭。外部 dsh 仍使用固定绝对路径的 Node 24.22.1；不是 dsh 无 Node 依赖的声明。
+
+保留以下失败及修正依据，不把初次失败改写为通过：
+
+1. 首次完整源码 **1,124 passed、1 failed、5 skipped**（1,436.90 秒）、首次 wheel **337 passed、1 failed、5 skipped**（837.07 秒）都在真实 Jiuwen 媒体任务超过 60 秒时触发编辑会话租约过期，旧测试未模拟 UI 的续租。测试驱动现对同一已有 project/session 每 15 秒实际 PUT 心跳，与现有 UI 相同，拒绝续租必须报错，退出停止线程。不延长租约、不 mock 时钟、不替换身份、不改为后台权限；保留该媒体用例的 **42 条原 assert**，另加三项成功/拒绝/流失败的心跳回归。
+2. 系统事件明确记录本地 **15:30:59 因 Battery 休眠，22:26:59 唤醒**。该轮源码最终仍全部通过；同轮 wheel 的权限测试跨越休眠后，写入被过期会话校验正确拒绝，得到 **340 passed、1 failed、5 skipped**（25,628.34 秒）。唤醒后同用例、同产品字节单独通过（12.86 秒），随后从头、不筛选地重跑全部 22 模块，结果为上表 341 passed。最终运行已接电，并仅在验证进程内申请防自动休眠，finally 恢复；没有更改系统电源策略或安全设置。
+3. 桌面首轮外部 RSS 采样遇到 CDP 列出的进程已退出、OpenProcess 返回 87。Windows 忽略目录采样器现通过实际内核句柄/退出状态确认退出后才记为 exited/RSS 0，存活进程的采样错误仍报错；真实存活与已退出 PID 对照通过。随后整组桌面脚本重新通过，原 22 条断言保留。七组共 184 条 assert 的语法树调用文本审计完全一致。
+4. 初次原生启动探针误用不支持的 `serve --root`，保留 usage 错误后按真实 `OPENDIRECTOR_ROOT` 环境契约执行成功。Linux 首次过长串口准备命令截断，改为短启动器从 loopback 获取完整输入后执行成功。两者属于验证驱动准备失败，未修改产品以迁就命令。
+
+### 保留的环境限制及结论
+
+Windows 的五个 skip 身份与上轮完全一致：四个 POSIX change-time 缓存用例已在前述真实 Linux 运行通过；一个最终文件 symlink 用例的独立本机重试仍是 **WinError 1314**。未改变开发人员模式、注册表或安全策略。Windows junction、根重定向、硬链接及共享句柄拒绝实际执行通过；Linux 文件/目录 symlink 证据保留，但不冒充 Windows 这项权限场景已执行。没有删除测试或扩大已有跳过条件，因而准确结论为**最终已执行检查全部通过、仍有五项 Windows 环境跳过**。
+
+OWNER RIGHTS 兼容性实测范围是当前用户所有的普通 NTFS 执行树、受支持简单 ACL，以及普通继承创建的子对象；不声明组所有权、提权 token、UNC、任意自定义复杂 ACL 或命令显式另建不继承 DACL 均已兼容。不支持的结构安全拒绝。前述 AppData junction 错误 183 和极深私有会话路径错误 206 的环境/范围记录继续保留；本轮不将明确的超过 260 字符回归通过扩展为任意路径的保证。
+
+本机为 Windows 11 x64、Python 3.12.10、Node 24.22.1、Chrome 156、FFmpeg/ffprobe 9.0.2。模型响应仍来自本地协议夹具，真实的是原生引擎、受限 token、文件/字体、业务 CLI、工程提交、浏览器和 MP4。SRT/ASS、自动转写、通用多视觉轨及关闭浏览器后的后台自主渲染不属于 Issue #87 本轮交付；没有将改动时间线等同于已实现后台渲染，也未验收付费模型服务。
+
+原始失败和最终 JUnit、ACL 对照、安全描述符、源码冻结清单、wheel 字节审计、系统休眠事件、截图/MP4 及七组报告保存在可再生成的本机忽略目录 `test-results/issue87/owner-rights-fix`；仓库中的本节直接记录关键条件及结果，本机文件不是他人必读依赖。Linux 虚拟机和其 loopback 输入服务器已关闭。
+
+**按 Issue #87 五项验收核对，当前未提交实现已在上述环境通过；OWNER RIGHTS 的原目录 dsh 阻塞已由产品代码修复，沙箱和安全拒绝保留。HEAD 仍为 `9834c1cc0d56abece57d815de53f78a501e698d0`，暂存区为空，既有改动保留，未提交、推送或合并。**
+
+## PR #193 全部未提交改动复审（2026-11-07）
+
+**复审结论：发现 1 项 P1、4 项 P2，当前不能给出安全及并发路径已完成签收的结论。** 上一节的功能测试通过记录保留；本节补充实际复现的覆盖遗漏，并收紧其“并发、异常清理可靠”和“测试修改未掩盖原失败”的解释。此轮仅审查、运行隔离探针和追加记录，没有修复产品代码或修改仓库测试。
+
+English summary: review of all 53 uncommitted paths found **one P1 and four P2 findings**. A deterministic real-ACL interleaving drops a newly added deny; a hard link created after traversal receives the execution file's ACL changes through its outside alias; real processes using different TEMP directories bypass mutual exclusion and revoke another active call's ancestor grant; failure of the first root attribute check leaks one actual handle per attempt. The original hidden-source generation test copied byte-for-byte from HEAD still fails, whereas its modified version restores source visibility before submission. These findings do not prove that the restricted dsh token can escape by itself: the ACL/link probes require a concurrent host-side actor. Existing native capability, read-only and outside-write rejection tests still pass. The targeted run returned **101 passed, one original symlink skip, zero failures**; the isolated original test returned **one failure**. Previous full-suite and wheel results remain historical test evidence, not approval of the newly discovered paths. No product/test changes, staging, commits, pushes or merges were performed during this review.
+
+### 已复现发现
+
+1. **[P1] ACL 的读取和整表写回之间会覆盖并发新增的 deny。** `owner_rights.py:266–280` 从旧 DACL 计算完整 `updated`，`edit` 只比较文件身份便调用 setter；清理的 `292–297` 也采用同类读后写模式。文件身份相同不能证明安全描述符未变。隔离探针在真实 setter 前插入一次实际 DACL 写入，加入 Everyone 的写入 deny，确认该 deny 已安装，再执行未修改的产品 setter，最终 deny 消失。没有 mock setter 的成功结果。当前 file lock 只约束遵循该协议且找到同一协调目录的调用，不约束其他 ACL 编辑者。应在设计中提供可靠的权限修改串行化/冲突处理，并补充准备与清理阶段的交错回归；不能仅增加一个旧快照检查便宣称与任意外部 DACL 更新完全原子。此问题破坏保留 deny 的并发保证，需要在签收 OWNER RIGHTS 修复前处理。
+2. **[P2] 硬链接只在遍历时检查，实际 ACL 写入前没有保持该条件。** `_tree` 的 `252` 行检查链接数，但 `apply/edit` 在可能等待锁之后没有再次验证并保护链接关系。探针在 `_Projection(work)` 完成后，为已检查文件新建目录外硬链接，再执行实际 `apply`：文件身份相同、链接数为 2，操作仍成功，目录外别名看到的 ACL 确实改变，原字节仍为 KEEP。该交错需要有创建目录外链接权限的宿主侧进程；未证明原生受限 token 能完成该操作。应让“普通、单链接文件”条件在权限变更期间持续成立，并测试锁等待期间及 setter 前的变更。硬链接共享同一安全描述符，不能按路径分别授权，参见 [CreateHardLinkW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createhardlinkw)。
+3. **[P2] 协调目录依赖各进程 TEMP，同一文件身份不一定使用同一把锁。** `native_owner_access` 的 `316` 行在 `tempfile.gettempdir()` 下建锁目录。双进程实际环境对照未 monkeypatch 锁或权限：相同 TEMP 时第二进程必须等待，先退出后再进入且授权稳定；不同 TEMP/TMP 时两进程同时进入同一原工作目录，先退出者移除第二进程仍在使用的祖先读取 ACE。两组全部子进程退出 0，后者安全描述符变化被独立读取确认。需要使用同一用户跨进程稳定的协调位置或等价全局机制，并保留不同进程环境的回归。现有同一进程/同一 TEMP 的取消测试不能覆盖此条件。
+4. **[P2] 首次根句柄检查失败时，该句柄未进入清理表。** 构造函数 `230–234` 在真实 CreateFileW 成功后，先 `checked(handle)` 再登记 `self.nodes`。若首次属性/类型检查抛错，`self.close()` 看不到该句柄。注入首次检查失败、保留真实创建/计数 API，连续 32 次后实际进程句柄数 **302→334**，每次泄漏一个。探针最后显式关闭捕获的句柄，计数恢复 302，没有把泄漏留在验证进程中。应先建立所有权/清理登记再执行可能失败的检查，并补第一处 WinAPI 错误的回归；现有“50 次失败遍历不泄漏”只覆盖登记之后的错误。
+5. **[P2] 隐藏来源测试的改动改变了原失败的业务前提。** `tests/test_creation_generation_service.py:90–102` 在接受任务前重新 `canvas.show` 来源；原测试是在来源保持隐藏时提交，并要求实际 `inputSnapshot.references` 包含该来源。把 HEAD 中原测试文件逐字节复制到忽略目录，使用当前产品和真实持久化服务单独重跑，仍在原第 104 行因 `references[0]` 的 **IndexError（实际为空）** 失败，2.13 秒，退出 1。该测试原本期望的场景没有被当前修改修复；现有逻辑引用保留及接受后隐藏两分支验证不能替代“隐藏时接受”的场景。这不表示新增了该产品行为，相关生成输入策略属于既有实现；但不能仅依据现有实现就把原失败改写为已解决。应保留原失败场景的独立回归，结合正式业务契约明确是否修产品或调整需求，不能将它归类为纯 Windows 夹具适配。
+
+上述前两项实际操作仅使用本轮新建私有目录；交错由宿主侧探针按确定顺序触发，没有更改沙箱 SDK、token、系统策略或用户工程。它们证明 ACL/链接竞争窗口存在，不证明 sandbox-only 攻击者具有所需外部写入或 WRITE_DAC 权限。另一次父目录设置探针观察到既有子文件的 inherited ACE 标记发生规范化，但没有据此宣称新增有效权限或新增沙箱逃逸；不将“使用 MAXIMUM_ALLOWED”扩大解释为所有子对象安全描述符字节必然不变。[SetSecurityInfo 的 MAXIMUM_ALLOWED 说明](https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-setsecurityinfo)不能代替具体系统的实测。
+
+### 沙箱、测试差异与验证范围
+
+- **稳态沙箱约束仍有实测支持。** 本轮重新运行真实 dsh 业务和真实 SDK 回归，原 OWNER RIGHTS 目录可写、A/B capability 区分、Low B 仍不可写、目录外哨兵、read-only 内外拒绝及 icacls 修改 DACL 失败的严格断言均通过。新增允许掩码不含 WRITE_DAC/WRITE_OWNER/FILE_DELETE_CHILD，没有新增宽泛主体或修改权限请求的 reject_once/cancel 策略。静态 deny 扣除测试仍通过；这与上面的并发 deny 覆盖是不同条件。
+- **异常清理有已覆盖的正确路径，也有上述遗漏。** 准备失败回滚、登记后的遍历失败、单次取消等待、异身份拒绝、协调别名拒绝、普通并发 ACL 更新后清理及 P1/P2 文件访问检查均通过。NativeRuntime 的 finally 兜底终止进程并关闭权限上下文保留；没有把它扩展为任意二次取消、进程崩溃或强制关机后自动恢复临时授权的保证。当前没有崩溃恢复授权日志，本轮未验证这些额外条件。
+- **审查覆盖全部 53 个未提交路径。** 包括新增未跟踪模块/测试，不只查看 git diff 的已跟踪部分。检查了执行文件边界、根绑定、fd 所有权、目录 junction、技能快照、会话恢复、元数据原子替换/缓存完整性、预览命名、入口脚本、依赖/契约和 23 个既有测试文件的差异。未发现包路径/预算/指纹、对象版本/锁/幂等检查被删除或旁路；其现有回归通过，不将此描述为不存在任何其他缺陷的保证。
+- **没有 test 函数删除或原 skip/xfail 装饰器扩大。** 但这一形式审计不能证明业务断言等价，第 5 项就是反例。文件 symlink 换为真实目录 junction 仍保留重定向拒绝，但覆盖不同 Windows 原语，不能代替受 1314 限制的最终文件 symlink。其它主要测试调整分别为原生 PE/PowerShell 命令、同一编辑会话真实心跳、精确业务回执/资产数和进程退出检查；未发现以异常文本包含标记冒充成功、吞掉意外后台异常或降低数量取得通过。上一轮浏览器 184 条 assert 和 Jiuwen 心跳前后 42 条 assert 的保留证据继续适用。
+- **本轮相关测试：7 个模块、102 项，101 passed、0 failed、1 个既有 Windows symlink skipped、1 warning，23.48 秒，退出 0。** 本轮未改产品或仓库测试，也未再次运行完整 Python、wheel 或七组浏览器。上节的完整源码 1,128 passed/5 skipped、wheel 341 passed/5 skipped、Node 621 及七组浏览器最终通过记录对应相同产品/测试字节，继续按其原范围引用；它们没有覆盖本节新反例。原测试隔离重跑为 1 failed、4 deselected，不属于已通过的 102 项结果，不加入正式套件或改成 skip。
+
+Windows 最终文件 symlink 权限仍记录为错误 1314；四项 POSIX change-time 的既有真实 Linux 通过证据、此前 P2 fd 验证、本轮 Linux 范围、路径深度/复杂 ACL/组所有者/UNC/付费模型与后台渲染限制均保留。本轮没有更改系统权限或伪造这些条件通过。
+
+本轮源码/测试指纹与上一轮冻结清单相比，只有验收文档不同；审查过程中和结束后再次核对 HEAD、暂存区及产品/测试文件。探针、双进程对照、原测试副本、JUnit 与审计保存在忽略目录 `test-results/issue87/final-review-20261107`。关键复现条件、实际数值及建议已在本节直接说明。**先处理上述五项并补充针对性回归，再重新评价最终签收；本轮未暂存、提交、推送或合并。**
+
+## PR #193 五项复审修复与重新验收（2026-11-08）
+
+**上一节复审提出的 1 项 P1、4 项 P2 已修复，并补充回归；以下是修复后的实际结果，上一节及此前失败记录继续保留。** HEAD 仍为 `9834c1cc0d56abece57d815de53f78a501e698d0`。既有未提交工作全部保留，没有暂存、提交、推送或合并。
+
+English summary: all five findings from the November 7 review are addressed. Directory DACL updates use a real RH oplock, read and transform the current descriptor under that guard, and perform a same-FILE_OBJECT native DACL update. Conflicts release the guard and retry against the new descriptor within a bounded deadline; unsupported protection fails closed. Initialization now precedes file creation in the same original work directory, and existing files are never ACL-repaired, because adding a hard link does not reliably break an oplock. Coordination uses the process token's OS profile rather than environment-dependent TEMP. First-check failures close their actual handles, and exceptions/cancellation reach permission cleanup. Hidden sources remain hidden at job acceptance while their active references, structured prompts and exact input snapshots remain intact. An additional reproduced GENERIC_EXECUTE mapping defect was tightened and has two regressions. No tests were removed or existing skip/xfail gates broadened. Final executed checks pass, with the same five Windows environment skips described below. Native sandbox tokens, capability separation, outside/read-only rejection and security checks remain enabled.
+
+### 修复及针对性证据
+
+1. **P1，并发 deny 不再被旧 DACL 写回覆盖。** 新增 `windows_acl_guard.py`，使用实际 RH（READ/HANDLE）oplock；在保护内读取当前 owner/DACL、重新计算保守投影，并在 setter 前后检查 break。通过同一 FILE_OBJECT 的 `NtSetSecurityObject` 只写 DACL，保留 owner、group、DACL protection/inherited 标志和 SACL/完整性标签。其他 FILE_OBJECT 的 SET_SECURITY 必须等待 HANDLE break 确认；发生冲突时释放保护，让对方完成，再在最多 0.5 秒内重读重算，不重放旧表。没有无保护 RMW 的回退。新增四项真实外部 ACL writer 交错（预打开/新打开 WRITE_DAC 句柄 × 读后/setter 内）及清理阶段交错，确认实际 deny 保留、没有对应 owner 写入 allow、worker 和租约均结束。其依据为 Windows 的 [SET_SECURITY oplock 规则](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fsa/306239fb-cb60-49fe-b293-df4d1a5f757a)，不是仅靠一次安全描述符比较宣称原子。
+2. **P2，硬链接竞争通过初始化边界解决。** 实际探针证明新建硬链接不会可靠打破 RH oplock，share=0 也不能作为该保证，因此产品不再修改任何既有文件 ACL。`NativeRuntime` 在同一原始新建 work 目录、复制技能/创建启动器之前初始化目录，随后文件按原普通继承创建。预检遇到既有普通文件、遍历后硬链接或晚到文件均在 ACL 写入前拒绝；edit 仅接受已绑定身份的目录。新增三项检查字节和内外安全描述符均不变的拒绝回归。真实 SDK 测试的输入文件改在权限上下文进入后创建，原 token、A/B capability、Low B、只读、目录外哨兵和 icacls 拒绝断言全部保留；没有改换 work 或 tmp_path，也不迁移用户工程。此功能明确是创建执行树之前的初始化，不是既有文件 ACL 修复工具。
+3. **P2，跨进程协调不再依赖 TEMP。** 使用 `GetUserProfileDirectoryW` 查询实际进程 token 对应的 OS profile，在其中使用固定私有协调目录，独立于 TEMP/TMP/HOME/USERPROFILE/LOCALAPPDATA 覆盖。保留目录 owner/ACL 校验、逐级无链接打开、handle-relative 锁文件、单硬链接校验及 LockFileEx。两个真实子进程分别在相同/不同环境覆盖下操作同一个原 work：第二个必须等待，第一个退出后第二个仍保有祖先授权，两个进程均正常退出。
+4. **P2，首次检查及异常退出可靠清理。** CreateFileW 成功后先登记根句柄，再执行首个可能失败的查询；连续注入 32 次首检失败，实际进程 handle 数不增长。另重复 8 次 oplock 请求失败，真实文件/event 句柄数不增长。NativeRuntime 的准备工作纳入 try/finally，权限上下文收到实际异常；RuntimeError、CancelledError、技能复制失败及清理冲突重试都有回归，失败初始化撤回目录投影，祖先临时 ACE 被移除。正常完成仅保留该执行树所需的等价 owner 投影，不将其扩展到目录外。
+5. **P2，恢复隐藏来源原场景并修业务服务。** `current_generation_inputs` 按活动逻辑参考解析，不再按画布可见性排除参考或删除结构化提示词；首尾帧引用预算也计入隐藏的活动引用，避免隐藏绕过数量限制。接受时来源保持隐藏，既有两分支及新增四项 follow_current/pinned × 来源/分组隐藏场景都检查实际任务输入、provider payload、指纹和采用。HEAD 原测试逐字节副本独立重跑通过；接受后的显示/隐藏不改写冻结输入。统一项目架构同步补充中英业务契约，没有以测试恢复可见性替代修复。
+
+补充权限审计实际复现：旧 `_specific` 把 GENERIC_EXECUTE 映射为 `0x1200A9`，导致仅可执行的继承文件额外可读。现按 Windows [文件权限映射](https://learn.microsoft.com/en-us/windows/win32/fileio/file-security-and-access-rights) 改为 `0x1200A0`，不增加 FILE_READ_DATA/FILE_READ_EA。两项新回归修复前均失败，修复后通过；其中真实 Windows 夹具移除会掩盖问题的 SYSTEM/Administrators 子项继承，仅在本轮新建自有私有目录内验证“初始化前后均不可读取”。
+
+### 最终执行结果
+
+| 检查 | 实际结果 |
+| --- | --- |
+| 针对性回归 | **95 passed、0 failed、0 skipped**，80.59 秒，退出 0；HEAD 原隐藏来源测试逐字节副本另 **1 passed**，1.80 秒 |
+| Windows 完整 Python | **1,154 项：1,149 passed、0 failed、5 个既有 skipped、1 warning**，1,263.83 秒，退出 0 |
+| 最新已安装 wheel Python | **26 个模块、408 项：403 passed、0 failed、同 5 个 skipped、1 warning**，681.77 秒，退出 0；含两项真实 dsh 及两项真实 Jiuwen |
+| Node / 契约 / 双语 | **621 passed、0 failed、0 skipped**；契约检查退出 0，i18n 为 **2,921 keys、0 problems**；干净 wheel 构建通过 |
+| 七组浏览器 | editing、render、archive、coverage、workflow、desktop、最新 wheel installed **全部退出 0**，原 184 条业务 assert 保留 |
+| 真实 POSIX | **45 passed、0 failed、49 个 Windows-only skipped**，17.16 秒；no-op 保持文件不变，fd 探针始终为 **4** |
+| 用例/源码/wheel 审计 | 上轮 **1,133 个身份全部保留，新增 21 项均通过**；25 个修改的既有测试文件无测试函数删除或 skip/xfail 扩大；最终运行期间 **769 文件字节不变**；wheel 的 **107 Python + 22 前端文件**匹配源码及实际安装 |
+
+源码完整套件执行 `python -m pytest tests`，wheel 执行 26 个受影响模块，均启用 `DEEPSEEK_ENGINE_TEST=1`、`JIUWENSWARM_ENGINE_TEST=1`，没有用例过滤、失败重试或新增 xfail。相关测试覆盖 owner、生命周期、真实 dsh、生成、画布及完整业务工作流。唯一 warning 为既有 FastAPI/Starlette testclient 的 httpx 弃用提示。两轮仅在各自验证进程运行期间请求防自动空闲休眠，结束已恢复；没有更改系统电源策略。
+
+对比上一轮 1,133 个用例身份，全部保留，本轮新增 21 项均通过（15 项生命周期、4 项隐藏结构化输入、2 项执行权限映射）。修改的既有测试文件及此前未跟踪的 owner/execution/process-helper 测试中，没有 test 函数删除，原 class/module/function skip/xfail 条件未扩大。该形式审计之外，还逐项核对业务断言：隐藏来源原失败场景已恢复，不再依靠可见性变化；真实 SDK 的安全断言保留；浏览器原 184 条 assert 调用文本完全一致。
+
+七组浏览器覆盖中文预览/真实解码 MP4、IME、撤销重做、UI/Agent 共用编辑命令、保存/服务重启/重开、UI→真实 CLI→UI 原生可编辑包往返、字体依赖、新成片与旧文件/编辑历史不变，以及无文字剪辑和混音。六组源码脚本在本轮业务及并发修复后通过，其后仅 agent 权限映射和两项回归变化，前端/渲染/业务服务字节未变；installed 组再次连接下面最新 wheel 实际服务通过。桌面覆盖横竖 1080p 与 2,000 cue/600 秒真实输出；与 Python 测试并发的样例不作为独立性能比较或一般性能承诺。
+
+### 最新 wheel 与 POSIX 核对
+
+从最终干净源码快照构建 `opendirector-0.1.0-py3-none-win_amd64.whl`，**97,542,088 字节**，SHA-256：
+
+`11c04fe6266c9e4b9f464843bb5e3f4ced0716eb8fffcfdf9d63df737f971913`
+
+构建实际执行 npm ci、TypeScript 与 Vite；全新 Python.org 3.12.10 venv 安装及 pip check 通过。wheel 压缩包和实际 site-packages 中 **107 个生产 Python 模块、22 个前端文件**逐字节匹配最终源码/dist；SOURCE_ROOT 为 None，应用测试 PATH 没有 Node。从仓库外执行原生 PE `opendirector.exe --help` 退出 0，实际 serve 的 health 为 200、字体版本 2.004，结束确认监听关闭。外部 dsh 使用固定绝对路径的 Node 24.22.1，这不代表 dsh 不依赖 Node。
+
+真实 POSIX 为 QEMU TCG 内 Alpine 3.24.4/Linux 6.18.60-0-virt/Python 3.14.10，使用最终输入文件哈希匹配的 owner/execution/lifecycle/POSIX fd 模块。49 项 skip 为 Windows API/namespace 场景；这是本轮 Linux 的实际范围，不冒充完整 Linux Python 套件。实际调用 POSIX no-op 后 inode、0500 权限、mtime 和中文文件 SHA-256 不变；另 2,000 次非法输入拒绝、100 次二进制往返，fd 在开始、十次中间采样及结束始终为 **4**。此前真实 Linux 的四项 POSIX change-time 与 155 passed 记录继续保留，对应文件访问/缓存代码本轮未变，不把旧证据标为新执行。虚拟机及其 loopback 输入服务器已关闭。
+
+### 保留的失败过程及限制
+
+- 首次相关测试因 `SetSecurityInfo` 在 RH 保护下内部重新打开目录而阻塞，中断日志保留。改为同一 FILE_OBJECT 的原生 setter 后解决；第二轮出现四个 ACL inheritance/protection 保留失败及一个旧隐藏预算预期失败（55 passed/5 failed），修复描述符控制位和业务预算后通过。没有把中断或失败计作完成。
+- 首次完整源码为 **1,146 passed/1 failed/5 skipped**（1,014.39 秒），首次 wheel 为 **400 passed/1 failed/5 skipped**（565.51 秒）。唯一失败的 workflow 测试要求隐藏来源删除输入，与已恢复的正式契约相冲突。等两轮均结束后，将三条“缺失引用/提示词”的断言改为七条精确 A2 引用、提示词、真实 provider 输入与旧 A1 不可变断言，其他历史/时间线/重启断言保留。随后完整源码 1,147 passed/5 skipped、wheel 401 passed/5 skipped 均通过；这是补充映射审计前的历史结果，最终结果以上表为准。
+- 随后的 GENERIC_EXECUTE 真实反例和两项修复前失败日志也保留；最终代码重新构建 wheel，并从头运行完整源码、受影响 wheel、最新安装验收及 Linux 检查。最终两组 Python 期间 **769 个源码/测试/文档文件字节未变**，结束并完成审计后才追加本节。
+- **五项 Windows skip 身份与上轮完全相同**：四项 POSIX change-time 只适用于 POSIX；一项最终文件 symlink 的本机独立重试仍为 **WinError 1314**。未改开发人员模式、注册表或系统安全策略。Windows junction、根重定向、硬链接和共享句柄拒绝实际执行通过，不能替代未获权限的文件 symlink 场景。因此结论是本轮已执行检查通过，仍有五项明确环境跳过。
+- OWNER RIGHTS 实测限当前调用者所有的普通本地 NTFS 执行目录、受支持简单 ACL 和可用 oplock；不保证任意复杂 ACL、组所有者、提权 token、UNC 或所有文件系统。重解析点、别名、外部所有权、意外既有执行文件以及不支持的保护条件拒绝。持续外部 ACL 冲突或撤销 WRITE_DAC 会明确失败；不承诺系统拒绝恢复时仍能完成物理清理，也没有扩大为进程崩溃/强制关机/任意二次取消的恢复保证。既有 AppData junction 183 及极深路径 206 的限制保留。
+- 保留原受限 token、capability、reject_once/cancel 和安全校验；新增 allow 不含 WRITE_DAC/WRITE_OWNER/FILE_DELETE_CHILD，所有适用 deny 扣除仍执行。真实 SDK 的写入隔离不等于通用读取/网络隔离。模型响应使用本地协议夹具，原生引擎、业务服务、文件/字体、FFmpeg、浏览器和媒体输出是真实执行；未验收费模型服务或关闭浏览器后的后台自主渲染，不扩大 Issue #87 的交换格式及自动转写范围。
+
+原始失败、最终 JUnit、真实 ACL/句柄/双进程对照、769 文件冻结清单、wheel 字节核对和浏览器报告保存在可再生成的本机忽略目录 `test-results/issue87/review-fixes`，本节直接保留他人评估所需关键条件与数值。当前结论替代上一节尚未处理五项的状态；既有工作保留，暂存区为空，**未提交、推送或合并**。

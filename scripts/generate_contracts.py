@@ -136,7 +136,7 @@ def main():
             path.parent.mkdir(parents=True, exist_ok=True)
             # Generated contracts contain non-ASCII text; the locale default (GBK on
             # Chinese Windows) cannot round-trip them.
-            path.write_text(contents, encoding='utf-8')
+            path.write_text(contents, encoding='utf-8', newline='\n')
     if stale:
         parser.error('Out-of-date generated contracts: ' + ', '.join(stale))
     print('Creation contracts ' + ('verified' if args.check else 'generated'))

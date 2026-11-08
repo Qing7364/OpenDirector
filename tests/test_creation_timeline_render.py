@@ -30,6 +30,9 @@ def prepared(project):
     document = dict(id=doc_id, projectId=pid, kind='timeline', data=dict(width=64, height=64, fps=24, tracks=[
         dict(id='visual', title='Visual', kind='visual', clips=[dict(id='clip', inPoint=0, outPoint=4, speed=2,
             resource=dict(asset=asset_ref(source), title='Source', durationSeconds=4))])]))
+    # FFmpeg and background imports do not renew edit leases. The active UI
+    # sends open heartbeats; establish that same precondition before editing.
+    store.open(pid, session)
     assert send(store, pid, 'creation.batch', session=session, operations=[
         dict(type='editor.create', payload=dict(document=document)),
         dict(type='canvas.show', payload=dict(item=dict(id=item_id, projectId=pid, kind='timeline',

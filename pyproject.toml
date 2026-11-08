@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=8,<10"]
+test = ["pytest>=8,<10", "distlib>=0.4,<1"]
 
 [project.scripts]
 opendirector = "opendirector.cli:main"

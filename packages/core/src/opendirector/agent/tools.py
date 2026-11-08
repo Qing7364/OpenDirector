@@ -266,7 +266,10 @@ class AgentTools:
                 target = directory(project_directory / 'agent-runs' / str(turn_id) / 'work' / 'previews')
                 target.mkdir(parents=True, exist_ok=True)
                 source = Path(result['preview']['path'])
-                destination = child(target, source.name)
+                # Asset IDs identify immutable content; repeating the source's
+                # full fingerprint here adds 65 characters to an already deep
+                # execution path and exceeds Windows' ordinary path limit.
+                destination = child(target, query.objectId.hex + source.suffix)
                 await asyncio.to_thread(shutil.copyfile, source, destination)
                 result['preview']['path'] = str(destination.resolve())
             return result

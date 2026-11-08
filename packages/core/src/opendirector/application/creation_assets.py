@@ -252,7 +252,10 @@ class CreationAssets:
         with stream:
             target = directory(target)
             target.mkdir(parents=True, exist_ok=True)
-            stem = f'{asset.id}-{asset.fingerprint.removeprefix("sha256:")}'
+            # open_media verifies immutable bytes before every preview. The
+            # stable asset ID is sufficient to name this disposable projection;
+            # repeating its fingerprint pushes Windows paths over MAX_PATH.
+            stem = asset.id.hex
             if asset.kind == 'image':
                 content, _ = self.thumbnail(project_id, asset_id)
                 output, mime = child(target, stem + '.webp'), 'image/webp'

@@ -1,4 +1,5 @@
 import asyncio
+import os
 from uuid import uuid4
 
 import pytest
@@ -108,7 +109,11 @@ async def test_skill_read_resolves_directory_alias_and_preserves_boundary(gatewa
     resource = skill / 'SKILL.md'
     resource.write_text('character replacement skill')
     alias = tmp_path / 'skill-alias'
-    alias.symlink_to(skill, target_is_directory=True)
+    if os.name == 'nt':
+        import _winapi
+        _winapi.CreateJunction(str(skill), str(alias))
+    else:
+        alias.symlink_to(skill, target_is_directory=True)
     gateway.roots = [alias]
 
     canonical = await gateway.call('canonical', 'read', {'path': str(resource.resolve())})
@@ -118,12 +123,25 @@ async def test_skill_read_resolves_directory_alias_and_preserves_boundary(gatewa
 
     outside = tmp_path / 'outside.md'
     outside.write_text('outside skill boundary')
-    (skill / 'escape.md').symlink_to(outside)
+    if os.name == 'nt':
+        # Exercise a real reparse-point escape without requiring Windows'
+        # symlink privilege. The same resolve-and-contain rule must reject it.
+        outside_directory = tmp_path / 'outside-skill'; outside_directory.mkdir()
+        (outside_directory / 'outside.md').write_text('outside skill boundary')
+        escape = skill / 'escape'
+        _winapi.CreateJunction(str(outside_directory), str(escape))
+        escape_file = escape / 'outside.md'
+    else:
+        escape_file = skill / 'escape.md'
+        escape_file.symlink_to(outside)
     for call_id, path in [('traversal', alias / '..' / '..' / 'outside.md'),
-                          ('symlink', skill / 'escape.md')]:
+                          ('symlink', escape_file)]:
         rejected = await gateway.call(call_id, 'read', {'path': str(path)})
         assert rejected.error == '只能读取已发现技能目录内的文本资源。'
     await gateway.close()
+    if os.name == 'nt':
+        escape.rmdir()
+        alias.rmdir()
 
 
 @pytest.mark.anyio
