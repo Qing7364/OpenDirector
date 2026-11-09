@@ -1,32 +1,64 @@
-# Issue #87 Windows 端补验指令
+# Issue #87 Windows 收尾执行指令
 
-[English](issue-87-windows-handoff.md)
+[English](issue-87-windows-handoff.md) · [完整分工与验收计划](issue-87-post-windows-plan.md)
 
-继续在 `Qing7364/OpenDirector:codex/issue-87-timeline-text`、Draft
-[PR #193](https://github.com/ThinkFlowLab/OpenDirector/pull/193) 上工作。`733001a2`
-已交付完整 Windows 验收；不要重复安装环境或重新实现其 ACL/host adapter。
-本次只需验证[完整复审修复](issue-87-final-review-plan.md)后的最新提交。
+`1799464f` 已完成上一轮约定的 Windows 补验，结果继续有效。本次剩余的是 ACL 最终检查/写入窗口、最新 main 整合和最终交付。发布本计划只改变文档，不改变该版本的产品代码，不触发重复功能验收。
 
-1. 保留本机改动，以 fast-forward 同步 PR 分支，记录完整输入 SHA 和实际 Windows/CPU/Python/Node 版本。阅读 `AGENTS.md`、修复计划和适用安全规则。
-2. 使用已有未打包的 Python.org 环境，设置 `PYTHON`。先运行以下相关测试，不放宽断言或扩大 skip/xfail：
+Windows Codex 是剩余产品代码的唯一写入方，连续负责整合、原生验证/必要修复、冻结前独立复审、最终验收、证据、正常推送及 CI 问题处理。当前 Mac 会话负责任务准备与交付后的只读核对；Linux GitHub Actions 负责当前提交的跨平台门禁。
 
-   ```powershell
-   & $env:PYTHON -m pytest tests/test_owner_rights.py tests/test_owner_rights_journal.py tests/test_owner_rights_lifecycle.py tests/test_owner_rights_resume.py tests/test_native_runtime.py tests/test_native_sessions.py tests/test_directory_links.py tests/test_skill_snapshot.py tests/test_execution_files.py tests/test_posix_execution_files.py tests/test_timeline_packages.py -q -ra
-   node --test tests/browserHost.test.ts
-   ```
+将下面内容发送到 Windows 原来的 Codex 对话：
 
-   核心检查：清理阶段写入成功后发生真实 oplock 冲突，外部同字节 deny 仍保留；Claude 两轮经过真实命令构建，第二轮技能更新且保留同一会话/目录；目录链接修复不删除普通目录。POSIX rename 用例在 Windows 明确跳过，不冒充原生 POSIX 验证。
-3. 运行完整 Python/Node、contracts `--check`、i18n、browser locale/manifest、四项 import 边界及 build。记录所有失败与 skip 原因。新增 host 发现用例会在独立目录验证无 `.venv`、PATH Python、显式覆盖及 venv 优先级。
-4. 运行 `timeline_text_editing.mjs` 和 `timeline_text_render.mjs`：文字条移动、左右裁剪应在按住鼠标期间更新，Escape 取消、单次撤销、UI/Agent 保存重开、中英文和真实 MP4 不回退。使用已有 `PLAYWRIGHT_MODULE` / `CHROMIUM_PATH`，测试自建隔离工程和服务。
-5. 从该最终源码重建 Windows wheel，安装进全新 venv，将 `OPENDIRECTOR_INSTALLED_PYTHON` 设置为该新 venv 的 Python 可执行文件绝对路径，再执行：
+```text
+继续完成 OpenDirector Draft PR #193 的全部剩余工作。
+项目：C:\Users\Qing Peng\OpenDirector
+仓库/分支：Qing7364/OpenDirector，codex/issue-87-timeline-text
 
-   ```powershell
-   & $env:PYTHON scripts/verify_install.py --python $env:OPENDIRECTOR_INSTALLED_PYTHON
-   node tests/browser/timeline_text_installed.mjs
-   ```
+你是本批次唯一的产品代码写入方。复用现有环境，保留本机工作，安全同步远端；
+阅读 AGENTS.md、适用安全规则、docs/development/issue-87-post-windows-plan.md
+和 issue-87-validation.md 最新 Windows 记录。责任表、冻结规则和门槛是本次执行依据。
 
-   确认无源码导入、后台 PATH 无 Node。历史 wheel 哈希不能代表新源码。
-6. 仅在当前改动或失败需要时扩大浏览器/原生引擎验证。原 `733001a2` 七组、1080p 和性能证据保留原版本边界，不伪称新提交已重新测量。
-7. 将完整 SHA、命令/退出码、通过/失败/跳过数量、wheel 哈希、实际浏览器结果及限制追加到[验收记录](issue-87-validation.md)。发现问题先复现并修复，再重跑相关及完整检查；提交证据/必要修复，按 upstream 同步后正常推送同一分支。保持 Draft，不强推或合并。
+按 Task 2 → Task 1 → 源码冻结 → Task 3 → Task 4 连续执行：
 
-不需要 SSH、远控配置、付费模型或修改系统安全策略。macOS 的确定性 ACL 测试不替代本机 WinAPI；此前真实 Windows 验收也不替代本次新增清理用例。
+1. 记录 PR/main 完整 SHA，将本次 main 合入现有 PR 分支，保留历史。
+   按计划解决冲突，保留音色库与字幕两侧能力，重新生成依赖锁和契约，核对自动合并区域。
+   将现有项目环境同步到合并后的 Python/npm 锁定依赖，记录实际版本，无需重装运行时。
+
+2. 用真实 WinAPI writer 验证最后一次 before_write 返回后、原始 NtSetSecurityObject
+   调用前的窗口。一次核对完整权限生命周期/并发矩阵及外部同字节 deny。
+   原生复现则修复并证明有效；若内核不允许该时序，提供证据说明模拟假设为何不成立。
+   Mac 反例只证明控制流；不得只增加检查次数、删除断言、扩大 skip 或放宽权限。
+
+3. 完整验收前安排独立只读复审，集中处理确认的范围内缺陷；新假设先定点复现。
+   之后提交源码冻结点，记录生产代码、测试、构建/CI 配置、依赖锁和打包资源哈希。
+   正常推送冻结版本，让 Linux CI 与 Windows 最终检查并行。
+
+4. 在稳定源码上集中完成完整 Python/Node、build、contracts、i18n、browser locale/manifest、
+   四项 import 边界；保留已有真实 CLI 门禁并核对 skip。Windows 跑 timeline
+   editing/render/archive 和独立 voice fixture。重建 Windows wheel，装进全新 venv，
+   运行 pip check、verify_install.py --python <wheel-python>、受影响原生模块和
+   timeline_text_installed.mjs，核对实际文件/帧、无源码导入和后台 PATH 无 Node。
+   Linux CI 覆盖标准浏览器工作流/助手面板及完整门禁，由你跟踪到最终结论。
+
+5. 确认失败在本批次内定位、修复，按影响范围复验；共享基础或依赖改变才扩大范围。
+   代码变动记录新冻结点；纯状态/验收文档变化不重跑 Windows 功能测试。
+   保留历史 1080p/2000 cue 证据，除非实际相关改动要求更新。
+
+6. 更新验收记录、旧计划/handoff 状态和 PR 描述；区分源码冻结 SHA 与最终证据提交 SHA，
+   证明相关运行输入未变。推送前同步 configured upstream 并保留 merge 历史，正常推送
+   同一分支。保持 Draft，不强推、不合并 PR、不自行发送 reviewer/外部聊天消息。
+
+正常步骤之间不需要再让我逐项确认。真实凭证/权限缺失、超出范围的产品取舍或原生证据
+仍无法判定时，明确报告阻塞和所缺条件；不要通过反复全量测试掩盖不确定性。
+
+最后统一返回：main 基线、源码冻结 SHA、最终 SHA/输入一致性、ACL 结论与原生证据、
+逐项检查/失败/skip、wheel 哈希、CI 链接和结论、PR 状态及剩余阻塞。
+```
+
+安装验证的 `--python` 参数不能省略。将 `OPENDIRECTOR_INSTALLED_PYTHON` 设置为新 wheel venv 的 Python 绝对路径，沿用已有 Playwright/Chrome 配置：
+
+```powershell
+& $env:PYTHON scripts/verify_install.py --python $env:OPENDIRECTOR_INSTALLED_PYTHON
+node tests/browser/timeline_text_installed.mjs
+```
+
+本批次不需要 SSH/远控配置、付费模型或系统安全策略修改。

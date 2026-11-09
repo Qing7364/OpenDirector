@@ -1,32 +1,73 @@
-# Issue #87 Windows follow-up validation
+# Issue #87 Windows completion handoff
 
-[中文](issue-87-windows-handoff.zh-CN.md)
+[中文](issue-87-windows-handoff.zh-CN.md) · [Complete allocation and acceptance plan](issue-87-post-windows-plan.md)
 
-Continue on `Qing7364/OpenDirector:codex/issue-87-timeline-text`, Draft
-[PR #193](https://github.com/ThinkFlowLab/OpenDirector/pull/193). Commit `733001a2`
-already delivered the complete Windows acceptance. Reuse its environment and
-tracked ACL/host adapters. Validate the latest [complete-review repairs](issue-87-final-review-plan.md).
+`1799464f` completed the previous agreed Windows follow-up; retain that evidence. Remaining work is the final ACL check/write window, current main integration and final delivery. Publishing this plan changes documentation only and does not require repeated functional acceptance of unchanged product code.
 
-1. Preserve local work, fast-forward to the current PR head, and record its full SHA and actual OS/CPU/Python/Node versions. Read repository guidance, the repair plan and applicable security rules.
-2. Set `PYTHON` to the existing unpackaged Python.org environment. Run the targeted checks below without weakening assertions or expanding skips/xfails:
+Windows Codex is the sole remaining product-code writer. It owns integration, native diagnosis/repair, independent pre-freeze review, final acceptance, evidence, normal pushes and CI corrections. The current Mac chat prepares this handoff and audits delivery read-only; Linux GitHub Actions covers the current revision's cross-platform gates.
 
-   ```powershell
-   & $env:PYTHON -m pytest tests/test_owner_rights.py tests/test_owner_rights_journal.py tests/test_owner_rights_lifecycle.py tests/test_owner_rights_resume.py tests/test_native_runtime.py tests/test_native_sessions.py tests/test_directory_links.py tests/test_skill_snapshot.py tests/test_execution_files.py tests/test_posix_execution_files.py tests/test_timeline_packages.py -q -ra
-   node --test tests/browserHost.test.ts
-   ```
+Send the following to the existing Windows Codex chat:
 
-   Confirm that a successful cleanup write followed by a real oplock conflict preserves an external identical deny. Confirm real command preparation on two Claude fixture turns, refreshed skills, stable session/workspace and refusal to remove ordinary directories. POSIX open-file rename cases are explicitly skipped on Windows; adapter tests do not certify native POSIX behavior.
-3. Run complete Python/Node suites, generated contracts, i18n, browser locale/manifest, four import-boundary contracts and build. Record every failure and skip reason. The new host regression independently covers PATH-only Python, explicit overrides and project venv preference.
-4. Run `timeline_text_editing.mjs` and `timeline_text_render.mjs` with the existing Playwright/Chrome settings. Verify live move/start-trim/end-trim previews before pointer release, Escape cancellation, single undo, bilingual UI/Agent persistence and real MP4 output. These scripts create isolated projects and services.
-5. Build a fresh Windows wheel from this final source and install it into a new venv. Set `OPENDIRECTOR_INSTALLED_PYTHON` to the absolute Python executable path in that new venv, then run:
+```text
+Complete all remaining work for OpenDirector Draft PR #193.
+Project: C:\Users\Qing Peng\OpenDirector
+Repository/branch: Qing7364/OpenDirector, codex/issue-87-timeline-text
 
-   ```powershell
-   & $env:PYTHON scripts/verify_install.py --python $env:OPENDIRECTOR_INSTALLED_PYTHON
-   node tests/browser/timeline_text_installed.mjs
-   ```
+You are the sole product-code writer for this batch. Reuse the installed environment, preserve local
+work and safely synchronize the remote branch. Read AGENTS.md, applicable security rules,
+docs/development/issue-87-post-windows-plan.md and the latest Windows validation record.
+The ownership table, freeze rules and gates in the plan govern this execution.
 
-   Verify no source imports and no Node on the backend PATH; an old wheel hash does not identify this source.
-6. Broaden browser/native-engine checks only when the changes or an observed failure justify them. Retain `733001a2`'s seven-suite, 1080p and performance evidence under its original revision; do not claim those measurements were repeated.
-7. Append the exact SHA, commands/exit codes, pass/fail/skip counts, wheel hash, observed browser results and limitations to the [validation record](issue-87-validation.md). Reproduce and fix any failures before rerunning affected and complete checks. Commit evidence/necessary repairs, synchronize the configured upstream and push normally to the same branch. Keep Draft; do not force push or merge.
+Execute Task 2 -> Task 1 -> source freeze -> Task 3 -> Task 4 continuously:
 
-No SSH/remote-control setup, paid models or machine security-policy changes are needed. Deterministic macOS ACL tests do not replace WinAPI; previous Windows acceptance does not certify the new cleanup cases.
+1. Record exact PR/main SHAs and integrate that main revision into the existing PR branch without
+   rewriting published history. Follow the conflict plan, preserve voice-library and timeline-text
+   behavior, regenerate locks/contracts and inspect automatic merges.
+   Synchronize the existing project environments with the merged Python/npm dependency locks and
+   record resolved versions; do not reinstall the runtimes.
+
+2. Use a real WinAPI writer after the final before_write check returns and before the original
+   NtSetSecurityObject call. Review the complete permission lifecycle/concurrency matrix and identical
+   external denies together. Fix a natively reproduced issue and prove the correction; if Windows
+   disallows the ordering, show evidence identifying the invalid simulation assumption.
+   The Mac probe establishes control flow only. Another pre-check alone does not establish atomicity.
+   Do not remove assertions, broaden skips or weaken permissions.
+
+3. Obtain an independent read-only review before broad acceptance. Resolve confirmed in-scope defects;
+   investigate new hypotheses with focused probes. Commit a source freeze and record hashes for
+   runtime code, tests, build/CI configuration, dependency locks and packaged resources.
+   Push normally so Linux CI and final Windows checks can run concurrently.
+
+4. On stable source, consolidate full Python/Node, build, contracts, i18n, browser locale/manifest
+   and four import boundaries, with existing real-CLI gates and explicit skip reasons. Windows runs
+   timeline editing/render/archive and the separate voice fixture. Rebuild the Windows wheel, install
+   into a fresh venv and run pip check, verify_install.py --python <wheel-python>, affected native
+   modules and timeline_text_installed.mjs. Check actual media/files, no source imports and no Node
+   on the backend PATH. Track Linux CI's complete gates, standard browsers and assistant panels.
+
+5. Diagnose and fix confirmed failures within this batch; rerun affected checks, broadening only
+   when shared foundations or dependencies change. Record a new freeze when code changes.
+   Pure status/evidence documents do not require repeating Windows functional checks.
+   Retain historical 1080p/2000-cue evidence unless relevant changes warrant updated measurements.
+
+6. Update validation evidence, superseded plan/handoff status and PR metadata. Distinguish the source
+   freeze SHA from the final evidence commit and prove relevant runtime inputs are unchanged.
+   Before pushing, synchronize the configured upstream while preserving merge history, then push
+   normally to the same branch. Keep Draft. Do not force push, merge the PR or send reviewer/chat messages.
+
+Continue routine steps without repeated confirmation. Actual missing credentials/permissions,
+out-of-scope product decisions or unresolved native evidence must be reported with the exact blocker.
+Repeated full suites cannot settle an unresolved native hypothesis.
+
+Return one complete delivery: main baseline, source freeze SHA, final SHA/input equivalence, native
+ACL conclusion/evidence, check/failure/skip results, wheel hash, CI links/conclusion, PR state and blockers.
+```
+
+The install verifier requires `--python`. Set `OPENDIRECTOR_INSTALLED_PYTHON` to the new wheel venv's absolute Python path and reuse existing Playwright/Chrome settings:
+
+```powershell
+& $env:PYTHON scripts/verify_install.py --python $env:OPENDIRECTOR_INSTALLED_PYTHON
+node tests/browser/timeline_text_installed.mjs
+```
+
+No SSH/remote-control setup, paid models or machine security-policy changes are needed.
