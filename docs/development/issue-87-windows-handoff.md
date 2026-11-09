@@ -1,5 +1,52 @@
 # Issue #87 Windows completion handoff
 
+## Pending: focused installation-conflict acceptance (2026-11-09)
+
+The audit after `83b341e6` found three new main conflicts from #210/#229 and an ACL **installation** retry that could remove an independent writer's identical deny after a stale replay. Mac owns this integration, repair and CI; Windows completed its previous assignment. This section supersedes the historical startup instructions below.
+
+If the guard cannot finish successfully after a native installation acknowledgment, initialization stops. It does not enter the Agent body, retry installation or remove uncertain ACEs from that object; it releases handles/leases and reports `InstallationUnconfirmedError`. Equal counts cannot establish unchanged ownership. A setter wrapper error with successful guard checks and release retains its original exception and ordinary rollback. Pre-write retries and committed-cleanup confirmation remain intact.
+
+Send to the existing Windows Codex chat:
+
+```text
+Complete focused Windows acceptance for PR #193's installation-conflict repair.
+Project: C:\Users\Qing Peng\OpenDirector
+Branch: codex/issue-87-timeline-text
+
+Preserve local work, safely synchronize remote and record the full source SHA.
+Reuse the existing environment and real-CLI gates. Read AGENTS.md, applicable security rules,
+the latest issue-87-validation.md section and this current handoff.
+Confirm main 63100975 is integrated and InstallationUnconfirmedError plus the new native test exist.
+Point PYTHONPATH at this checkout's packages/core/src and apps/api/src.
+Set OPENDIRECTOR_ACL_EVIDENCE to an absolute JSONL path in this run's evidence directory.
+Run:
+python -m pytest tests/test_owner_rights.py tests/test_owner_rights_journal.py tests/test_owner_rights_lifecycle.py tests/test_owner_rights_resume.py tests/test_native_runtime.py tests/test_native_sessions.py tests/test_directory_links.py -q -ra --tb=short --junitxml=<this-run-evidence-directory>/native.xml
+
+Inspect test_installation_guard_failure_preserves_the_independent_writer_policy:
+real writers reach the last pre-write check, acknowledgment and final release windows;
+stale replay, equal-count replacement and additive identical denies must survive.
+Record original NtSetSecurityObject status, one installation receipt, full ACL/owner,
+no body entry, operation handle/event release and lease reacquisition after fixture-only
+restoration of its known policy. Post-ack installation conflicts must fail explicitly;
+pre-write conflicts still retry. The twelve existing cleanup-window cases must keep passing.
+Also verify missing-rollout recovery with full history and the validated workspace,
+plus other engines' continuation regressions.
+
+Investigate failures narrowly and finish necessary repairs within this batch. Do not remove
+assertions, widen skips or disable sandbox rules. If a native ordering is impossible, record
+actual behavior instead of claiming a pass. Rerun only affected checks.
+Do not repeat complete captions/MP4/1080p/2000-cue or Python/Node acceptance: caption/timeline rendering
+is unchanged. Keep historical wheel/media evidence at its original revision.
+
+Append source SHA, commands/exit codes, pass/skip, native phases and failures to validation;
+update this section and the PR body. Commit evidence/necessary fixes, preserve merge history
+and push normally to the same branch. Documentation-only changes do not rerun Windows.
+Track final-head CI. Keep Draft; no force push, PR merge or reviewer/external chat messages.
+Return one consolidated delivery and any remaining blockers.
+```
+
+## Historical handoff (completed)
+
 **Executed on Windows, 2026-11-08.** Final source freeze is `97edaf4e` (main `c54d78eb`).
 Native windows, main integration, independent review, scoped Windows checks, a fresh wheel and Linux gates
 are complete. The startup instructions below are historical reproduction guidance, not new pending work.

@@ -1494,3 +1494,67 @@ OpenCode 的技能/搜索还需要主机 rg 或上游首次获取成功；本轮
 原 reviewer 五项建议的处理：main 冲突与生成契约已整合；Pydantic 下限保持>=2.12；六项规则事实共用生成；
 错误按稳定码显示中英；不支持文字的 FCPXML/legacy ZIP 动作禁用并保留后端拒绝。
 处理说明已准备，未发送 reviewer 评论或请求复审。PR 保持 Draft，CHANGES_REQUESTED 不等于已批准。
+
+## 2026-11-09 交付后整合与安装归属修复（Windows 原生待确认）
+
+输入为已完成 Windows 交接的 `83b341e62fa1270ed5e774c8cb8629283863110d`。随后 main 前进到
+`63100975dae048dfd591eaa0ec31a63b033e43ea`（#210 下载边界与媒体结果修复、#229 Codex 历史恢复），
+产生 localization、lessons、native 三处真实冲突。用户要求继续，Mac 负责本批整合、修复及 Linux CI，
+Windows 仅执行[当前定点交接](issue-87-windows-handoff.zh-CN.md)。本节随修复提交，精确提交 SHA 和
+提交后的 CI 结果由 PR 交付回执记录；此处不虚构尚未生成的自身 SHA。
+
+English: this follow-up integrates main 63100975 and fixes uncertain ACL installation ownership.
+Mac arm64 source checks and independent review passed; the eleven new WinAPI interleavings and
+related native regressions remain pending on Windows. Prior 97edaf4e media/wheel evidence remains
+revision-bound. This is not another full Windows media/performance acceptance cycle.
+
+### 整合与根因
+
+- 两侧 localization/lessons 均保留。Codex 不再使用 ephemeral；先验证已保存执行目录，再检查 rollout。
+  缺失 rollout 仅清除 session ID，保留验证过的目录并以完整对话启动新原生会话，继续保存真实会话记录。
+  保留 OpenCode 的引擎目录与当轮输出目录边界、Claude 技能更新及 Windows 已初始化目录检查。
+  上游 `[True-codex]` 回归在缺少恢复判断时实际失败，加入判断后相关集合通过。
+- ACL 根因是**安装**回执在重试时仍被当成当前 ACE 的归属依据：独立 writer 回写旧 ACL 和自己的同字节
+  deny 后，旧安装记录在最终清理中误删该 deny。可移植实际 apply/edit/close 探针复现 deny 数量
+  `1→0` 且正常返回。九个回放/追加/异常回归在旧控制流均失败、修复后通过；不把模拟边界称为 WinAPI 实测。
+- 安装写入已成功但 guard 未正常确认结束时，`InstallationUnconfirmedError` 阻止重试和 Agent body，
+  清理保留该对象的完整不确定 ACL，释放资源并明确失败。不能用数量推断相同字节规则的归属。
+  已确认的其他对象仍正常回滚。若 setter 包装层报错而 guard 检查及释放均正常，原异常（包括取消）
+  保持身份并正常回滚；既有部分初始化失败测试未改动。清理阶段的一次移除回执/后置确认规则不变。
+- **明确的合同变化：**既有安装 `after_write` 的可移植两项及原生四项，不再预期成功重试，而预期拒绝执行、
+  报告归属未确认并保留 writer 的完整 ACL；写入前四项原生重试、既有十二项清理窗口及普通异常回滚保留。
+  没有扩大 skip/xfail 或关闭沙箱；此处不声称所有旧成功断言保持不变。
+- 新原生用例 `test_installation_guard_failure_preserves_the_independent_writer_policy` 含十一项，覆盖最后
+  写入前检查、成功回执、最终检查后释放、setter 回执后异常，与无 READ/相同数量旧值回放及追加 deny。
+  夹具显式建立所需 OWNER RIGHTS READ，记录真实 setter 状态、回执、完整 ACL/owner、禁止执行、
+  操作句柄/事件释放及 fixture 恢复策略后的租约重获。本机只收集/静态检查，尚未执行 WinAPI。
+
+### 本机验证及复审
+
+当前 checkout 显式 `PYTHONPATH=packages/core/src:apps/api/src:<本轮依赖目录>`，使用既有 arm64 Python venv。
+缺少的 `python-multipart==0.0.33`、`import-linter==2.16`、`grimp==3.19` 安装到 ignored 的本轮目录，
+不改变共享 venv。默认企业索引超时；从 PyPI 取得同一锁定版本。首轮 imports 命令因缺少可执行入口退出，
+补齐这些依赖后按同一契约重跑通过。既有 Starlette/httpx 弃用提示仍记录，不作为产品失败。
+
+| 检查 | 实际结果 |
+| --- | --- |
+| `OPENDIRECTOR_REAL_CLI=1 python -m pytest`：owner_rights、journal、lifecycle、resume、native_runtime、native_sessions、directory_links | **78 passed / 76 Windows skips**，81.21 秒；真实 OpenCode 技能/续聊/看门狗执行，退出 0 |
+| `python -m pytest`：creation_tool_drafts、tool_tasks、result_download_security、localization、agent_tools_voices、voice_library、cli、timeline_packages、moss、openai_images、self_hosted、self_hosted_proxy | **430 passed**，32.94 秒，退出 0 |
+| `npm test` | **734 passed / 0 skipped**，退出 0 |
+| `python scripts/generate_contracts.py --check` | 一致，退出 0 |
+| `npm run check:i18n` | **2996 keys / 0 problems**，退出 0 |
+| `npm run check:browser-locale`、`npm run check:browser-manifest` | 通过，各退出 0 |
+| `lint-imports` | **4 kept / 0 broken**，退出 0 |
+| `npm run build` | TypeScript 和 production build 通过，退出 0；既有 bundle 大小提示保留 |
+
+本批独立只读整合审查确认上游未被 PR 修改的 41 个路径与 main 逐字节相同，并核对其余八处重叠；
+下载边界、时间线数据/来源、双语错误和会话恢复均保留。独立 ACL 审查另验证已确认对象的回滚、
+不确定对象保留、原异常身份、重复 close 和资源释放，未发现新的确认缺陷。原生结论保持待验证。
+日志/XML 保留在 ignored `test-results/issue87/integration-83b341e6-20261109`，正式命令与边界见本节和 handoff。
+
+### 剩余范围
+
+提交后由本 Mac 会话跟踪 Linux Release checks 并处理可归因失败。Windows 只运行 handoff 指定七个模块，
+包括十一项新安装时序、已调整的安装冲突合同、十二项已有清理时序和会话恢复。原 Windows 完整 Python、
+五组媒体浏览器、1080p/性能和 wheel 保留原 SHA，不改标、不机械重跑。当前没有新 Windows wheel 的交付声明。
+完成原生确认前保持 Draft；既有 CHANGES_REQUESTED 仍需维护者复审。未发送 reviewer 或外部聊天消息。

@@ -56,13 +56,12 @@ def codex_isolation_flags(binary: str) -> tuple[str, ...]:
     """Optional codex flags this CLI accepts.
 
     Isolation flags vary across releases, and an unsupported flag prevents the
-    CLI from starting. Turns do not resume CLI sessions, so use `--ephemeral`
-    when available.
+    CLI from starting. Keep rollouts on disk so later turns can resume them.
     """
     cached = _CODEX_ISOLATION.get(binary)
     if cached is not None:
         return cached
-    wanted = ('--ignore-user-config', '--ignore-rules', '--ephemeral')
+    wanted = ('--ignore-user-config', '--ignore-rules')
     try:
         probe = subprocess.run([binary, 'exec', '--help'], capture_output=True,
                                timeout=20, stdin=subprocess.DEVNULL)
@@ -73,6 +72,12 @@ def codex_isolation_flags(binary: str) -> tuple[str, ...]:
     flags = tuple(flag for flag in wanted if flag in help_text)
     _CODEX_ISOLATION[binary] = flags
     return flags
+
+
+def codex_session_available(session_id: str) -> bool:
+    home = Path(os.environ.get('CODEX_HOME', Path.home() / '.codex'))
+    return any(path.is_file() for folder in ('sessions', 'archived_sessions')
+               for path in (home / folder).glob(f'**/*{session_id}*.jsonl'))
 
 
 def command(runtime: str, work: Path, socket: str, token: str, model: str | None,
@@ -167,6 +172,10 @@ class NativeRuntime:
         if session_id and session_directory is None:
             # Unverifiable session directories cannot be resumed. Preserve the
             # old session and start with authoritative conversation context.
+            session_id = None
+        if session_id and runtime == 'codex' and not codex_session_available(session_id):
+            # Retain the validated workspace while rebuilding a missing native
+            # conversation from the full authoritative history.
             session_id = None
         queue = asyncio.Queue(maxsize=128)
         pending = set()

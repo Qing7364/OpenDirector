@@ -31,7 +31,7 @@ import { CanvasNotifications } from "../CanvasNotifications";
 
 import { CanvasToolRail } from "../CanvasToolRail";
 import { canStartReference, connectedCreationKinds } from "../connectionPolicy";
-import { REFERENCE_PORT_ICON_SIZE, REFERENCE_PORT_SIZE, referencePortIcon } from "../connectionPorts";
+import { REFERENCE_PORT_ICON_SIZE, REFERENCE_PORT_SIZE, referencePortDirection, referencePortIcon } from "../connectionPorts";
 import { batchCreationKinds, SELECTION_PADDING, SELECTION_PORT_SIZE } from "../selectionReferences";
 
 import "../multi-selection.css";
@@ -695,6 +695,9 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
                     }
                     data-reference-source={port.nodeId}
                     data-side={port.side}
+                    data-direction={referencePortDirection(
+                      doc.nodes.find((node) => node.id === port.nodeId),
+                    )}
                     data-active={port.active}
                     style={{
                       left: port.point.x,
@@ -713,8 +716,9 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
                     <CanvasIcon
                       name={referencePortIcon(
                         port.side,
-                        doc.nodes.find((node) => node.id === port.nodeId)?.data
-                          .mediaRole === "asset",
+                        referencePortDirection(
+                          doc.nodes.find((node) => node.id === port.nodeId),
+                        ),
                       )}
                       size={REFERENCE_PORT_ICON_SIZE}
                     />
@@ -867,15 +871,17 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
             onClick={() => togglePanel("history")}
           />
           <IconButton
-            name="upload"
+            name="canvasImport"
             label={t("canvas.workspace.toolbar.importCanvas")}
             tooltipSide="bottom"
+            size={20}
             onClick={() => importInput.current?.click()}
           />
           <IconButton
-            name="download"
+            name="canvasExport"
             label={t("canvas.workspace.toolbar.exportCanvas")}
             tooltipSide="bottom"
+            size={20}
             onClick={exportDocument}
           />
           <input
@@ -1325,9 +1331,13 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
           <div
             ref={composerElement}
             className="cw-composer-dock cw-node-action-dock"
+            data-tool={activeAction.tool}
             style={{
               ...selectionPresentation.placement?.composer,
-              width: selectionPresentation.composerWidth,
+              width:
+                activeAction.tool === "image-presets"
+                  ? Math.min(440, selectionPresentation.composerWidth)
+                  : selectionPresentation.composerWidth,
               maxHeight: selectionPresentation.composerMaxHeight,
               transform: selectionPresentation.composerTransform,
             }}

@@ -1,5 +1,18 @@
 # PR #193 Windows 补验后审查与后续计划
 
+## 2026-11-09 交付后续项
+
+`83b341e6` 已完成上一轮交接。随后 main 的 #210/#229 带来三处真实冲突；复审另确认 ACL 安装重试的旧记录在外部回写后可能误删拒绝规则。用户要求继续处理，当前 Mac 会话负责本批代码与 CI，Windows 仅负责[安装冲突定点验收](issue-87-windows-handoff.zh-CN.md#当前待办安装冲突定点验收2026-11-09)。下面 2026-11-08 的完成状态与责任表属于原批次。
+
+1. 整合固定 main `63100975`，保留会话目录验证与缺失 rollout 恢复；同时保留两侧 localization 和 lessons。
+2. 先复现再修复安装回执后的归属不确定性：明确停止初始化，保留外部 ACL，不靠 ACE 数量推断归属；保留写入前重试及既有清理合同。
+3. 对本批差异独立复审；运行相关后端/原生控制流、Node、契约、i18n、边界、build，正常推送并处理 Linux CI。
+4. Windows 运行 handoff 指定七个模块，记录新安装矩阵与既有清理、续聊结果；不重做未变媒体和性能验收。旧 wheel 不冒充新源码结果。
+
+English: the previous Windows assignment is complete. This follow-up integrates main 63100975 and rejects uncertain post-ack ACL installations. Mac owns implementation/CI; Windows owns only the focused seven-module native handoff. Historical evidence retains its original revision.
+
+## 上一批执行状态
+
 **执行状态（2026-11-08，Windows）：Task 2、Task 1、独立复审及最终源码验收已完成。**
 最终源码冻结 `97edaf4e0b932cb1085d6d5dcb8b7c59def98749`，main 基线 `c54d78eb`；ACL 两个最终窗口的真实反例已修复，
 CI 额外暴露的异步 projection 竞态已定点修复并复审。最终 Windows/wheel 与 Linux 门禁及准确版本边界见

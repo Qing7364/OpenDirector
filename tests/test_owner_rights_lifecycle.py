@@ -346,7 +346,7 @@ def test_real_processes_share_one_coordinator_across_environment_overrides(tmp_p
 @pytest.mark.parametrize('stage', ['before_write', 'after_write'])
 @pytest.mark.parametrize('outcome', ['complete', 'body_failure', 'cancel', 'setup_failure'])
 def test_real_lease_journal_preserves_an_external_identical_owner_deny(tmp_path, monkeypatch, stage, outcome):
-    """An abandoned plan owns nothing; a completed setter owns its real delta."""
+    """Pre-ack retry is safe; an unconfirmed installation retains the writer ACL."""
     from opendirector.agent import windows_acl_guard as guard
     work = tmp_path / 'work'; work.mkdir(mode=0o700)
     probe = rights._Projection(tmp_path, tree=False)
@@ -361,7 +361,7 @@ def test_real_lease_journal_preserves_an_external_identical_owner_deny(tmp_path,
     probe.edit(root, lambda current_owner, acl: policy)
     other = writer_handle(api, parent, name)
     actual_guard, actual_set, actual_init = guard.descriptor_guard, rights._Windows.set_acl, rights._Projection.__init__
-    states, races, errors, checkpoints, setup_failures = [], [], [], [], []
+    states, races, errors, checkpoints, setup_failures, writer_policies, entered = [], [], [], [], [], [], []
     done = threading.Event()
     def track(self, path, **options):
         actual_init(self, path, **options)
@@ -370,9 +370,10 @@ def test_real_lease_journal_preserves_an_external_identical_owner_deny(tmp_path,
         try:
             current_owner, current = api.security(other)
             assert current_owner == owner
-            # In after_write this is a second identical ACE, installed by the
-            # independent writer. Closing our lease must leave exactly one.
-            actual_set(api, other, rights._acl(current, [external_deny] + rights._entries(current)))
+            # This writer preserves the installed ACE, but the host cannot
+            # distinguish it from a stale replacement after the guard breaks.
+            writer_policies.append(rights._acl(current, [external_deny] + rights._entries(current)))
+            actual_set(api, other, writer_policies[0])
         except BaseException as error: errors.append(error)
         finally: api.kernel.CloseHandle(other); done.set()
     worker = threading.Thread(target=external_writer)
@@ -409,6 +410,7 @@ def test_real_lease_journal_preserves_an_external_identical_owner_deny(tmp_path,
         return actual_set(self, target, acl, **options)
     async def exercise():
         async with rights.native_owner_access(work):
+            entered.append(True)
             if outcome == 'body_failure': raise RuntimeError('body failed')
             if outcome == 'cancel': raise asyncio.CancelledError('cancelled body')
             assert outcome == 'complete'
@@ -419,18 +421,28 @@ def test_real_lease_journal_preserves_an_external_identical_owner_deny(tmp_path,
             patch.setattr(rights._Windows, 'set_acl', set_acl)
             expected_error = {'body_failure': RuntimeError, 'cancel': asyncio.CancelledError,
                               'setup_failure': OSError}.get(outcome)
+            if stage == 'after_write': expected_error = ExceptionGroup
             if expected_error:
-                with pytest.raises(expected_error): asyncio.run(exercise())
+                with pytest.raises(expected_error) as error: asyncio.run(exercise())
+                if stage == 'after_write':
+                    assert all(isinstance(item, rights.InstallationUnconfirmedError) for item in error.value.exceptions)
             else: asyncio.run(exercise())
         worker.join(timeout=3)
         assert races and done.is_set() and not worker.is_alive() and errors == []
         current_owner, current = api.security(root)
         assert current_owner == owner
-        assert rights._entries(current) == [external_deny] + rights._entries(policy)
+        if stage == 'after_write':
+            assert current == writer_policies[0] and rights._entries(current).count(external_deny) == 2
+            assert not entered, 'Unconfirmed installation must never enter the execution body'
+        else: assert rights._entries(current) == [external_deny] + rights._entries(policy)
         assert checkpoints == [0 if stage == 'before_write' else 1]
         assert states[0].changes == [] and states[0].nodes == []
         if outcome != 'complete': assert security(work) == original_work
-        assert bool(setup_failures) is (outcome == 'setup_failure')
+        assert bool(setup_failures) is (outcome == 'setup_failure' and stage == 'before_write')
+        if stage == 'after_write':
+            # Only the fixture owns the writer's complete intended policy.
+            # Product cleanup deliberately leaves ambiguous ACEs untouched.
+            probe.edit(root, lambda current_owner, acl: rights._acl(policy, [external_deny] + rights._entries(policy)))
         async def acquire_again():
             async with asyncio.timeout(5):
                 async with rights.native_owner_access(work): pass
@@ -759,3 +771,192 @@ def test_guard_release_break_preserves_the_original_body_error(tmp_path, monkeyp
         else: worker.join(timeout=3)
         state.edit(root, lambda current_owner, acl: original)
         state.close()
+
+
+@pytest.mark.parametrize(('stage', 'writer_policy'), [
+    ('after_final_check', 'stale_without_read'),
+    ('after_final_check', 'stale_equal_counts'),
+    *[(stage, policy) for stage in ('after_native_ack', 'after_final_post_check', 'after_ack_exception')
+      for policy in ('stale_without_read', 'stale_equal_counts', 'additive')],
+])
+def test_installation_guard_failure_preserves_the_independent_writer_policy(tmp_path, monkeypatch, stage, writer_policy):
+    """An acknowledged install cannot establish ACE ownership after a break."""
+    from opendirector.agent import windows_acl_guard as guard
+    work = tmp_path / 'work'; work.mkdir(mode=0o700)
+    probe = rights._Projection(tmp_path, tree=False)
+    api, root = probe.api, probe.nodes[-1][0]
+    owner, original = api.security(root)
+    identity = api.identity(root)
+    entries = rights._entries(original)
+    # Declare the READ projection this fixture exercises rather than depending
+    # on a particular Python temporary-directory OWNER RIGHTS policy. Keep all
+    # original ACEs and insert the explicit allow before inherited entries.
+    inherited = next((index for index, item in enumerate(entries) if item[1] & 16), len(entries))
+    entries.insert(inherited, rights._ace(0, 0, rights.READ, rights.OWNER))
+    policy = rights._acl(original, [rights._ace(1, 0, 2, rights.OWNER)] + entries)
+    external = rights._ace(1, 0, 2, owner)
+    read = rights._ace(0, 0, rights.READ, owner)
+    probe.edit(root, lambda current_owner, acl: policy)
+    # The external writer's saved original descriptor predates installation.
+    stale = rights._acl(policy, [external] + rights._entries(policy)
+                        + ([read] if writer_policy == 'stale_equal_counts' else []))
+    other = writer_handle(api, *probe.locations[root])
+    runner = asyncio.Runner()
+    runner.get_loop()
+    actual_guard, actual_set, actual_init = guard.descriptor_guard, rights._Windows.set_acl, rights._Projection.__init__
+    original_native, original_cancel = api.files.native.NtSetSecurityObject, api.kernel.CancelIoEx
+    states, active, snapshots, errors, receipts, statuses, entered = [], {}, [], [], [], [], []
+    done = threading.Event()
+    main_thread = threading.get_ident()
+    raced = False
+    def track(self, path, **options):
+        actual_init(self, path, **options)
+        if Path(path) == work and options.get('tree', True): states.append(self)
+    def selected(target):
+        return threading.get_ident() == main_thread and states and api.identity(target) == identity
+    def writer():
+        try: actual_set(api, other, snapshots[0])
+        except BaseException as error: errors.append(repr(error))
+        finally: api.kernel.CloseHandle(other); done.set()
+    worker = threading.Thread(target=writer)
+    @contextmanager
+    def observe(self, target):
+        try:
+            with actual_guard(self, target) as unchanged:
+                checks = []
+                def check():
+                    unchanged()
+                    checks.append('returned')
+                active[target] = (unchanged, checks)
+                yield check
+        finally: active.pop(target, None)
+    def start_writer(target):
+        nonlocal raced
+        unchanged, checks = active[target]
+        assert checks == ['returned'] * (3 if stage == 'after_final_post_check' else 2)
+        current_owner, current = api.security(target)
+        assert current_owner == owner
+        assert rights._entries(current).count(external) == (0 if stage == 'after_final_check' else 1)
+        snapshots.append(rights._acl(current, [external] + rights._entries(current))
+                         if writer_policy == 'additive' else stale)
+        raced = True; worker.start()
+        deadline = time.monotonic() + 3
+        while True:
+            try: unchanged()
+            except OSError as error:
+                assert error.winerror == 995
+                break
+            assert time.monotonic() < deadline, 'Writer did not break the actual RH oplock'
+            time.sleep(.005)
+        assert not done.is_set(), 'Independent writer must wait for acknowledgment'
+    def native(target, information, descriptor):
+        chosen = selected(target)
+        if chosen and not raced and stage == 'after_final_check': start_writer(target)
+        result = original_native(target, information, descriptor)
+        if chosen: statuses.append(result)
+        return result
+    def cancel(target, operation):
+        if selected(target) and not raced and stage == 'after_final_post_check': start_writer(target)
+        return original_cancel(target, operation)
+    def setter(self, target, acl, **options):
+        chosen = selected(target)
+        callback = options.get('on_write')
+        if chosen and callback is not None:
+            def committed():
+                receipts.append('native-success')
+                callback()
+            options['on_write'] = committed
+        result = actual_set(self, target, acl, **options)
+        if chosen and not raced and stage in {'after_native_ack', 'after_ack_exception'}:
+            start_writer(target)
+            if stage == 'after_ack_exception':
+                raise OSError('setter instrumentation failed after native acknowledgment')
+        return result
+    async def exercise():
+        async with rights.native_owner_access(work): entered.append(True)
+    # Track this operation's actual Win32 handles rather than unrelated pytest
+    # or asyncio process-wide activity. Include the preopened writer handle.
+    owned, opened, closed = {other}, [], []
+    bookkeeping = threading.RLock()
+    actual_close, actual_create = api.kernel.CloseHandle, api.files.native.NtCreateFile
+    actual_file, actual_event = api.kernel.CreateFileW, api.kernel.CreateEventW
+    def register(value):
+        value = value.value if hasattr(value, 'value') else value
+        with bookkeeping:
+            if value not in (None, w.HANDLE(-1).value):
+                assert value not in owned
+                owned.add(value); opened.append(value)
+        return value
+    def close(value):
+        with bookkeeping:
+            result = actual_close(value)
+            value = value.value if hasattr(value, 'value') else value
+            if value in owned:
+                assert result, 'A native operation handle was not closed'
+                owned.remove(value); closed.append(value)
+        return result
+    def create(*arguments):
+        result = actual_create(*arguments)
+        if result >= 0: register(c.cast(arguments[0], c.POINTER(w.HANDLE))[0])
+        return result
+    caught = None
+    try:
+        projected, additions = rights.owner_entries(policy, owner)
+        assert set(additions) == {external, read}, 'Fixture must project both the owner deny and READ grant'
+        if writer_policy == 'stale_equal_counts': assert stale == projected
+        with monkeypatch.context() as patch:
+            patch.setattr(api.kernel, 'CloseHandle', close)
+            patch.setattr(api.kernel, 'CreateFileW', lambda *args: register(actual_file(*args)))
+            patch.setattr(api.kernel, 'CreateEventW', lambda *args: register(actual_event(*args)))
+            patch.setattr(api.files.native, 'NtCreateFile', create)
+            patch.setattr(rights._Projection, '__init__', track)
+            patch.setattr(guard, 'descriptor_guard', observe)
+            patch.setattr(rights._Windows, 'set_acl', setter)
+            patch.setattr(api.files.native, 'NtSetSecurityObject', native)
+            patch.setattr(api.kernel, 'CancelIoEx', cancel)
+            try: runner.run(exercise())
+            except BaseException as error: caught = error
+            finally:
+                # Keep the close interceptor installed until the writer closes
+                # its own FILE_OBJECT; otherwise accounting races patch teardown.
+                if worker.ident is not None: worker.join(timeout=3)
+        assert worker.ident is not None, repr(caught)
+        worker.join(timeout=3)
+        current_owner, current = api.security(root)
+        evidence = dict(stage=stage, writerPolicy=writer_policy, nativeStatus=statuses,
+            receipts=receipts, owner=current_owner.hex(), originalOwner=owner.hex(), acl=current.hex(),
+            aclEntries=[item.hex() for item in rights._entries(current)], writerErrors=errors,
+            writerDone=done.is_set(), writerAlive=worker.is_alive(), error=repr(caught), bodyEntered=bool(entered),
+            operationOpened=len(opened) + 1, operationClosed=len(closed), remainingHandles=list(owned),
+            nodesClosed=not states[0].nodes, journalClosed=not states[0].changes)
+        destination = os.environ.get('OPENDIRECTOR_ACL_EVIDENCE')
+        if destination:
+            with Path(destination).open('a', encoding='utf-8') as stream:
+                stream.write(json.dumps(evidence) + '\n')
+        assert raced and done.is_set() and not worker.is_alive() and errors == []
+        assert statuses == [0] and receipts == ['native-success']
+        assert isinstance(caught, ExceptionGroup)
+        assert all(isinstance(error, rights.InstallationUnconfirmedError) for error in caught.exceptions)
+        assert isinstance(caught.__context__, rights.InstallationUnconfirmedError)
+        assert not entered, 'Unconfirmed installation must not begin execution'
+        assert current_owner == owner and current == snapshots[0]
+        assert rights._entries(current).count(external) == (2 if writer_policy == 'additive' else 1)
+        assert not owned and len(opened) + 1 == len(closed)
+        assert not states[0].nodes and not states[0].changes and not states[0].unconfirmed
+        # The fixture can establish the writer's intended final policy. The
+        # product must not infer it, even if a replay retained the same counts.
+        probe.edit(root, lambda current_owner, acl: rights._acl(policy, [external] + rights._entries(policy)))
+        async def acquire_again():
+            async with asyncio.timeout(5):
+                async with rights.native_owner_access(work): pass
+        runner.run(acquire_again())
+        assert rights._entries(api.security(root)[1]) == [external] + rights._entries(policy)
+        if destination:
+            with Path(destination).open('a', encoding='utf-8') as stream:
+                stream.write(json.dumps(dict(stage=stage, writerPolicy=writer_policy, leaseReacquired=True)) + '\n')
+    finally:
+        if worker.ident is not None: worker.join(timeout=3)
+        else: api.kernel.CloseHandle(other)
+        probe.edit(root, lambda current_owner, acl: original)
+        probe.close()
+        runner.close()

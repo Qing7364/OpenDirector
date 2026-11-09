@@ -26,6 +26,10 @@ class CleanupUnconfirmedError(OSError):
     """A committed removal was followed by an indistinguishable ACL replay."""
 
 
+class InstallationUnconfirmedError(CleanupUnconfirmedError):
+    """A native installation succeeded without a confirmed guard release."""
+
+
 def _specific(mask):
     for generic, specific in ((0x80000000, 0x120089), (0x40000000, 0x120116),
                               (0x20000000, 0x1200A0), (0x10000000, 0x1F01FF)):
@@ -268,6 +272,7 @@ class _Projection:
     def __init__(self, work, *, tree=True, initialized=False):
         self.api = _Windows()
         self.nodes, self.changes = [], []
+        self.unconfirmed = {}
         self.locations = {}
         self.applied = False
         self.initialized = initialized
@@ -350,10 +355,15 @@ class _Projection:
                 # A proposal from an abandoned attempt owns no ACEs. Keep a
                 # separate snapshot for each setter that actually succeeded.
                 self.changes.append((handle, writable, planned.copy()))
+            def unconfirmed(error):
+                failure = InstallationUnconfirmedError(
+                    'Owner access installation was committed but cannot be confirmed; cleanup was not attempted')
+                self.unconfirmed[handle] = failure
+                raise failure from error
             # Avoid requesting write access on unrelated system ancestors.
             owner, acl = self.api.security(handle)
             if acl is not None and owner_entries(acl, owner, writable=writable)[1]:
-                self.edit(handle, prepare, on_write=installed)
+                self.edit(handle, prepare, on_write=installed, on_unconfirmed=unconfirmed)
         self.applied = True
 
     def release_file_probes(self):
@@ -369,11 +379,16 @@ class _Projection:
                 self.locations.pop(handle, None)
                 self.api.kernel.CloseHandle(handle)
 
-    def edit(self, handle, transform, *, on_write=None):
+    def edit(self, handle, transform, *, on_write=None, on_unconfirmed=None):
         from opendirector.agent.windows_acl_guard import descriptor_guard
         parent, name = self.locations[handle]
         deadline = time.monotonic() + .5
         while True:
+            committed, confirmed, setter_error = False, False, None
+            def wrote():
+                nonlocal committed
+                committed = True
+                if on_write is not None: on_write()
             try:
                 changed = self.api.open(parent, name, maximum=True)
                 with descriptor_guard(self.api, changed) as unchanged:
@@ -383,21 +398,41 @@ class _Projection:
                     updated = transform(owner, acl)
                     unchanged()
                     if updated is not None and updated != acl:
-                        self.api.set_acl(changed, updated, before_write=unchanged, on_write=on_write)
-                        # A post-write break can retry, but the native setter
-                        # has already recorded the entries requiring cleanup.
+                        try:
+                            self.api.set_acl(changed, updated, before_write=unchanged, on_write=wrote)
+                        except BaseException as error:
+                            if not committed or on_unconfirmed is None: raise
+                            # A wrapper can fail after the native acknowledgment.
+                            # Finish checking/releasing this guard before deciding
+                            # whether ordinary rollback still owns those ACEs.
+                            setter_error = error
+                        # Removal may retry against its committed postcondition;
+                        # installation must reject a post-ack guard failure.
                         unchanged()
+                confirmed = True
+                if setter_error is not None: raise setter_error
                 return
-            except OSError as error:
+            except BaseException as error:
+                # An installation receipt proves that we wrote, not that the
+                # current identical ACEs are still ours after a guard failure.
+                # Even equal counts can be an external replacement. Retain the
+                # receipt, refuse execution and never spend that ownership.
+                if committed and not confirmed and on_unconfirmed is not None:
+                    if setter_error is not None and error is not setter_error:
+                        error = BaseExceptionGroup('Owner access setter and guard failed', [setter_error, error])
+                    on_unconfirmed(error)
                 # Release the oplock before retrying so a pending editor can
                 # finish. Recompute against its actual new DACL, never replay
                 # the old descriptor. Persistent conflicts remain failures.
-                if getattr(error, 'winerror', None) not in {995, 300} or time.monotonic() >= deadline: raise
+                if confirmed or not isinstance(error, OSError) or getattr(error, 'winerror', None) not in {995, 300} or time.monotonic() >= deadline: raise
                 time.sleep(.01)
 
     def close(self):
         failures = []
         for handle, writable, added in reversed(self.changes):
+            if handle in self.unconfirmed:
+                failures.append(self.unconfirmed[handle])
+                continue
             # A successful execution tree keeps the owner projection, just as
             # dsh keeps its standing workspace grant. Ancestors are restored;
             # a failed preparation rolls back every change before any spawn.
@@ -433,6 +468,7 @@ class _Projection:
                 self.edit(handle, remove, on_write=removed)
             except BaseException as error: failures.append(error)
         self.changes.clear()
+        self.unconfirmed.clear()
         for handle, _ in reversed(self.nodes): self.api.kernel.CloseHandle(handle)
         self.nodes.clear()
         if failures: raise BaseExceptionGroup('Owner access cleanup failed', failures)

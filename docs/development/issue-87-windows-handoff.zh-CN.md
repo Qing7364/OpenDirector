@@ -1,6 +1,48 @@
 # Issue #87 Windows 收尾执行指令
 
-**当前交接已执行完成（2026-11-08）。** 最终源码冻结 `97edaf4e`（main `c54d78eb`），
+## 当前待办：安装冲突定点验收（2026-11-09）
+
+`83b341e6` 交付后的复审发现 main 新增 #210/#229 的三处冲突，以及 ACL **安装**成功后发生并发回写时，旧记录可能误删外部同字节拒绝规则。Mac 负责本批整合、修复和 CI；此前 Windows 已完成约定任务。本节替代下面的历史启动指令。
+
+新合同：原生安装成功回执之后，若无法确认 guard 正常结束，停止初始化，不启动 Agent、不重试安装、不删除该对象上归属不明的 ACE；释放句柄/租约并报告 `InstallationUnconfirmedError`。数量相同不能证明归属未变。若 setter 包装层报错但 guard 的检查和释放均正常，保留原异常并正常回滚；写入前重试、既有清理成功回执后的确认机制也保留。
+
+将下面内容发送到原 Windows Codex 对话：
+
+```text
+完成 PR #193 安装冲突修复的 Windows 定点验收。
+项目：C:\Users\Qing Peng\OpenDirector
+分支：codex/issue-87-timeline-text
+
+保留本机工作并安全同步远端，记录完整源码 SHA；复用已有环境和真实 CLI 门禁。
+阅读 AGENTS.md、适用安全规则、issue-87-validation.md 最新章节和本文件当前待办。
+确认已整合 main 63100975，包含 InstallationUnconfirmedError 及新安装冲突原生测试。
+设置 PYTHONPATH 指向本 checkout 的 packages/core/src 与 apps/api/src。
+将 OPENDIRECTOR_ACL_EVIDENCE 设置为本轮证据目录内 JSONL 文件的绝对路径，保留原生逐项记录。
+运行：
+python -m pytest tests/test_owner_rights.py tests/test_owner_rights_journal.py tests/test_owner_rights_lifecycle.py tests/test_owner_rights_resume.py tests/test_native_runtime.py tests/test_native_sessions.py tests/test_directory_links.py -q -ra --tb=short --junitxml=<本轮证据目录>/native.xml
+
+重点核对 test_installation_guard_failure_preserves_the_independent_writer_policy：
+真实 writer 命中安装前最后检查后、成功回执后、最终检查后释放前等窗口；
+旧 ACL 回放、相同数量替换、新增同字节 deny 均不得被后续清理误删。
+记录原始 NtSetSecurityObject 状态、一次安装回执、完整 ACL/owner、body 未进入、
+操作句柄/事件释放，以及 fixture 恢复已知策略后的租约重获。
+安装后冲突必须明确失败；写入前冲突仍可重试；原十二项清理窗口回归继续通过。
+同时核对 Codex 缺失 rollout 后完整历史恢复、验证后的原目录复用和其他引擎续聊。
+
+发现失败先定点定位，必要修复在本批完成；不删断言、不扩大 skip、不关闭沙箱。
+如果原生时序不成立，记录实际行为，不伪造通过。只重跑受影响检查。
+不重跑整套字幕、MP4、1080p、2000 cue、完整 Python/Node；字幕/时间线渲染实现未改变。
+历史 wheel/媒体证据保留原 SHA，不改标为本轮结果。
+
+追加源码 SHA、命令/退出码、pass/skip、原生阶段和失败过程到验收记录，
+更新本节状态和 PR 描述，提交证据/必要修复，保留 merge 历史并正常推送同一分支。
+纯证据文档不重跑 Windows；跟踪最终头 CI。保持 Draft，不强推、不合并 PR、
+不发送 reviewer/外部聊天消息。最后统一返回结果与剩余阻塞。
+```
+
+## 历史交接（已完成）
+
+**上一轮交接已执行完成（2026-11-08）。** 最终源码冻结 `97edaf4e`（main `c54d78eb`），
 原生窗口、main 整合、独立复审、Windows scoped checks、新 wheel 和 Linux 门禁已完成。
 本文件下方启动指令保留作历史复核，不是新的重复验收待办；原版本结果不改标。
 完整结果、最终交付回执和限制见[验收记录](issue-87-validation.md)及 PR 描述。保持 Draft，等待维护者复审。

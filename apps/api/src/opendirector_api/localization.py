@@ -13,6 +13,8 @@ from opendirector.domain.creation.commands import CommandReceipt
 
 ENGLISH_BY_CODE = {
     'execution_file_link': 'Execution files must not have hard links.',
+    'tool_concept_translation': 'Use a short English subject description, or add a chat model in Models to translate it automatically.',
+    'tool_no_video_match': 'The requested subject was not found in the video. Try a different description.',
     'voice_upload_type': 'Upload the voice recording using multipart/form-data.',
     'voice_upload_form': 'Check the recording, form fields and text lengths, then try the upload again.',
     'voice_model_unsupported': 'This checkpoint does not accept uploaded voices. Choose a Base model for voice cloning or a compatible built-in voice.',
