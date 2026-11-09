@@ -163,7 +163,7 @@ class _Windows:
         finally:
             self.kernel.LocalFree(descriptor)
 
-    def set_acl(self, handle, acl):
+    def set_acl(self, handle, acl, *, on_write=None):
         # Use this exact FILE_OBJECT, without SetSecurityInfo's user-mode
         # directory reopens/recursive inheritance (which break our own oplock).
         # Only DACL_SECURITY_INFORMATION is changed, never owner/group/SACL.
@@ -188,6 +188,9 @@ class _Windows:
             raise self.c.WinError(self.c.get_last_error())
         result = self.files.native.NtSetSecurityObject(handle, 4, self.c.byref(descriptor))
         if result < 0: raise self.c.WinError(self.files.native.RtlNtStatusToDosError(result))
+        # Record the native commit before any caller-side post-write checks or
+        # instrumentation can raise. A failed native setter owns no entries.
+        if on_write is not None: on_write()
 
     def checked(self, handle):
         attributes = self.files._attributes(handle)
@@ -254,11 +257,12 @@ class _Windows:
 
 
 class _Projection:
-    def __init__(self, work, *, tree=True):
+    def __init__(self, work, *, tree=True, initialized=False):
         self.api = _Windows()
         self.nodes, self.changes = [], []
         self.locations = {}
         self.applied = False
+        self.initialized = initialized
         c, w, files = self.api.c, self.api.w, self.api.files
         files.validate_path(PureWindowsPath(work))
         path = PureWindowsPath(os.path.abspath(work))
@@ -300,35 +304,64 @@ class _Projection:
         return sorted(set(keys))
 
     def apply(self):
-        # This is initialization, before the host creates execution files.
-        # Existing files are never ACL-edited, even if a hard link is added
-        # after enumeration. Their shared descriptor must remain untouched.
+        # Fresh initialization precedes execution files. An initialized session
+        # may contain files, but neither mode edits their shared descriptors.
+        # Keep alias, single-link and identity checks when resuming as well.
         for handle, writable in self.nodes:
-            if writable and not self.api.checked(handle): raise self.api.c.WinError(5)
+            if writable and not self.api.checked(handle):
+                if not self.initialized: raise self.api.c.WinError(5)
+                self.api.single_link(handle)
         known = {self.api.identity(handle) for handle, writable in self.nodes if writable}
         for handle, writable in self.nodes:
-            if not writable: continue
+            if not writable or not self.api.checked(handle): continue
             for name in self.api.children(handle):
                 child = self.api.open(handle, name)
                 try:
-                    if not self.api.checked(child) or self.api.identity(child) not in known:
+                    if self.api.identity(child) not in known:
                         raise self.api.c.WinError(5)
+                    if not self.api.checked(child):
+                        if not self.initialized: raise self.api.c.WinError(5)
+                        self.api.single_link(child)
                 finally: self.api.kernel.CloseHandle(child)
         for handle, writable in self.nodes:
+            # A validated resumed session already has its standing projection.
+            # Recheck its tree but never rewrite any writable object, including
+            # skill directories that preparation may delete and recreate.
+            if writable and self.initialized: continue
+            planned = []
             def prepare(owner, acl):
+                nonlocal planned
+                planned = []
                 if acl is None: return None
                 updated, additions = owner_entries(acl, owner, writable=writable)
                 if additions:
                     if owner != self.api.owner: raise self.api.c.WinError(5)
-                    self.changes.append((handle, writable, additions))
+                    planned = additions
                 return updated
+            def installed():
+                # A proposal from an abandoned attempt owns no ACEs. Keep a
+                # separate snapshot for each setter that actually succeeded.
+                self.changes.append((handle, writable, planned.copy()))
             # Avoid requesting write access on unrelated system ancestors.
             owner, acl = self.api.security(handle)
             if acl is not None and owner_entries(acl, owner, writable=writable)[1]:
-                self.edit(handle, prepare)
+                self.edit(handle, prepare, on_write=installed)
         self.applied = True
 
-    def edit(self, handle, transform):
+    def release_file_probes(self):
+        # Resumed files are inspection-only: no ACL changes refer to them.
+        # Keeping READ_DATA handles would prevent writers such as Add-Content
+        # that intentionally omit FILE_SHARE_READ. Keep directory bindings and
+        # ancestor leases pinned; release only fully validated ordinary files.
+        if not self.initialized: return
+        for index in range(len(self.nodes) - 1, -1, -1):
+            handle, writable = self.nodes[index]
+            if writable and not self.api.checked(handle):
+                self.nodes.pop(index)
+                self.locations.pop(handle, None)
+                self.api.kernel.CloseHandle(handle)
+
+    def edit(self, handle, transform, *, on_write=None):
         from opendirector.agent.windows_acl_guard import descriptor_guard
         parent, name = self.locations[handle]
         deadline = time.monotonic() + .5
@@ -342,7 +375,9 @@ class _Projection:
                     updated = transform(owner, acl)
                     unchanged()
                     if updated is not None and updated != acl:
-                        self.api.set_acl(changed, updated)
+                        self.api.set_acl(changed, updated, on_write=on_write)
+                        # A post-write break can retry, but the native setter
+                        # has already recorded the entries requiring cleanup.
                         unchanged()
                 return
             except OSError as error:
@@ -375,11 +410,16 @@ class _Projection:
 
 
 @asynccontextmanager
-async def native_owner_access(work):
+async def native_owner_access(work, *, initialized=False):
+    """Lease ancestors; initialize a fresh tree or verify a saved session tree.
+
+    Only the host's validated native-session record selects initialized=True.
+    Its standing workspace projection is retained without writable ACL edits.
+    """
     if os.name != 'nt':
         yield
         return
-    state = _Projection(work)
+    state = _Projection(work, initialized=initialized)
     locks = []
     probe = None
     try:
@@ -408,6 +448,7 @@ async def native_owner_access(work):
                 while not probe.api.lock(handle): await asyncio.sleep(.05)
                 record[1] = True
         state.apply()
+        state.release_file_probes()
         try:
             yield
         except BaseException:

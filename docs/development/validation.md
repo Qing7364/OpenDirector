@@ -220,7 +220,11 @@ OPENDIRECTOR_INSTALLED_PYTHON=/absolute/path/to/wheel-venv/bin/python \
   node tests/browser/timeline_text_installed.mjs
 ```
 
-该脚本自行启动已安装后端，不启动 Vite；后台 PATH 不包含 Node，浏览器仍使用约定的 Playwright/Chrome 安装。实际创建时间线、添加文字、检查预览及缺字诊断/恢复、保存、重启后重开。桌面性能脚本以 500 毫秒间隔采样该隔离 Chrome 实例通过 CDP 报告的进程 PID 及其 `ps` RSS；总和可能重复计算共享页，并非独占内存或精确瞬时峰值，不含 Python/Vite/Node 控制进程。完整逐次采样保存在 `report.json`。
+该脚本自行启动已安装后端，不启动 Vite；后台 PATH 不包含 Node，浏览器仍使用约定的 Playwright/Chrome 安装。实际创建时间线、添加文字、检查预览及缺字诊断/恢复、保存、重启后重开。桌面性能脚本以 500 毫秒间隔采样该隔离 Chrome 实例通过 CDP 报告的进程 PID：POSIX 使用 `ps` RSS，Windows 使用实际 `GetProcessMemoryInfo` 工作集。总和可能重复计算共享页，并非独占内存或精确瞬时峰值，不含 Python/Vite/Node 控制进程。完整逐次采样保存在 `report.json`；存活进程采样失败会报错，零值仅用于内核确认已退出的 PID。
+
+七组时间线脚本共用仓库中的 `tests/browser/host.mjs` 与 `windows_host.py`，不依赖本机忽略目录副本。源码 `PYTHONPATH` 使用平台分隔符，已安装服务移除源码导入和宿主 PATH；Windows 子进程先挂入本测试的私有 Job Object，再开始执行，清理仅终止该 Job。设置 `PYTHON` 指向 **未打包的 Python.org 虚拟环境**，installed 组另设置 `OPENDIRECTOR_INSTALLED_PYTHON` 指向全新 wheel 环境。Microsoft Store Python 的激活启动器曾在真实检查中留下 Job 外的孙进程，host adapter 会在启动测试应用前明确拒绝该解释器；这是测试宿主的支持边界，不把它改为 skip 或改变产品沙箱。
+
+The seven timeline suites share the tracked host adapter. Source imports use the native path delimiter; installed servers have no source import path or ambient Node PATH. Windows uses a private job and actual kernel working-set samples for CDP PIDs. Set `PYTHON` to an unpackaged Python.org venv and `OPENDIRECTOR_INSTALLED_PYTHON` to a fresh wheel venv. Packaged Microsoft Store Python is explicitly rejected before launching the test application because native tests observed descendants outside job ownership. This is a host prerequisite, not a skipped test or a product sandbox change.
 
 MOSS 图像与语音接入使用以下检查。浏览器命令连接本文前述隔离 API 和 Vite；可通过环境变量改用其他端口。
 

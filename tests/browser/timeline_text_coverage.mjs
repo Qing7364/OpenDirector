@@ -1,10 +1,10 @@
+import { spawnOwned as spawn, stopOwned, pythonExecutable, sourcePythonPath } from "./host.mjs";
 /** Actual draft coverage, Inspector measurement, and independent font consumers. */
 import assert from "node:assert/strict";
-import { spawn, execFileSync } from "node:child_process";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { once } from "node:events";
 import { launchBrowser } from "./engine.mjs";
 const root = await mkdtemp(
   join(tmpdir(), "opendirector-creation-text-coverage-"),
@@ -12,6 +12,7 @@ const root = await mkdtemp(
 const evidence =
   process.env.TIMELINE_TEXT_EVIDENCE ??
   (await mkdtemp(join(tmpdir(), "opendirector-text-coverage-evidence-")));
+await mkdir(evidence, { recursive: true });
 const apiPort = process.env.TEXT_COVERAGE_API_PORT ?? "8060",
   webPort = process.env.TEXT_COVERAGE_WEB_PORT ?? "5210";
 const api = `http://127.0.0.1:${apiPort}`,
@@ -40,16 +41,13 @@ async function until(check) {
   throw Error("Isolated server did not start: " + logs.slice(-1500));
 }
 async function stop(child) {
-  if (!child || child.exitCode !== null) return;
-  const ended = once(child, "exit");
-  child.kill("SIGTERM");
-  await ended;
+  await stopOwned(child);
 }
 try {
   server = run(
-    process.env.PYTHON ?? ".venv/bin/python",
+    pythonExecutable(),
     ["tests/browser/creation_server.py", "--port", apiPort, "--root", root],
-    { PYTHONPATH: "packages/core/src:apps/api/src" },
+    { PYTHONPATH: sourcePythonPath() },
   );
   await until(
     async () =>
@@ -85,7 +83,7 @@ try {
     waitUntil: "domcontentloaded",
   });
   const latin = execFileSync(
-    process.env.PYTHON ?? ".venv/bin/python",
+    pythonExecutable(),
     [
       "-c",
       `
@@ -99,7 +97,7 @@ with tempfile.TemporaryDirectory() as d:
     {
       env: {
         ...process.env,
-        PYTHONPATH: "packages/core/src:apps/api/src:tests",
+        PYTHONPATH: sourcePythonPath("tests"),
       },
     },
   )

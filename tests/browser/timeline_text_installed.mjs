@@ -1,11 +1,11 @@
+import { spawnOwned as spawn, stopOwned, installedServerEnv } from "./host.mjs";
 /** Actual installed-wheel UI; no Vite, repository imports, models, or user projects. */
 import assert from "node:assert/strict";
-import { spawn, execFileSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve, isAbsolute } from "node:path";
-import { once } from "node:events";
 import { createServer } from "node:net";
 import { launchBrowser } from "./engine.mjs";
 const python = process.env.OPENDIRECTOR_INSTALLED_PYTHON ?? process.env.PYTHON;
@@ -24,15 +24,7 @@ const port = process.env.TEXT_INSTALLED_API_PORT ?? "8072";
 assert.match(port, /^\d{4,5}$/);
 const base = `http://127.0.0.1:${port}`,
   pid = randomUUID();
-const env = Object.fromEntries(
-  Object.entries(process.env).filter(
-    ([key]) =>
-      !key.startsWith("OPENDIRECTOR_") &&
-      !["PYTHONPATH", "PYTHONHOME"].includes(key),
-  ),
-);
-env.OPENDIRECTOR_ROOT = root;
-env.PATH = dirname(python) + ":/usr/bin:/bin";
+const env = installedServerEnv(python, root);
 let server,
   browser,
   logs = "";
@@ -55,39 +47,7 @@ function start() {
   return child;
 }
 async function stop(child) {
-  if (!child) return;
-  const exited =
-    child.exitCode === null ? once(child, "exit") : Promise.resolve();
-  try {
-    process.kill(-child.pid, "SIGTERM");
-  } catch (error) {
-    if (error.code === "ESRCH") return;
-    throw error;
-  }
-  const timer = setTimeout(() => {
-    try {
-      process.kill(-child.pid, "SIGKILL");
-    } catch {}
-  }, 3000);
-  await exited;
-  for (let i = 0; i < 30; i++) {
-    try {
-      process.kill(-child.pid, 0);
-    } catch (error) {
-      if (error.code === "ESRCH") {
-        clearTimeout(timer);
-        return;
-      }
-      throw error;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  clearTimeout(timer);
-  try {
-    process.kill(-child.pid, "SIGKILL");
-  } catch (error) {
-    if (error.code !== "ESRCH") throw error;
-  }
+  await stopOwned(child);
 }
 async function healthy() {
   for (let i = 0; i < 300; i++) {
@@ -106,6 +66,7 @@ async function healthy() {
   throw Error(logs.slice(-2000));
 }
 try {
+  execFileSync(python, ["-c", "from opendirector import installation; assert installation.SOURCE_ROOT is None"], { cwd: root, env });
   execFileSync(
     python,
     ["-c", "import shutil; assert shutil.which('node') is None"],

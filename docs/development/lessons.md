@@ -23,3 +23,21 @@ When work exposes a consequential risk or a recurring problem, add a lesson or u
 - **Trigger:** A relevant test fails and comparison shows that it also fails on the baseline.
 - **Lesson:** Commits `28d61dce` and `0a5630ac` each recorded the same generation test failing on the baseline. That historical record does not establish whether the test still fails today.
 - **Check:** Record the versions and results used in the comparison. Link an existing issue or create one when appropriate. Report the check as failed; a baseline failure is not a pass.
+
+## Native permission plans are not committed permissions
+
+- **Trigger:** Retrying an ACL read/modify/write or rolling back failed initialization.
+- **Lesson:** [PR #193](https://github.com/ThinkFlowLab/OpenDirector/pull/193) reproduced an abandoned plan claiming an external writer's identical owner deny. Recording only after the final conflict check has the opposite problem: a successful native write can still need rollback when that check fails.
+- **Check:** Record the installed delta at the native setter's success point, before caller-side exceptions or post-write conflict checks. Test no-write retries, an external identical ACE, successful-write conflicts, failed initialization, cancellation and real lease close with both deterministic control flow and actual WinAPI writers. Do not describe a control-flow counterexample as a demonstrated sandbox escape.
+
+## A process exit and ownership of its descendants are separate facts
+
+- **Trigger:** Adapting browser fixture cleanup or sampled process memory to Windows.
+- **Lesson:** [PR #193](https://github.com/ThinkFlowLab/OpenDirector/pull/193) observed a Microsoft Store Python launcher's grandchild surviving private-job termination; the same native test passed with unpackaged Python.org. Separate tests also observed `exit` before inherited stdio closed. A root PID or a stream event alone did not prove tree cleanup.
+- **Check:** Create controlled Win32 children suspended in a private job, check actual descendants and an unrelated live sentinel, and reject unsupported packaged Python before launching the application. Distinguish Node's [exit and close events](https://nodejs.org/api/child_process.html#event-close); close only owned pipe endpoints after verified process/job termination. Sample actual kernel working sets for bounded CDP PIDs and report unsupported access as an error, not a fabricated measurement.
+
+## Resuming a native workspace is different from initializing an empty tree
+
+- **Trigger:** A validated native-session record reuses a populated execution directory.
+- **Lesson:** [PR #193](https://github.com/ThinkFlowLab/OpenDirector/pull/193) found that fresh-only permission setup rejected the second turn. Rewriting existing skill-directory ACLs also made rollback depend on directories replaced during preparation, and retaining inspection READ_DATA handles blocked PowerShell writers that omit FILE_SHARE_READ.
+- **Check:** Select resume mode only from the validated host session record. Retain path, identity, reparse and single-link rejection, ancestor coordination and sandbox checks. Leave every writable object's descriptor unchanged and release inspection-only file handles before execution. Test real two-turn sandbox writes, outside-write denial, skill replacement, cancellation and lease reacquisition; keep fresh initialization's refusal of existing files.

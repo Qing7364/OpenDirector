@@ -821,3 +821,234 @@ Windows host adapter 需要正式提交并对最终 SHA 验证。本轮没有新
 
 本地完整日志位于 `test-results/issue87/pr193-shared-review-20261108/`（忽略的验收产物），
 复现命令和范围已记在本节，读取仓库不依赖该本机目录。
+
+## 2026-11-08：91c2 检查点后的原生 Windows ACL 与交付验收
+
+输入为 `Qing7364/OpenDirector:codex/issue-87-timeline-text` 的
+`91c2f09f22bb717b9b181cef81b036f73480148e`。起点 `0934583c29173509b8a41d557165e073a15dc3a7`
+的 tracked 工作区干净，先保存状态/差异记录，保留本机材料后 fast-forward；没有重写历史。
+本节对应包含本节的 Windows 修复提交；提交后的完整 SHA 另由 Git 回执和 PR 头核对记录。
+此前 Windows/Mac 各节保留其原版本范围，不作为本次执行的替代证据。
+
+English summary: the native setter now journals only successful ACL writes, before any post-write
+conflict or caller exception. Real WinAPI races preserve an external identical deny through retry,
+failure, cancellation and lease close. Validated DeepSeek resumes retain the existing worktree ACLs
+and release inspection-only file handles before execution. The tracked browser host adapter uses
+private Windows jobs, native path handling and real working-set samples. The complete source suite,
+Node suite, installed-wheel checks and seven browser groups passed within the explicit platform
+limits below. The PR remains Draft; this is not a paid-model, arbitrary-filesystem or background-rendering guarantee.
+
+### 改动与原生回归
+
+- ACL 的 `prepare()` 仅生成计划；`NtSetSecurityObject` 成功后立即调用内部写入回执，
+  在后置冲突检查/外层 setter 异常之前记录实际 delta。未写入的重试不认领外部同字节 ACE。
+  保留原 ACE 次序、owner、保护/继承控制及所有适用 deny 的扣除；新增 allow 不含
+  WRITE_DAC、WRITE_OWNER 或 FILE_DELETE_CHILD。没有关闭 dsh 沙箱或增加权限回退。
+- 新增五项确定性记账用例、八项真实 WinAPI 并发 writer/租约关闭用例；覆盖写入前冲突、
+  成功写入后冲突、正常结束、初始化失败、body 异常和取消。原生 writer 实际等待 RH oplock
+  确认，核对最终外部 deny、owner、回滚内容及租约重获。修复前 **7 failed/6 passed**；
+  简单地移到 setter 返回后记账仍有 **1 failed/60 passed**，最终原生成功回执版本 **61 passed**。
+  这是原生 ACL/control-flow 复现，不表述为已证明通用沙箱逃逸。
+- 完整套件发现 Windows 续聊仍按“空目录初始化”处理既有执行文件。只允许已校验的宿主会话记录
+  选择 resumed 模式：仍检查路径、身份、reparse point 和单链接，租用祖先，但不重写任何可写
+  工程对象的描述符。技能目录可正常刷新，失败/取消不会尝试回滚已被替换的旧技能目录。
+  检查结束释放文件 READ_DATA 探测句柄，保留目录绑定与租约；否则真实 PowerShell
+  `Add-Content` 会因未共享读权限返回 WinError 32。该反例先失败，新增八项 WinAPI 回归均通过。
+  默认新初始化仍拒绝既有文件。真实 dsh 两轮保持相同目录 inode/session、第一份 trace 不变，
+  能修改保留文件和生成第二项业务素材，两轮越界写入均返回 `NATIVE_OUTSIDE_DENIED`。
+- 七组浏览器共用已纳入 Git 的 `host.mjs`、类型声明与 `windows_host.py`。Windows 子进程
+  suspended 创建、先加入私有 Job 后运行；清理只终止本测试 Job 并等待成员退出。回归核对孙进程
+  和不相关的存活 sentinel、根进程先退出、重复关闭、Unicode 参数、真实退出码及拒绝外部 PID。
+  源码使用 `path.delimiter`；wheel 去除源码导入与宿主 Node PATH，保留必要系统/PowerShell 路径。
+  内存使用实际 `GetProcessMemoryInfo` 和 CDP PID/创建时间，采样失败报错，不伪造 RSS。
+- 既有 Python 测试函数与 skip/xfail 表达式保留。真实 Jiuwen 媒体测试仅将 trace 查询修正为
+  产品实际写入的 `agent-runs/{turn}.jiuwenswarm.jsonl`，保留媒体、重开及敏感信息检查。
+  测试 setter instrumenter 转发新增回执参数，保留原异常注入断言。七组原有 **192 条 assert
+  调用文本完全一致**。首次全量的 1,375 个用例身份全部保留，新增八项 resumed 用例均实际通过。
+
+### 环境、命令和结果
+
+Windows 11 Pro 25H2 **26200.9711**、原生 AMD64。Python.org **3.12.10**，Node **24.22.1**、
+npm **11.19.1**、FFmpeg/ffprobe **9.0.2**、Chrome **156.0.8078.80**；五个本机可执行文件均核对
+AMD64 PE。Pydantic **2.14.3**、fontTools **4.68.0**、Pillow **13.0.0**。真实 dsh **0.2.2-rc.1**、
+WorkSwarm **0.2.8**（openjiuwen **0.1.20**），wheel 内 OpenCode **1.19.5**。模型响应使用本地协议
+夹具，原生引擎、ACL、文件、字体、FFmpeg、浏览器和输出是真实执行；未调用付费模型或用户工程。
+
+| 检查 | 实际结果，均退出 0 |
+| --- | --- |
+| ACL、续聊、dsh/SDK、Jiuwen 相关七个模块 | **81 passed、0 skipped、0 failed，109.31 秒** |
+| 完整 Python `pytest tests` | **1,368 passed、15 skipped、0 failed，1,181.61 秒** |
+| 完整 Node | **720 passed、0 skipped、0 failed，17.07 秒**，含六项真实 host 回归 |
+| wheel 的 28 个受影响模块 | **448 passed、7 skipped、0 failed，559.28 秒** |
+| contracts / i18n | 生成契约 `--check` 通过；**2,934 keys、0 problems**，既有 CJK 基线检查通过 |
+| 浏览器规范 / 架构 / build | locale **64 pages、0 problems**；manifest **67 entries**；import-linter **4 kept、0 broken**；TypeScript/Vite 构建通过 |
+| 全新安装 | pip install、pip check、原生 PE `--help`、实际 serve/health/web/内置 CLI/技能/持久化工程均通过；SOURCE_ROOT=None、应用 PATH 无 Node |
+| 七组浏览器 | **editing / render / coverage / archive / workflow / installed / desktop 均退出 0**；详见下节 |
+
+Python 两个套件各有一条既有 Starlette/httpx testclient 弃用 warning；构建保留既有大 chunk 提示。
+源码完整套件不筛选用例，三个真实 CLI 门禁均设为 1，没有增加重试、xfail 或跳过范围。
+
+以下为本机使用的命令与变量（路径以本机实际安装为准）；每次执行的完整 argv、开始/结束、
+退出码及环境门禁另保存为 `*-command.json` / `*-status.json`。`wsrc` 是从 tracked 与本任务
+未跟踪源码清单复制的独立快照，不包含旧产物或 node_modules；构建 hook 实际执行 npm ci 和 build。
+
+```powershell
+Set-Location -LiteralPath 'C:\Users\Qing Peng\OpenDirector'
+$e = 'test-results/issue87/handoff-91c2'
+$org = 'C:\Users\Qing Peng\.opendirector-tools\python31210\python.exe'
+& $org -m venv "$e/svenv"
+$py = (Resolve-Path "$e/svenv/Scripts/python.exe").Path
+$env:TEMP = "$env:USERPROFILE/od-tmp"; $env:TMP = $env:TEMP
+$env:PYTHON = $py; $env:PYTHONUTF8 = '1'; $env:PYTHONNOUSERSITE = '1'
+$env:OPENDIRECTOR_REAL_CLI = '1'
+$env:DEEPSEEK_ENGINE_TEST = '1'; $env:JIUWENSWARM_ENGINE_TEST = '1'
+$env:NO_PROXY = '127.0.0.1,localhost'
+$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
+$env:Path = (Join-Path (Get-Location) 'test-results/issue87/resume-20261107/cli-bin') + ';' + (Split-Path $py) + ';' + $env:Path
+& $py -m pip install -e '.[test]'
+& $py -m pytest tests --basetemp="$env:TEMP/hs91final" -q --tb=long -ra `
+  -o faulthandler_timeout=180 -o tmp_path_retention_count=10 `
+  "--junitxml=$e/python-full-final.xml"
+$node = (Get-Command node).Source
+$npm = Join-Path (Split-Path $node) 'node_modules/npm/bin/npm-cli.js'
+& $node $npm test
+& $py scripts/generate_contracts.py --check
+& $node $npm run check:i18n
+& $node $npm run check:browser-locale
+& $node $npm run check:browser-manifest
+& "$e/svenv/Scripts/lint-imports.exe"
+& $node $npm run build
+& $py -m pip check
+& $py -m pip wheel --no-deps "./$e/wsrc" --wheel-dir "./$e/wheel"
+& $org -m venv "$e/wvenv"
+$wp = (Resolve-Path "$e/wvenv/Scripts/python.exe").Path
+& $wp -m pip install "$e/wheel/opendirector-0.1.1-py3-none-win_amd64.whl[test]"
+& $wp -m pip check
+& $wp scripts/verify_install.py --python $wp
+```
+
+wheel 的 Python 验收移除 PYTHONPATH/PYTHONHOME、设置 PYTHONNOUSERSITE=1，并用独立 PATH：
+测试 CLI bin、外部 Agent bin、wheel Scripts、FFmpeg bin、Git cmd、System32、
+System32/WindowsPowerShell/v1.0、Windows 根目录；不含 Node。实际核对
+`installation.SOURCE_ROOT is None` 和 `shutil.which('node') is None`。
+外部 dsh 的可信 launcher 使用 Node 的绝对路径，不声称 dsh 无需 Node。
+
+```powershell
+$sourcePath = $env:Path
+$ffmpegDir = Split-Path (Get-Command ffmpeg).Source
+$gitDir = Split-Path (Get-Command git).Source
+$env:Path = @((Join-Path (Get-Location) 'test-results/issue87/resume-20261107/cli-bin'),
+  "$env:USERPROFILE/.opendirector-tools/bin", (Split-Path $wp), $ffmpegDir, $gitDir,
+  "$env:SystemRoot/System32", "$env:SystemRoot/System32/WindowsPowerShell/v1.0", $env:SystemRoot) -join ';'
+Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+Remove-Item Env:PYTHONHOME -ErrorAction SilentlyContinue
+$env:PYTHON = $wp
+& $wp -c "import shutil; from opendirector import installation; assert installation.SOURCE_ROOT is None; assert shutil.which('node') is None"
+$modules = @('agent_artifacts','agent_gateway','agent_metadata','cli',
+  'creation_artifacts','creation_storage','directory_links','execution_files',
+  'native_runtime','native_sessions','skill_snapshot','timeline_packages',
+  'posix_execution_files','local_json','tool_tasks','installation','process_helpers',
+  'owner_rights','owner_rights_lifecycle','owner_rights_journal','owner_rights_resume',
+  'creation_generation_service','creation_canvas_service','creation_workflow',
+  'deepseek_engine','deepseek_runtime','jiuwenswarm_engine','jiuwenswarm_media')
+$selection = @($modules | ForEach-Object { "tests/test_$_.py" })
+& $wp -m pytest @selection --basetemp="$env:TEMP/hs91wheelcomplete" -q --tb=long -ra `
+  -o faulthandler_timeout=180 "--junitxml=$e/wheel-related-complete.xml"
+# 浏览器控制端恢复源码工具 PATH；installed 后端由 helper 单独隔离。
+$env:Path = $sourcePath; $env:PYTHON = $py
+$env:CHROMIUM_PATH = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
+$env:PLAYWRIGHT_MODULE = 'file:///C:/Users/Qing%20Peng/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright-core/index.mjs'
+$env:OPENDIRECTOR_INSTALLED_PYTHON = $wp
+$suites = @('timeline_text_editing','timeline_text_render','timeline_text_coverage',
+  'timeline_text_archive','timeline_workflow','timeline_text_installed','timeline_text_desktop')
+foreach ($suite in $suites) {
+  $env:TIMELINE_TEXT_EVIDENCE = "$e/browser/$suite"
+  & $node "tests/browser/$suite.mjs"
+}
+```
+
+### wheel、七组浏览器与真实媒体
+
+本机构建 `opendirector-0.1.1-py3-none-win_amd64.whl`，**97,586,605 字节**，SHA-256：
+
+`91d48da97f36c14f4735c1e9044319a88cfcf8b58020137691450bd34b7310ce`
+
+全新 Python.org venv 安装；归档及实际 site-packages 中 **130 个生产 Python 模块、31 个打包资源
+（含 23 个 web 文件）**逐字节匹配构建快照，23 个 web 文件另与当前源码 dist 匹配。最终运行期间
+生产代码和全部 Python 测试未变化；开始后的六个文件变化仅为浏览器 host/fixture 的目录、事件导入、
+证据位置与 PowerShell PATH 修正，随后重跑 Node 和相应浏览器。追加本节前的 **865 文件**清单
+SHA-256 为 `3f29cb4ba4976a31d875abaff35eb7dfde38b972e7ff623d10949810958e1aaf`；逐文件哈希保留在
+`source-hashes-final.json`。本节是检查结束后的证据追加，不把尚未存在的提交 SHA 写进旧日志。
+
+| 脚本 | 本次实际覆盖 |
+| --- | --- |
+| editing | 中文 IME、撤销/重做、UI/Agent 共用命令、保存、服务重启/重开、版本冲突/锁和中英文导出说明 |
+| render | 实际中文字体、预览和 MP4 解码帧、独占结束、层次/位置、纯文字、真实混音及无文字 MP4 子回归 |
+| coverage | 独立字体消费者取消、失败重试、缺字拒绝、Inspector 预览、草稿保留与恢复，实际中英文 |
+| archive | UI→真实 CLI→UI 跨工程包往返、字体/正文依赖、重启续编、两份成片、精确版本和旧文件/历史不变 |
+| workflow | 无文字剪辑、失败保留草稿/重试、真实 MP4 顺序/尺寸/混音、取消无结果、缺失素材拒绝、重启及第二份成片 |
+| installed | 新 wheel 实际服务，无 Vite、无源码导入、无 Node 的后台 PATH；Add text、预览/缺字/草稿恢复、保存/重启/重开 |
+| desktop | 可见 Chrome、横竖 1080p、实际 H.264 解码帧、2,000 cue/600 秒对照及原生 Windows 工作集 |
+
+`render/text.mp4` 实测 H.264 **640×360、99 帧、4.160 秒**，AAC **48 kHz/双声道**，混音 RMS
+**3,516.07**；`pure-text.mp4` 为 **96 帧/4 秒**。帧 **23/24、47/48、71/72、95/96** 比较均通过，
+ROI MAE 为 **0–2.716**，文字边界误差不超过 1 像素；已实际查看解码中文图及中英文 UI 截图。
+
+跨工程字体 fingerprint 为 `sha256:2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b`，
+正文为 `sha256:7c4b1a704cb0b8531ae5f219d6c877354578ee231087f14c78b2008a8881c46e`，目标工程使用
+自己的素材身份。续编 A/B 两份 **640×360、24 帧/1 秒** MP4 分别绑定编辑版本 **2/3**，SHA-256 为
+`14b54e3886d13ddb9c7ffdf691fa426eade0ebae7fffdbb55313361f6be24115` 和
+`96d1fe0b5ad573d5bda81536aac09e68b91d80f19ba57fc0f8129ecb8e45a4a5`；旧素材指纹、来源和文件字节保持不变。
+
+desktop 在上述 Python 重任务结束后单独执行，实际 H.264 为 **1920×1080** 和 **1080×1920**，
+均为 **60 帧/2.500 秒**；预览边界和解码帧 **11、12、24、36、48、59** 的颜色/层次断言通过。
+横屏/竖屏文件 SHA-256 为 `4bf963e8f7e44bf8843cce79329acffe34359dee2b3826869b8f127d2915d92e` /
+`afb782432b2672d6e402a1674a2830e178e739bc07ac3a6bc0b8e06b9dc60290`，已实际查看两种尺寸的中文解码图。
+
+同一隔离 Chrome 内按 baseline→text-2000 顺序各测一次，均为 **640×360、24 fps、600 秒、14,400 帧**：
+
+| 样例 | 渲染耗时 | 文件字节 | 采样 JS heap 峰值 | Win32 工作集总和采样峰值 | 采样数 |
+| --- | --- | --- | --- | --- | --- |
+| baseline（同一黑图，无文字） | **49,897.90 ms** | **496,550** | **41,625,047 B** | **933,208 KiB** | **101** |
+| text-2000 | **51,455.90 ms** | **1,468,866** | **51,819,977 B** | **867,228 KiB** | **104** |
+
+原生采样错误 **0**；完整 PID、创建时间和逐次数据保留在 report.json。顺序、缓存/GC 和采样定义影响
+这些单次结果，不据工作集的大小差异声称文字降低内存，也不作为跨机器性能保证。两份 600 秒文件的
+SHA-256 分别为 `73a3c2e486f2d624a43afe9165b6eb2f641454750fd7f13ccb914ccb8b2d6323` /
+`11c720a28ce0d2f8bf69f37554cb3c8c848180171c150be6a6baac3f6abeda98`。
+本轮 **73 个 MP4/PNG/ZIP 媒体证据**另列字节和 SHA-256；七组后台的隔离监听端口均确认关闭。
+
+### 保留的失败过程与限制
+
+- 首轮完整源码 **1,358 passed/2 failed/15 skipped，870.84 秒**：续聊错误使用新初始化，以及
+  旧 Jiuwen trace 查询路径。补充相应回归和契约修正后重跑全量，得到上表结果。另保留真实
+  WinError 32 的失败证据。未删除或放宽旧媒体/trace/会话断言。
+- 首轮 wheel **446 passed/2 failed/7 skipped，669.55 秒**。独立 PATH 漏掉系统 PowerShell，
+  实际 OpenCode 工具回执显示 `powershell.exe` 不存在，素材断言正确捕获失败；补路径后两项聚焦
+  **2 passed，81.63 秒**，再从头执行全部 28 模块，得到 **448 passed/7 skipped**。
+  另一次 `jiuwenswarm --version` 诊断返回 2（该 CLI 不支持此参数），版本以安装 metadata 核对，
+  不计作成功命令或功能验收失败。
+- 首轮 render/coverage 因执行器未预建证据目录返回 ENOENT；原失败日志保留。修复目录创建，保留
+  MP4 子回归的 `once` 导入，重跑相应组退出 0。可编辑包/workflow 使用本轮独立证据目录。
+  未把仅生成部分文件或旧结果当作整组通过。
+- **15 个 Windows skip 身份与首轮完全一致**：Agent gateway 一项和 storage 一项 POSIX 语义，
+  storage 四项 POSIX change-time，runtime readiness 八项 POSIX shebang/权限，共 **14 项 POSIX**；
+  一项文件 symlink 仍为 **WinError 1314**。wheel 的同范围子集为六项 POSIX加一项 symlink，
+  共七项。本轮未重跑 POSIX；此前真实 Linux 证据仍保留原版本范围。Windows junction、硬链接、
+  namespace、根重定向及共享句柄拒绝实际执行，不能替代未获权限的最终文件 symlink 场景。
+- Microsoft Store Python 激活器的真实孙进程曾不在私有 Job 内，保留失败及 PID/创建时间对照；
+  host adapter 在应用启动前明确拒绝该解释器。本轮使用 Python.org，六项 host 回归和七组浏览器
+  实际通过。这是测试宿主支持边界，不是扩大 skip、修改用户目录 ACL 或关闭产品沙箱。
+- OWNER RIGHTS 范围为当前调用者拥有的普通本地 NTFS、受支持简单 ACL 和可用 oplock。
+  不承诺复杂 ACL/UNC/所有文件系统、撤销 WRITE_DAC 后仍可恢复或任意二次取消/崩溃/关机恢复。
+  不支持条件继续拒绝；原受限 token、capability、只读边界与安全校验保留。原生 SDK 写隔离不等于
+  通用读取/网络隔离。没有修改开发人员模式、注册表、系统安全策略或全局电源策略。
+- 早期源码、wheel 与部分浏览器验收并发执行；archive 的 2,000 cue UI 延迟样本不作为独立性能承诺。
+  最后的 desktop 在 Python 重任务结束后单独执行。Windows RSS 是 CDP 所列隔离 Chrome 进程的
+  工作集之和，可能重复计算共享页，是采样峰值，不是独占内存或瞬时精确峰值；不含控制端/后端。
+  未声称关闭浏览器后后台自主渲染，也未扩大交换格式、自动转写或付费服务交付范围。
+
+完整命令、退出回执、JUnit、失败过程、逐文件/用例身份审计、wheel 字节审计、真实 MP4、PNG 与
+逐次内存采样保存在可再生成的本机忽略目录 `test-results/issue87/handoff-91c2`；关键条件、数值及
+限制已直接记录于本节。他人理解和复现不依赖该本机目录。按本轮明确授权提交并正常推送到原 PR
+分支；同步 upstream，不强推、不合并、不改为 Ready，PR 保持 Draft。

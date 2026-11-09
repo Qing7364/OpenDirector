@@ -78,9 +78,9 @@ def test_initialization_never_changes_an_existing_files_shared_acl(tmp_path, mon
     state = rights._Projection(work)
     writes = []
     setter = rights._Windows.set_acl
-    def record(self, handle, value):
+    def record(self, handle, value, **options):
         writes.append(self.identity(handle))
-        return setter(self, handle, value)
+        return setter(self, handle, value, **options)
     monkeypatch.setattr(rights._Windows, 'set_acl', record)
     if kind == 'late_file_after_walk': source.write_bytes(b'KEEP')
     outside = tmp_path / 'outside.txt'
@@ -143,9 +143,9 @@ def test_concurrent_real_deny_is_preserved_across_descriptor_update(tmp_path, mo
     def transform(owner, acl):
         if stage == 'after_read': start_conflict()
         return rights.owner_entries(acl, owner, writable=True)[0]
-    def writing(self, target, acl):
+    def writing(self, target, acl, **options):
         if stage == 'inside_setter': start_conflict()
-        return actual_set(self, target, acl)
+        return actual_set(self, target, acl, **options)
     monkeypatch.setattr(rights._Windows, 'set_acl', writing)
     try:
         state.edit(handle, transform)
@@ -255,7 +255,7 @@ def test_cleanup_retry_preserves_a_deny_added_during_its_actual_setter(tmp_path,
                     finally: state.api.kernel.CloseHandle(other); done.set()
                 worker = threading.Thread(target=external)
                 raced = []
-                def setter(self, handle, value):
+                def setter(self, handle, value, **options):
                     if self.identity(handle) == identity and not raced:
                         raced.append(True); worker.start()
                         deadline = time.monotonic() + 3
@@ -267,7 +267,7 @@ def test_cleanup_retry_preserves_a_deny_added_during_its_actual_setter(tmp_path,
                             assert time.monotonic() < deadline
                             time.sleep(.005)
                         assert not done.is_set()
-                    return actual_set(self, handle, value)
+                    return actual_set(self, handle, value, **options)
                 monkeypatch.setattr(guard, 'descriptor_guard', observed)
                 monkeypatch.setattr(rights._Windows, 'set_acl', setter)
             finally: state.close()
@@ -320,3 +320,103 @@ def test_real_processes_share_one_coordinator_across_environment_overrides(tmp_p
         for process in processes:
             if process.poll() is None:
                 process.kill(); process.communicate(timeout=5)
+
+
+@pytest.mark.parametrize('stage', ['before_write', 'after_write'])
+@pytest.mark.parametrize('outcome', ['complete', 'body_failure', 'cancel', 'setup_failure'])
+def test_real_lease_journal_preserves_an_external_identical_owner_deny(tmp_path, monkeypatch, stage, outcome):
+    """An abandoned plan owns nothing; a completed setter owns its real delta."""
+    from opendirector.agent import windows_acl_guard as guard
+    work = tmp_path / 'work'; work.mkdir(mode=0o700)
+    probe = rights._Projection(tmp_path, tree=False)
+    api, root = probe.api, probe.nodes[-1][0]
+    owner, original = api.security(root)
+    original_work = security(work)
+    root_identity = api.identity(root)
+    parent, name = probe.locations[root]
+    owner_deny = rights._ace(1, 0, 2, rights.OWNER)
+    external_deny = rights._ace(1, 0, 2, owner)
+    policy = rights._acl(original, [owner_deny] + rights._entries(original))
+    probe.edit(root, lambda current_owner, acl: policy)
+    other = writer_handle(api, parent, name)
+    actual_guard, actual_set, actual_init = guard.descriptor_guard, rights._Windows.set_acl, rights._Projection.__init__
+    states, races, errors, checkpoints, setup_failures = [], [], [], [], []
+    done = threading.Event()
+    def track(self, path, **options):
+        actual_init(self, path, **options)
+        if Path(path) == work and options.get('tree', True): states.append(self)
+    def external_writer():
+        try:
+            current_owner, current = api.security(other)
+            assert current_owner == owner
+            # In after_write this is a second identical ACE, installed by the
+            # independent writer. Closing our lease must leave exactly one.
+            actual_set(api, other, rights._acl(current, [external_deny] + rights._entries(current)))
+        except BaseException as error: errors.append(error)
+        finally: api.kernel.CloseHandle(other); done.set()
+    worker = threading.Thread(target=external_writer)
+    @contextmanager
+    def observe(self, target):
+        with actual_guard(self, target) as unchanged:
+            checks = 0
+            def check():
+                nonlocal checks
+                checks += 1
+                if (self.identity(target) == root_identity and not races
+                        and checks == (1 if stage == 'before_write' else 2)):
+                    recorded = [entry for handle, writable, added in states[0].changes
+                                if self.identity(handle) == root_identity for entry in added]
+                    checkpoints.append(recorded.count(external_deny))
+                    races.append(True); worker.start()
+                    deadline = time.monotonic() + 3
+                    while True:
+                        try: unchanged()
+                        except OSError as error:
+                            assert error.winerror == 995
+                            break
+                        assert time.monotonic() < deadline, 'Writer did not break the actual RH oplock'
+                        time.sleep(.005)
+                    assert not done.is_set(), 'Competing SET_SECURITY did not wait for acknowledgment'
+                unchanged()
+            yield check
+    def set_acl(self, target, acl, **options):
+        if (outcome == 'setup_failure' and states
+                and self.identity(target) == self.identity(states[0].nodes[-1][0])
+                and not setup_failures):
+            setup_failures.append(True)
+            raise OSError('initialization setter denied')
+        return actual_set(self, target, acl, **options)
+    async def exercise():
+        async with rights.native_owner_access(work):
+            if outcome == 'body_failure': raise RuntimeError('body failed')
+            if outcome == 'cancel': raise asyncio.CancelledError('cancelled body')
+            assert outcome == 'complete'
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(rights._Projection, '__init__', track)
+            patch.setattr(guard, 'descriptor_guard', observe)
+            patch.setattr(rights._Windows, 'set_acl', set_acl)
+            expected_error = {'body_failure': RuntimeError, 'cancel': asyncio.CancelledError,
+                              'setup_failure': OSError}.get(outcome)
+            if expected_error:
+                with pytest.raises(expected_error): asyncio.run(exercise())
+            else: asyncio.run(exercise())
+        worker.join(timeout=3)
+        assert races and done.is_set() and not worker.is_alive() and errors == []
+        current_owner, current = api.security(root)
+        assert current_owner == owner
+        assert rights._entries(current) == [external_deny] + rights._entries(policy)
+        assert checkpoints == [0 if stage == 'before_write' else 1]
+        assert states[0].changes == [] and states[0].nodes == []
+        if outcome != 'complete': assert security(work) == original_work
+        assert bool(setup_failures) is (outcome == 'setup_failure')
+        async def acquire_again():
+            async with asyncio.timeout(5):
+                async with rights.native_owner_access(work): pass
+        asyncio.run(acquire_again())
+        assert rights._entries(api.security(root)[1]) == [external_deny] + rights._entries(policy)
+    finally:
+        if worker.ident is not None: worker.join(timeout=3)
+        else: api.kernel.CloseHandle(other)
+        probe.edit(root, lambda current_owner, acl: original)
+        probe.close()

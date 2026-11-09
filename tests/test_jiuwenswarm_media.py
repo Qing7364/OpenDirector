@@ -290,7 +290,7 @@ def test_native_skill_media_publication_and_project_reopen(tmp_path, monkeypatch
             for asset in outputs:
                 media = reopened.get(root + '/assets/' + asset['id'] + '/content')
                 assert media.status_code == 200 and media.content == (work / asset['name']).read_bytes()
-            trace = (directory / 'agent-runs' / turn / f'{turn}.jiuwenswarm.jsonl').read_text()
+            trace = (directory / 'agent-runs' / f'{turn}.jiuwenswarm.jsonl').read_text()
             assert 'media-fixture-key' not in trace
             assert 'MEDIA_PROCESSING_FINISHED' in trace
     finally:

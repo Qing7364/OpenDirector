@@ -226,6 +226,11 @@
       ]
     },
     {
+      "file": "host.mjs",
+      "helper": true,
+      "note": "Portable host process ownership, environment and real RSS adapters."
+    },
+    {
       "file": "jiuwenswarm_picker.mjs",
       "previewSafe": true,
       "lanes": [

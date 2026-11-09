@@ -1,13 +1,13 @@
+import { spawnOwned as spawn, stopOwned, pythonExecutable, sourcePythonPath, executable, sampleProcessRss, rssDefinition } from "./host.mjs";
 /** Headed, isolated desktop H.264 acceptance and reproducible 2,000-cue measurements.
  * Test inputs are generated locally. HTTP stays in the loopback Vite/API
  * fixtures; no user profile, project, model, or credentials are accessed.
  */
 import assert from "node:assert/strict";
-import { spawn, execFileSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { once } from "node:events";
 const root = await mkdtemp(
   join(tmpdir(), "opendirector-creation-text-desktop-"),
 );
@@ -33,19 +33,14 @@ const report = {
   measurements: {},
 };
 async function stop(child) {
-  if (!child || child.exitCode !== null) return;
-  const exited = once(child, "exit");
-  child.kill("SIGTERM");
-  const timer = setTimeout(() => child.kill("SIGKILL"), 2000);
-  await exited;
-  clearTimeout(timer);
+  await stopOwned(child);
 }
 try {
   server = spawn(
-    process.env.PYTHON ?? ".venv/bin/python",
+    pythonExecutable(),
     ["tests/browser/creation_server.py", "--port", apiPort, "--root", root],
     {
-      env: { ...process.env, PYTHONPATH: "packages/core/src:apps/api/src" },
+      env: { ...process.env, PYTHONPATH: sourcePythonPath() },
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
@@ -118,7 +113,7 @@ try {
     intervalMs: 500,
     unit: "KiB",
     definition:
-      "Sum of ps RSS for this isolated Chrome instance's CDP-reported PIDs; shared pages can be counted more than once; sampled peak is not unique/private or exact instantaneous memory",
+      rssDefinition,
     phases: {},
     errors: [],
   };
@@ -137,18 +132,7 @@ try {
         ids.length > 0 && ids.length <= 128,
         "Bounded owned Chrome process list",
       );
-      const rows = execFileSync(
-        "ps",
-        ["-o", "pid=,ppid=,rss=", "-p", ids.join(",")],
-        { encoding: "utf8", timeout: 3000 },
-      )
-        .trim()
-        .split("\n")
-        .filter(Boolean)
-        .map((line) => {
-          const [pid, parentPid, rssKiB] = line.trim().split(/\s+/).map(Number);
-          return { pid, parentPid, rssKiB };
-        });
+      const rows = sampleProcessRss(ids);
       assert(
         rows.every(
           (row) =>
@@ -420,8 +404,7 @@ try {
   for (const output of report.outputs.filter((o) => !o.runtimeError)) {
     const file = join(evidence, output.name + ".mp4");
     output.ffprobe = JSON.parse(
-      execFileSync(
-        "ffprobe",
+      execFileSync(executable("ffprobe"),
         ["-v", "error", "-show_streams", "-show_format", "-of", "json", file],
         { encoding: "utf8" },
       ),
@@ -432,8 +415,7 @@ try {
     assert.equal(stream.height, output.height);
     assert(Math.abs(Number(output.ffprobe.format.duration) - 2.5) <= 1 / 24);
     for (const frame of [11, 12, 24, 36, 48, 59]) {
-      const decoded = execFileSync(
-        "ffmpeg",
+      const decoded = execFileSync(executable("ffmpeg"),
         [
           "-v",
           "error",
@@ -473,7 +455,7 @@ try {
         got.every((v, i) => Math.abs(v - expected[i]) < 12),
         `${output.name} frame ${frame}: ${got} versus ${expected}`,
       );
-      execFileSync("ffmpeg", [
+      execFileSync(executable("ffmpeg"), [
         "-v",
         "error",
         "-y",
@@ -489,8 +471,7 @@ try {
   }
   for (const sample of report.measurements.samples.filter((s) => !s.error)) {
     sample.ffprobe = JSON.parse(
-      execFileSync(
-        "ffprobe",
+      execFileSync(executable("ffprobe"),
         [
           "-v",
           "error",

@@ -184,10 +184,11 @@ class NativeRuntime:
             permissions = AsyncExitStack()
             try:
                 if runtime == 'deepseek':
-                    # Initialize this same validated work directory before copying
-                    # skills/launchers. Files inherit access at creation; never
-                    # rewrite a pre-existing file's shared security descriptor.
-                    await permissions.enter_async_context(native_owner_access(work))
+                    # A fresh tree is initialized before copying files. A saved
+                    # session already has its standing projection; only lease
+                    # its ancestors and validate the populated tree on resume.
+                    await permissions.enter_async_context(native_owner_access(work,
+                        **({'initialized': True} if reuse_workspace else {})))
                 if runtime == 'opencode':
                     git = await asyncio.create_subprocess_exec(
                         'git', 'init', '--quiet', '--template=', cwd=work,

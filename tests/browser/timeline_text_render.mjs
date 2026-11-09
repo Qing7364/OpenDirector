@@ -1,10 +1,11 @@
+import { spawnOwned as spawn, stopOwned, pythonExecutable, sourcePythonPath, executable } from "./host.mjs";
 /** Real isolated Chrome/MP4/font lifecycle and native output-pixel comparisons. */
 import assert from "node:assert/strict";
-import { spawn, execFileSync } from "node:child_process";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { once } from "node:events";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { once } from "node:events";
 import { launchBrowser } from "./engine.mjs";
 const root = await mkdtemp(
   join(tmpdir(), "opendirector-creation-text-render-"),
@@ -12,6 +13,7 @@ const root = await mkdtemp(
 const evidence =
   process.env.TIMELINE_TEXT_EVIDENCE ??
   (await mkdtemp(join(tmpdir(), "opendirector-text-render-evidence-")));
+await mkdir(evidence, { recursive: true });
 const apiPort = process.env.TEXT_RENDER_API_PORT ?? "8044",
   webPort = process.env.TEXT_RENDER_WEB_PORT ?? "5194";
 const api = `http://127.0.0.1:${apiPort}`,
@@ -40,21 +42,18 @@ async function until(check) {
   throw Error("Isolated server did not start: " + logs.slice(-1500));
 }
 async function stop(child) {
-  if (!child || child.exitCode !== null) return;
-  const ended = once(child, "exit");
-  child.kill("SIGTERM");
-  await ended;
+  await stopOwned(child);
 }
 function ffmpeg(args) {
-  return execFileSync("ffmpeg", ["-v", "error", "-y", ...args], {
+  return execFileSync(executable("ffmpeg"), ["-v", "error", "-y", ...args], {
     maxBuffer: 30 * 1024 * 1024,
   });
 }
 try {
   server = run(
-    process.env.PYTHON ?? ".venv/bin/python",
+    pythonExecutable(),
     ["tests/browser/creation_server.py", "--port", apiPort, "--root", root],
-    { PYTHONPATH: "packages/core/src:apps/api/src" },
+    { PYTHONPATH: sourcePythonPath() },
   );
   await until(
     async () =>
@@ -492,7 +491,7 @@ try {
   await writeFile(mp4, Buffer.from(result.mp4, "base64"));
   await writeFile(pure, Buffer.from(result.pure, "base64"));
   const probe = JSON.parse(
-    execFileSync("ffprobe", [
+    execFileSync(executable("ffprobe"), [
       "-v",
       "error",
       "-show_streams",

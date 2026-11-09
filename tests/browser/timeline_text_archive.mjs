@@ -1,14 +1,14 @@
+import { spawnOwned as spawn, stopOwned, pythonExecutable, sourcePythonPath, executable } from "./host.mjs";
 /** Real isolated UI / editor.save / Agent / reopen acceptance for timed text. */
 import assert from "node:assert/strict";
 import { randomUUID, createHash } from "node:crypto";
-import { spawn, execFileSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { once } from "node:events";
 import { launchBrowser } from "./engine.mjs";
 const root = await mkdtemp(join(tmpdir(), "opendirector-creation-text-edit-"));
-const evidence = join(process.cwd(), "test-results/issue87/archive");
+const evidence = process.env.TIMELINE_TEXT_EVIDENCE ?? join(process.cwd(), "test-results/issue87/archive");
 await mkdir(evidence, { recursive: true });
 const report = { date: new Date().toISOString(), root };
 const apiPort = process.env.TEXT_ARCHIVE_API_PORT ?? "8048",
@@ -39,18 +39,13 @@ async function until(check) {
   throw Error(logs.slice(-1500));
 }
 async function stop(p) {
-  if (!p || p.exitCode !== null) return;
-  const done = once(p, "exit");
-  p.kill("SIGTERM");
-  const timer = setTimeout(() => p.kill("SIGKILL"), 2000);
-  await done;
-  clearTimeout(timer);
+  await stopOwned(p);
 }
 function start() {
   return run(
-    process.env.PYTHON ?? ".venv/bin/python",
+    pythonExecutable(),
     ["tests/browser/creation_server.py", "--port", apiPort, "--root", root],
-    { PYTHONPATH: "packages/core/src:apps/api/src" },
+    { PYTHONPATH: sourcePythonPath() },
   );
 }
 try {
@@ -239,13 +234,13 @@ try {
   // Actual UI A -> native CLI B -> native CLI export -> UI C.
   const cliEnv = {
     ...process.env,
-    PYTHONPATH: "packages/core/src:apps/api/src",
+    PYTHONPATH: sourcePythonPath(),
   };
   for (const key of Object.keys(cliEnv))
     if (key.startsWith("OPENDIRECTOR_AGENT_")) delete cliEnv[key];
   function cli(project, args) {
     const output = execFileSync(
-      process.env.PYTHON ?? ".venv/bin/python",
+      pythonExecutable(),
       ["-m", "opendirector.cli", "--url", api, "--project", project, ...args],
       { env: cliEnv, encoding: "utf8", timeout: 120000 },
     );
@@ -406,8 +401,7 @@ try {
       "published real MP4 retains exact document revision",
     );
     const probe = JSON.parse(
-      execFileSync(
-        "ffprobe",
+      execFileSync(executable("ffprobe"),
         ["-v", "error", "-show_streams", "-show_format", "-of", "json", file],
         { encoding: "utf8" },
       ),
@@ -437,8 +431,7 @@ try {
   assert.equal(old.fingerprint, publications[0].fingerprint);
   assert.deepEqual(old.provenance, publications[0].provenance);
   const decoded = publications.map((output) =>
-    execFileSync(
-      "ffmpeg",
+    execFileSync(executable("ffmpeg"),
       [
         "-v",
         "error",
@@ -461,7 +454,7 @@ try {
     "new wording changes actual decoded video pixels",
   );
   for (let i = 0; i < publications.length; i++) {
-    execFileSync("ffmpeg", [
+    execFileSync(executable("ffmpeg"), [
       "-v",
       "error",
       "-y",
@@ -526,7 +519,7 @@ try {
   await page.screenshot({ path: join(evidence, "text-package-zh.png") });
   // Unknown capabilities fail through the real package API in both languages.
   const unsupported = join(root, "unsupported.timeline.zip");
-  execFileSync(process.env.PYTHON ?? ".venv/bin/python", [
+  execFileSync(pythonExecutable(), [
     "-c",
     "import json,sys,zipfile\nwith zipfile.ZipFile(sys.argv[1]) as source, zipfile.ZipFile(sys.argv[2], 'w') as target:\n for item in source.infolist():\n  value=source.read(item.filename)\n  if item.filename == 'manifest.json':\n   manifest=json.loads(value); manifest['requiredCapabilities']=['timeline.future.v99']; value=json.dumps(manifest).encode()\n  target.writestr(item.filename,value)",
     cliArchive,

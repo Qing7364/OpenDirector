@@ -1,10 +1,9 @@
+import { spawnOwned as spawn, stopOwned, pythonExecutable, sourcePythonPath } from "./host.mjs";
 /** Real isolated UI / editor.save / Agent / reopen acceptance for timed text. */
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { once } from "node:events";
 import { launchBrowser } from "./engine.mjs";
 const root = await mkdtemp(join(tmpdir(), "opendirector-creation-text-edit-"));
 const apiPort = process.env.TEXT_EDIT_API_PORT ?? "8047",
@@ -35,18 +34,13 @@ async function until(check) {
   throw Error(logs.slice(-1500));
 }
 async function stop(p) {
-  if (!p || p.exitCode !== null) return;
-  const done = once(p, "exit");
-  p.kill("SIGTERM");
-  const timer = setTimeout(() => p.kill("SIGKILL"), 2000);
-  await done;
-  clearTimeout(timer);
+  await stopOwned(p);
 }
 function start() {
   return run(
-    process.env.PYTHON ?? ".venv/bin/python",
+    pythonExecutable(),
     ["tests/browser/creation_server.py", "--port", apiPort, "--root", root],
-    { PYTHONPATH: "packages/core/src:apps/api/src" },
+    { PYTHONPATH: sourcePythonPath() },
   );
 }
 try {

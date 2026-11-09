@@ -133,9 +133,9 @@ class TestWindowsOwnerRights:
         before = {p: self.security(p) for p in (tmp_path, work, nested, outside)}
         setter = rights._Windows.set_acl
         calls = 0
-        def fail(self, handle, value):
+        def fail(self, handle, value, **options):
             nonlocal calls
-            setter(self, handle, value)
+            setter(self, handle, value, **options)
             calls += 1
             if calls == 2: raise OSError('injected after actual ACL write')
         monkeypatch.setattr(rights._Windows, 'set_acl', fail)
