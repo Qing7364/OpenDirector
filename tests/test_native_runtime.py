@@ -15,7 +15,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 import httpx
 import pytest
-from process_helpers import assert_process_exited
+from process_helpers import assert_process_exited, python_cli
 
 from opendirector.application.creation_assets import CreationAssets
 from opendirector.agent import native
@@ -169,6 +169,59 @@ def test_native_events_real_cli_and_shared_write(tmp_path, monkeypatch, runtime)
         assert len(workspaces) == (1 if runtime in {'codex', 'claude'} else 2)
         assert all((directory / 'environment-check.txt').read_text() == 'native execution works' for directory in workspaces)
 
+
+
+def test_claude_continuation_refreshes_skills_using_real_command(tmp_path, monkeypatch):
+    script = python_cli(tmp_path / 'claude fixture', '''import json,sys
+from pathlib import Path
+prompt = sys.stdin.read()
+marker = Path('first-turn.txt')
+skill = Path('plugin/skills/character-replacement/SKILL.md').read_text()
+if marker.exists():
+ assert sys.argv[sys.argv.index('--resume') + 1] == 'fixture-session'
+ assert marker.read_text() == str(Path.cwd())
+ assert 'second skill version' in skill
+else:
+ assert '--resume' not in sys.argv
+ assert 'first skill version' in skill
+ marker.write_text(str(Path.cwd()))
+print(json.dumps({'type':'assistant','session_id':'fixture-session',
+ 'message':{'content':[{'type':'text','text':'completed'}]}}),flush=True)
+''')
+    monkeypatch.setattr(native, 'executable', lambda _: str(script))
+    directory = tmp_path / 'project'; directory.mkdir()
+    entry = tmp_path / '.opendirector/skills/character-replacement/SKILL.md'
+    common = dict(runtime='claude', project_id=uuid4(), session=str(uuid4()),
+        conversation_id=uuid4(), directory=directory, config=None, selected_skills=[],
+        skills=[{'name': 'character-replacement', 'filePath': str(entry)}])
+    async def closed(): pass
+    async def exercise():
+        records = []
+        messages = []
+        for version in ['first', 'second']:
+            entry.write_text(version + ' skill version', encoding='utf-8')
+            messages.append({'role': 'user', 'content': version})
+            run = RunContext(**common, turn_id=uuid4(), messages=list(messages))
+            gateway = SimpleNamespace(close=closed)
+            events = [event async for event in native.NativeRuntime().stream(run, gateway)]
+            assert events == [{'type': 'delta', 'text': 'completed'}]
+            records.append(json.loads((run.native_session_path() / 'session.json').read_text()))
+            messages.append({'role': 'assistant', 'content': 'completed'})
+        assert records[0]['sessionId'] == records[1]['sessionId'] == 'fixture-session'
+        assert records[0]['directory'] == records[1]['directory']
+        workspaces = list(directory.glob('agent-runs/*/work'))
+        assert len(workspaces) == 1
+        assert (workspaces[0] / 'plugin/skills/character-replacement/SKILL.md').read_text() == 'second skill version'
+    asyncio.run(exercise())
+
+
+def test_claude_skill_alias_refuses_to_replace_a_real_directory(tmp_path, monkeypatch):
+    monkeypatch.setattr(native, 'executable', lambda _: sys.executable)
+    occupied = tmp_path / 'plugin/skills'; occupied.mkdir(parents=True)
+    sentinel = occupied / 'keep.txt'; sentinel.write_text('keep')
+    with pytest.raises(FileExistsError):
+        native.command('claude', tmp_path, 'socket', 'token', None, '', [])
+    assert sentinel.read_text() == 'keep'
 
 
 def test_native_commands_keep_auth_and_restrict_tools(tmp_path, monkeypatch):

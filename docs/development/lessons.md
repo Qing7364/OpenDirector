@@ -29,6 +29,7 @@ When work exposes a consequential risk or a recurring problem, add a lesson or u
 - **Trigger:** Retrying an ACL read/modify/write or rolling back failed initialization.
 - **Lesson:** [PR #193](https://github.com/ThinkFlowLab/OpenDirector/pull/193) reproduced an abandoned plan claiming an external writer's identical owner deny. Recording only after the final conflict check has the opposite problem: a successful native write can still need rollback when that check fails.
 - **Check:** Record the installed delta at the native setter's success point, before caller-side exceptions or post-write conflict checks. Test no-write retries, an external identical ACE, successful-write conflicts, failed initialization, cancellation and real lease close with both deterministic control flow and actual WinAPI writers. Do not describe a control-flow counterexample as a demonstrated sandbox escape.
+- **Follow-up:** The same rule applies to cleanup. In PR #193, a cleanup setter succeeded and a later conflict retried the removal, deleting an external identical deny. Consume the pending removal at the native write acknowledgment and inject conflicts during cleanup itself, not only installation.
 
 ## A process exit and ownership of its descendants are separate facts
 
@@ -41,3 +42,10 @@ When work exposes a consequential risk or a recurring problem, add a lesson or u
 - **Trigger:** A validated native-session record reuses a populated execution directory.
 - **Lesson:** [PR #193](https://github.com/ThinkFlowLab/OpenDirector/pull/193) found that fresh-only permission setup rejected the second turn. Rewriting existing skill-directory ACLs also made rollback depend on directories replaced during preparation, and retaining inspection READ_DATA handles blocked PowerShell writers that omit FILE_SHARE_READ.
 - **Check:** Select resume mode only from the validated host session record. Retain path, identity, reparse and single-link rejection, ancestor coordination and sandbox checks. Leave every writable object's descriptor unchanged and release inspection-only file handles before execution. Test real two-turn sandbox writes, outside-write denial, skill replacement, cancellation and lease reacquisition; keep fresh initialization's refusal of existing files.
+- **Follow-up:** Exercise the real command builder on continuation. PR #193's mocked command builder hid Claude's unconditional recreation of an existing skills alias. Refresh only the alias and preserve ordinary files/directories at that location.
+
+## Exclusive creation does not confer ownership of a later pathname
+
+- **Trigger:** A POSIX output is renamed/replaced during a failed copy or flush.
+- **Lesson:** [PR #193](https://github.com/ThinkFlowLab/OpenDirector/pull/193) reproduced failure cleanup deleting a different writer's replacement while retaining the original renamed inode. Pinning the parent and using `O_EXCL` at creation do not make later pathname deletion safe. A stat check followed by unlink still has a race.
+- **Check:** Never delete an uncertain output by its public name. The execution-file writer preserves possible partial POSIX outputs, propagates the failure and requires exclusive creation on retry. Test replacement, disappearance, copy/flush failure and descriptor release; distinguish this from Windows' exact-handle cleanup. If atomic publication becomes necessary, define a trusted staging boundary and a publication commit point first.

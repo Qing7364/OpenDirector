@@ -401,7 +401,10 @@ class _Projection:
                     for item in added:
                         if item in entries: entries.remove(item)
                     return _acl(acl, entries)
-                self.edit(handle, remove)
+                # Cleanup has the same commit boundary as installation. Once
+                # the setter succeeds, a post-write conflict must not remove a
+                # second, externally owned copy of an identical ACE on retry.
+                self.edit(handle, remove, on_write=added.clear)
             except BaseException as error: failures.append(error)
         self.changes.clear()
         for handle, _ in reversed(self.nodes): self.api.kernel.CloseHandle(handle)

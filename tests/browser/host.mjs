@@ -42,13 +42,21 @@ export function executable(name, env = process.env) {
 }
 
 export function pythonExecutable(env = process.env) {
-  const python = executable(
-    env.PYTHON ??
-      (process.platform === "win32"
-        ? ".venv/Scripts/python.exe"
-        : ".venv/bin/python"),
-    env,
-  );
+  let python;
+  if (env.PYTHON !== undefined) {
+    // An explicit interpreter is a requirement, never silently substituted.
+    python = executable(env.PYTHON, env);
+  } else {
+    const candidates = [
+      process.platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python",
+      "python3",
+      "python",
+    ];
+    for (const candidate of candidates) {
+      try { python = executable(candidate, env); break; } catch {}
+    }
+    if (!python) throw new Error("Browser host Python unavailable; set PYTHON or install Python on PATH");
+  }
   if (process.platform === "win32" && !checkedPython.has(python)) {
     // Packaged Python activation can start descendants outside a caller's job.
     // Reject it before launching the test application; never report that job

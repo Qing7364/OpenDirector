@@ -37,21 +37,29 @@ def test_lexical_escape_and_root_are_rejected(tmp_path, create):
     assert outside.read_bytes() == b'outside'
 
 
-def test_failed_create_and_failed_flush_remove_only_the_new_file(tmp_path, monkeypatch):
+def test_failed_create_and_flush_preserve_platform_output_ownership(tmp_path, monkeypatch):
     work = tmp_path / 'work'; work.mkdir()
     preserved = work / 'preserved'; preserved.write_bytes(b'keep')
     with pytest.raises(RuntimeError, match='copy failed'):
         with execution_file(work, 'partial.zip', create=True) as stream:
             stream.write(b'partial')
             raise RuntimeError('copy failed')
-    assert not (work / 'partial.zip').exists()
+    if os.name == 'nt': assert not (work / 'partial.zip').exists()
+    else:
+        assert (work / 'partial.zip').read_bytes() == b'partial'
+        with pytest.raises(FileExistsError):
+            with execution_file(work, 'partial.zip', create=True):
+                pytest.fail('Retry overwrote incomplete output')
     def failed_sync(fd):
         raise OSError('flush failed')
     monkeypatch.setattr(os, 'fsync', failed_sync)
     with pytest.raises(OSError, match='flush failed'):
-        with execution_file(work, 'partial.zip', create=True) as stream:
+        with execution_file(work, 'flush.zip', create=True) as stream:
             stream.write(b'partial')
-    assert not (work / 'partial.zip').exists()
+    if os.name == 'nt': assert not (work / 'flush.zip').exists()
+    else:
+        assert (work / 'flush.zip').read_bytes() == b'partial'
+        (work / 'partial.zip').unlink(); (work / 'flush.zip').unlink()
     assert preserved.read_bytes() == b'keep'
     # Every directory handle is released, including on error.
     preserved.unlink(); work.rmdir()

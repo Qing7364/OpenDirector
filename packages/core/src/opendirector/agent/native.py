@@ -20,7 +20,7 @@ from opendirector.agent.process import terminate
 from opendirector.agent.tools import ROOT, SYSTEM
 from opendirector.installation import BUNDLED
 from opendirector.agent.skill_snapshot import prepare_skills
-from opendirector.agent.directory_links import link_directory
+from opendirector.agent.directory_links import link_directory, unlink_directory
 from opendirector.agent.owner_rights import native_owner_access
 from opendirector.domain.projects import ProjectError
 from opendirector.integrations.chat_completions import ChatCompletions
@@ -121,6 +121,7 @@ def command(runtime: str, work: Path, socket: str, token: str, model: str | None
         (plugin / '.claude-plugin/plugin.json').write_text(json.dumps({'name': 'opendirector', 'version': '0.1.1'}))
         skill_root = work / '.agents/skills'
         skill_root.mkdir(parents=True, exist_ok=True)
+        unlink_directory(plugin / 'skills')
         link_directory(plugin / 'skills', skill_root)
         args = [binary, '-p', '--verbose', '--system-prompt', SYSTEM,
             '--output-format', 'stream-json', '--plugin-dir', str(plugin), '--tools', 'Skill,Bash,Read',

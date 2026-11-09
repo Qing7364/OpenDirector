@@ -82,3 +82,51 @@ def test_failed_setter_does_not_commit_a_proposed_change(monkeypatch):
         assert state.changes == []
     finally: state.close()
     assert acls == {1: ancestor, 2: work}
+
+
+@pytest.mark.parametrize('stage', ['before_write', 'after_write', 'setter_conflict'])
+@pytest.mark.parametrize('completed', [False, True])
+def test_cleanup_consumes_only_its_committed_removal(monkeypatch, stage, completed):
+    # Exercise the real apply/edit/close loop; only WinAPI/oplock boundaries
+    # are controlled here. Native lifecycle coverage lives in its own module.
+    state, acls, ancestor, work, external, _, closed = projection(monkeypatch, 'setter_failure')
+    cleanup, raced = False, False
+    unrelated = rights._ace(1, 0, 4, bytes.fromhex('010100000000000516000000'))
+    writes = []
+    def compete():
+        nonlocal raced
+        raced = True
+        acls[1] = rights._acl(acls[1], [unrelated] + rights._entries(acls[1]))
+        raise failure(995)
+    def write(handle, acl, *, on_write=None):
+        acls[handle % 100] = acl
+        if on_write is not None: on_write()
+        if cleanup and handle % 100 == 1:
+            writes.append(rights._entries(acl).count(external))
+            if stage == 'setter_conflict' and not raced: compete()
+    @contextmanager
+    def guard(api, handle):
+        checks = 0
+        def unchanged():
+            nonlocal checks
+            checks += 1
+            if (cleanup and handle % 100 == 1 and not raced
+                    and stage != 'setter_conflict'
+                    and checks == (1 if stage == 'before_write' else 2)):
+                compete()
+        try: yield unchanged
+        finally: closed.append(handle)
+    state.api.set_acl = write
+    monkeypatch.setitem(sys.modules, 'opendirector.agent.windows_acl_guard',
+        SimpleNamespace(descriptor_guard=guard))
+    state.apply()
+    acls[1] = rights._acl(acls[1], [external] + rights._entries(acls[1]))
+    assert rights._entries(acls[1]).count(external) == 2
+    state.applied, cleanup = completed, True
+    state.close()
+    assert raced
+    assert rights._entries(acls[1]) == [unrelated, external] + rights._entries(ancestor)
+    assert writes == [1], 'A successful removal must never run a second time'
+    assert (acls[2] != work) is completed
+    assert closed.count(1) == closed.count(2) == 1
+    assert not state.changes and not state.nodes

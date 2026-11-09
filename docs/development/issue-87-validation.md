@@ -1052,3 +1052,84 @@ SHA-256 分别为 `73a3c2e486f2d624a43afe9165b6eb2f641454750fd7f13ccb914ccb8b2d6
 逐次内存采样保存在可再生成的本机忽略目录 `test-results/issue87/handoff-91c2`；关键条件、数值及
 限制已直接记录于本节。他人理解和复现不依赖该本机目录。按本轮明确授权提交并正常推送到原 PR
 分支；同步 upstream，不强推、不合并、不改为 Ready，PR 保持 Draft。
+
+## 2026-11-08：733001a2 后的完整 PR 复审与修复
+
+本轮先核对 PR #193、Issue #87 的全部验收项及唯一外部 review，再对
+`2f35c78e..733001a2` 的全部 **163 个变更文件**分区审查：前端/浏览器、后端契约与服务、
+原生 Agent/文件访问，以及构建/依赖/文档。生成文件通过生成器校验，字体及媒体二进制
+结合指纹、许可证、解析和实际渲染检查。以下结果对应包含本节的后续修复提交；原生
+Windows 的 `733001a2` 结果仍保留在上一节，不能替代本轮新增 WinAPI 回归。
+
+English summary: the complete PR review confirmed six defect groups. The follow-up consumes ACL
+cleanup deltas at the successful native write, refreshes Claude skill aliases on real continuation,
+finds Python in PATH-only CI installations, preserves uncertain POSIX outputs instead of deleting a
+replacement by name, shows live text move/trim previews, and aligns browser assertions with retained
+hidden references. New native Windows cases require a fresh Windows run; historical evidence is not
+relabelled as current acceptance.
+
+### 已复现的问题与修复依据
+
+| 问题 | 失败证据 | 本轮处理与验证 |
+| --- | --- | --- |
+| ACL 清理写入成功后重试，再次删除外部同字节 deny | 新确定性回归 **4 failed / 7 passed**；此前仅覆盖 apply 阶段 | 原生 setter 成功回调消费清理 delta；聚焦 **25 passed / 52 Windows skips**，新增两项真实 WinAPI/oplock 清理阶段用例待 Windows 执行 |
+| Claude 第二轮重复创建技能链接 | 真实命令构建、子进程、会话记录复现第二轮 `FileExistsError` | 仅刷新 alias，拒绝普通目录；相关 **32 passed / 3 skipped**；两轮同目录/session、技能实际更新，未调用真实 Claude 模型 |
+| 全局 Python 的 CI 无 `.venv` | GitHub run `42542108951` 的五个 host 测试失败；本机新目录同样失败 | 显式 PYTHON → 工程 venv → PATH Python；七项 host 回归及无 venv 独立运行均通过，保留 venv 路径拼写和 Windows packaged-Python 拒绝 |
+| POSIX 失败清理删除另一 writer 的替换文件 | 真实 rename/replace 后 copy 失败；两项新增用例失败，包含原异常被 unlink 的 ENOENT 遮蔽 | 不按公开路径删除不确定文件；保留可能不完整输出并继续独占创建；相关 **60 passed / 15 skipped**，Windows 仍按准确句柄清理 |
+| 字幕移动/裁剪时条块不跟随鼠标 | 按住指针的真实 UI 断言超时；松开后才跳变 | 文字 lane 使用临时 dragPreview；移动、左右裁剪、Escape 和单次撤销在实际编辑套件通过 |
+| 隐藏来源的旧浏览器断言与业务规则相反 | CI 和本机 closure 仍期待隐藏后阻止采用；扩展用例缺少 welcome dismissal | 保留活动引用及正常采用断言、冻结输入和显式移除检查；真实 hidden-reference 回归通过 |
+
+POSIX 处理是明确的保守取舍：没有可移植的“比较打开 inode 后原子删除此名字”接口，
+`stat` 后 `unlink` 仍有竞态。本轮不引入新的宿主 staging/沙箱/跨文件系统协议，失败时
+保留可能不完整的输出、传播原异常，重试不得覆盖它。双语 CLI 文档说明检查输出并换新
+文件名；该规则针对 Agent 执行目录导出，不改变浏览器下载或原生 Windows 句柄清理。
+
+### 当前 macOS arm64 检查
+
+本机使用原生 Node **24.22.1**、Python **3.13.12 arm64**、Pydantic **2.14.3**，源码路径显式
+设置为当前 checkout 的 `packages/core/src` 和 `apps/api/src`。解释器与 node_modules 复用
+本机开发安装；不是新的 wheel 验收。模拟模型与真实文件/浏览器/子进程分开评价。
+
+| 检查 | 实际结果 |
+| --- | --- |
+| `python -m pytest tests -q -ra` | **1,321 passed、74 skipped、0 failed，140.58 秒**；一条既有 Starlette/httpx warning |
+| `npm test` | **721 passed、0 failed** |
+| `npm run build` | TypeScript/Vite 通过；既有大 chunk 提示 |
+| `generate_contracts.py --check` | 契约一致 |
+| i18n / browser locale / manifest | **2,934 keys / 0 problems；64 pages / 0 problems；67 entries** |
+| import-linter | **4 kept / 0 broken** |
+| host 从无 `.venv` 的独立目录运行 | **7 passed**，未设置 PYTHON，实际 PATH 解释器与进程树检查 |
+| `timeline_text_editing.mjs` | 中英文、IME、移动/左右裁剪的实时预览、取消/撤销、锁/冲突、UI/Agent、保存/服务重启通过 |
+| `timeline_text_render.mjs` | 真实字体/MP4 解码帧、中文/位置/叠层/起止帧、纯文字、无文字回归和混音通过；混音 RMS **3516.07** |
+| `timeline_text_coverage.mjs` | 独立字体消费者、取消/恢复、实际 Inspector 缺字诊断与草稿保留通过 |
+| `timeline_text_archive.mjs` | UI↔CLI 跨工程包、真实资源依赖、重启续编、两份不可变 MP4 发布和双语拒绝通过 |
+| `hidden_references.mjs` | 隐藏后活动 prompt 引用保留，恢复不重建业务关系，显式移除和历史输入保持正确 |
+| 完整浏览器 gate | 第二次完整运行 **19/19 通过，166.2 秒**；包含真实导演舞台发布和无文字时间线媒体闭环 |
+
+测试没有删除原断言来掩盖产品回归：隐藏显示的预期按已验证的共享业务规则更新；POSIX
+失败输出断言按上述明确的平台合同更新。新增 Windows 专属用例在 Mac 跳过，新增 POSIX
+真实 rename 用例在 Mac 实际执行、Windows 明确跳过。原平台/能力门禁没有扩大。
+
+### 保留的失败过程与边界
+
+- 首轮 19 项浏览器 gate 为 **18/19**：`structured_editors.mjs` 在导演舞台 `Camera name`
+  控件等待超时。相同代码独立复跑（含 `--publish`）通过，记录为时序波动，不能把首轮写为全绿。
+  随后相同代码再次完整执行 **19/19 通过**，未延长超时或修改产品代码来绕过这次等待。
+- 初次扩展 hidden-reference 运行被欢迎弹窗遮挡；补齐标准 fixture 初始化后，保留有效的
+  零 thumbnail 断言，只修正活动 prompt 引用预期，最终通过。
+- import-linter 初次使用不支持的 `python -m importlinter` 返回 1；改用已安装 CLI 的
+  `importlinter.cli:lint_imports` 入口后四项边界通过，未修改产品边界或忽略规则。
+- 本轮未在 Mac 冒充执行 Windows WinAPI、dsh 原生沙箱或 Windows wheel；后续原生检查见
+  [Windows 补验指令](issue-87-windows-handoff.zh-CN.md)。没有重新测量此前的横竖 1080p
+  桌面性能，也没有调用付费模型。旧证据仍准确对应其原始提交。
+- engsec 完成局部预检与上下文/代码分析，独立源代码审查及反例已纳入修复；完整外部报告/
+  通知管线未执行，未向 Jira/聊天服务发送内容，不将此描述为正式安全签核。
+
+完整本机日志及反例保留在可再生成的 ignored `test-results/issue87/pr193-full-review/`；
+上述步骤、结果和限制直接写在仓库内，理解与复现不依赖本机材料。
+
+独立最终复审读取本轮全部修复差异、原三份完整覆盖报告及相关调用链，未确认新的
+Critical/Important 问题；另独立运行 **93 项 Python 通过 / 43 项平台或能力跳过**、
+**7 项 Node host 通过**，以及真实 POSIX“输出替换后 fsync 失败”组合反例。
+该组合检查确认两份文件、原异常及描述符释放都保留。审查不等于原生 Windows 运行，
+最终平台状态仍按补验结果确认。没有需要额外处理的代码缺陷或被隐藏的失败结论。

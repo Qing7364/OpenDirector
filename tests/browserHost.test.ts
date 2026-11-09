@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { delimiter, dirname } from "node:path";
+import { delimiter, dirname, join } from "node:path";
+import { mkdtempSync, rmSync, realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { once } from "node:events";
 import { execFileSync } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
@@ -51,6 +53,39 @@ function assertExited(pid: number) {
     }
   }
 }
+
+test("Python discovery supports PATH-only installs and preserves explicit and venv selection", () => {
+  const python = pythonExecutable();
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "browser Python 中文 ")));
+  const env: NodeJS.ProcessEnv = { ...process.env, PATH: dirname(python) };
+  delete env.PYTHON;
+  for (const key of Object.keys(env))
+    if (key.toUpperCase() === "PATH" && key !== "PATH") delete env[key];
+  const script = `
+    import { pythonExecutable } from ${JSON.stringify(new URL("./browser/host.mjs", import.meta.url).href)};
+    import { execFileSync } from 'node:child_process';
+    const python = pythonExecutable();
+    const prefix = execFileSync(python, ['-c', 'import sys; print(sys.prefix)'], {encoding:'utf8'}).trim();
+    console.log(JSON.stringify({python, prefix}));
+  `;
+  const discover = (environment: NodeJS.ProcessEnv) => JSON.parse(execFileSync(
+    process.execPath, ["--input-type=module", "-e", script],
+    { cwd: root, env: environment, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+  ));
+  try {
+    const expectedPrefix = execFileSync(python, ["-c", "import sys; print(sys.prefix)"], {encoding:"utf8"}).trim();
+    assert.equal(realpathSync(discover(env).prefix), realpathSync(expectedPrefix));
+    const venv = join(root, ".venv");
+    execFileSync(python, ["-m", "venv", "--without-pip", venv], { timeout: 15000 });
+    const local = discover(env);
+    assert.equal(local.python, join(venv, process.platform === "win32" ? "Scripts/python.exe" : "bin/python"));
+    assert.equal(realpathSync(local.prefix), realpathSync(venv));
+    assert.equal(discover({ ...env, PYTHON: python }).python, python);
+    assert.throws(() => discover({ ...env, PYTHON: join(root, "missing-python") }), /executable unavailable/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("source search path uses native separators and executable lookup retains a venv spelling", () => {
   const entries = sourcePythonPath("tests").split(delimiter);

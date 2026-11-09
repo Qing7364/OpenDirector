@@ -420,3 +420,75 @@ def test_real_lease_journal_preserves_an_external_identical_owner_deny(tmp_path,
         else: api.kernel.CloseHandle(other)
         probe.edit(root, lambda current_owner, acl: original)
         probe.close()
+
+
+@pytest.mark.parametrize('stage', ['before_write', 'after_write'])
+def test_real_cleanup_retry_keeps_an_external_identical_deny(tmp_path, monkeypatch, stage):
+    """An actual writer breaks the cleanup oplock, after apply has completed."""
+    from opendirector.agent import windows_acl_guard as guard
+    work = tmp_path / 'work'; work.mkdir(mode=0o700)
+    probe = rights._Projection(tmp_path, tree=False)
+    api, root = probe.api, probe.nodes[-1][0]
+    owner, original = api.security(root)
+    identity = api.identity(root)
+    policy = rights._acl(original, [rights._ace(1, 0, 2, rights.OWNER)] + rights._entries(original))
+    external = rights._ace(1, 0, 2, owner)
+    unrelated = rights._ace(1, 0, 4, WORLD)
+    probe.edit(root, lambda current_owner, acl: policy)
+    other = writer_handle(api, *probe.locations[root])
+    actual_guard, actual_set = guard.descriptor_guard, rights._Windows.set_acl
+    cleanup, raced = False, False
+    errors, done = [], threading.Event()
+    def competing_writer():
+        try:
+            _, current = api.security(other)
+            actual_set(api, other, rights._acl(current, [unrelated] + rights._entries(current)))
+        except BaseException as error: errors.append(error)
+        finally: api.kernel.CloseHandle(other); done.set()
+    worker = threading.Thread(target=competing_writer)
+    @contextmanager
+    def observe(self, target):
+        with actual_guard(self, target) as unchanged:
+            checks = 0
+            def check():
+                nonlocal checks, raced
+                checks += 1
+                if (cleanup and self.identity(target) == identity and not raced
+                        and checks == (1 if stage == 'before_write' else 2)):
+                    raced = True; worker.start()
+                    deadline = time.monotonic() + 3
+                    while True:
+                        try: unchanged()
+                        except OSError as error:
+                            assert error.winerror == 995
+                            break
+                        assert time.monotonic() < deadline, 'Cleanup writer did not break the RH oplock'
+                        time.sleep(.005)
+                    assert not done.is_set(), 'Writer must await oplock acknowledgment'
+                unchanged()
+            yield check
+    async def exercise():
+        nonlocal cleanup
+        async with rights.native_owner_access(work):
+            _, current = api.security(root)
+            assert rights._entries(current).count(external) == 1
+            actual_set(api, other, rights._acl(current, [external] + rights._entries(current)))
+            assert rights._entries(api.security(root)[1]).count(external) == 2
+            cleanup = True
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(guard, 'descriptor_guard', observe)
+            asyncio.run(exercise())
+        worker.join(timeout=3)
+        assert raced and done.is_set() and not worker.is_alive() and not errors
+        assert api.security(root) == (owner, rights._acl(policy, [unrelated, external] + rights._entries(policy)))
+        async def acquire_again():
+            async with asyncio.timeout(5):
+                async with rights.native_owner_access(work): pass
+        asyncio.run(acquire_again())
+        assert rights._entries(api.security(root)[1]).count(external) == 1
+    finally:
+        if worker.ident is not None: worker.join(timeout=3)
+        else: api.kernel.CloseHandle(other)
+        probe.edit(root, lambda current_owner, acl: original)
+        probe.close()

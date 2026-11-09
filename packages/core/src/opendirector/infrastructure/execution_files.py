@@ -23,23 +23,22 @@ def _posix_file(work, parts, create):
         flags = (os.O_WRONLY | os.O_CREAT | os.O_EXCL) if create else (os.O_RDONLY | os.O_NONBLOCK)
         fd = os.open(parts[-1], flags | os.O_NOFOLLOW, 0o600, dir_fd=parent)
         stack.callback(os.close, fd)
+        facts = os.fstat(fd)
+        if not stat.S_ISREG(facts.st_mode) or (not create and facts.st_size == 0):
+            raise ProjectError('发布产物必须是非空普通文件。')
+        duplicate = os.dup(fd)
         try:
-            facts = os.fstat(fd)
-            if not stat.S_ISREG(facts.st_mode) or (not create and facts.st_size == 0):
-                raise ProjectError('发布产物必须是非空普通文件。')
-            duplicate = os.dup(fd)
-            try:
-                stream = os.fdopen(duplicate, 'wb' if create else 'rb')
-            except BaseException:
-                # fdopen does not take ownership when construction fails.
-                os.close(duplicate)
-                raise
-            with stream:
-                yield stream
+            stream = os.fdopen(duplicate, 'wb' if create else 'rb')
         except BaseException:
-            if create:
-                os.unlink(parts[-1], dir_fd=parent)
+            # fdopen does not take ownership when construction fails.
+            os.close(duplicate)
             raise
+        # POSIX permits renaming an open output. Its pathname may now name
+        # another writer's file; even stat-then-unlink cannot atomically prove
+        # ownership. Preserve possible partial output on failure and never
+        # delete by that name. Exclusive creation also protects later retries.
+        with stream:
+            yield stream
 
 
 @contextmanager
@@ -49,7 +48,8 @@ def execution_file(execution_directory: Path, path: str, *, create=False):
     Pin the execution root and user directory components for the operation.
     Both implementations open its ancestry without links; after binding the
     root Windows releases lookup-only ancestors to permit project commits.
-    Outputs are created exclusively.
+    Outputs are created exclusively. Failed POSIX writes may leave a partial
+    file; inspect it and use a new output name rather than overwriting on retry.
     """
     # Do not resolve the execution root: it is a lexical authorization boundary,
     # not permission to follow a replacement symlink/junction. Both backends

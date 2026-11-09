@@ -1,62 +1,32 @@
-# Issue #87 Windows handoff
+# Issue #87 Windows follow-up validation
 
-[中文指令](issue-87-windows-handoff.zh-CN.md)
+[中文](issue-87-windows-handoff.zh-CN.md)
 
-Continue Draft [PR #193](https://github.com/ThinkFlowLab/OpenDirector/pull/193)
-on `Qing7364/OpenDirector:codex/issue-87-timeline-text`. Fetch the published
-shared-fixes checkpoint and record the full SHA before changing code. Preserve
-existing work, use fast-forward updates, and do not force-push or merge the PR.
-The PR body identifies the checkpoint; older Windows evidence in
-[the validation record](issue-87-validation.md) does not validate this revision.
+Continue on `Qing7364/OpenDirector:codex/issue-87-timeline-text`, Draft
+[PR #193](https://github.com/ThinkFlowLab/OpenDirector/pull/193). Commit `733001a2`
+already delivered the complete Windows acceptance. Reuse its environment and
+tracked ACL/host adapters. Validate the latest [complete-review repairs](issue-87-final-review-plan.md).
 
-## Work to complete on Windows
+1. Preserve local work, fast-forward to the current PR head, and record its full SHA and actual OS/CPU/Python/Node versions. Read repository guidance, the repair plan and applicable security rules.
+2. Set `PYTHON` to the existing unpackaged Python.org environment. Run the targeted checks below without weakening assertions or expanding skips/xfails:
 
-1. Read `AGENTS.md`, the review-fixes plan, and applicable security rules.
-   Verify native OS, CPU architecture, Python and Node architecture. Install
-   only missing prerequisites: Python 3.11+, Node >=24.22.1, FFmpeg/ffprobe,
-   and a compatible Chromium with Playwright. Build a Windows wheel locally
-   and install it into a separate fresh environment.
-2. Fix ACL rollback journaling in `agent/owner_rights.py`. `prepare()` currently
-   appends additions to `self.changes` before `unchanged()` and `set_acl()`.
-   An attempt that never wrote can therefore claim a later external writer's
-   identical owner deny and remove it during close. Distinguish proposed changes
-   from actually installed entries. Also account for a successful setter followed
-   by a post-write conflict: moving the append after the final check alone can
-   lose changes that need cleanup. Preserve unrelated ACEs, ownership, protection
-   flags, existing read-only restrictions, and fail-closed behavior.
-3. Add failing regressions first. Cover an abandoned first attempt, an external
-   identical deny on a non-writable ancestor, retry, and real lease close. The
-   external deny must survive. Also cover setter success followed by a conflict,
-   initialization failure, cancellation and cleanup. Use real native descriptors
-   and concurrent writers as well as deterministic control-flow tests. The Mac
-   finding is a control-flow reproduction, not proof of a native sandbox escape.
-4. Commit portable browser host adapters. Local ignored script copies are not
-   deliverables. Adapt process cleanup, source `PYTHONPATH` (`path.delimiter`),
-   installed-server `PATH` isolation, executable discovery and memory sampling
-   for Windows. Terminate only processes owned by the test. Unsupported memory
-   measurements must be reported honestly, never replaced by fabricated values.
-5. Run full Python and Node tests, build, contract generation check, i18n,
-   browser locale/manifest checks, and all four import-boundary contracts.
-   Revalidate the installed wheel with source imports disabled. Do not remove
-   tests, weaken assertions, or broaden skip/xfail conditions to obtain a pass.
-6. Run all seven suites on the final source/wheel revision:
-   `timeline_text_editing.mjs`, `timeline_text_render.mjs`,
-   `timeline_text_coverage.mjs`, `timeline_text_archive.mjs`,
-   `timeline_text_desktop.mjs`, `timeline_text_installed.mjs`, and
-   `timeline_workflow.mjs`. The desktop and installed suites have explicit native
-   prerequisites and are registered in the manual lane. Verify Chinese text,
-   frame boundaries, layering/position, actual mixed audio, 1080p landscape and
-   portrait MP4, UI/Agent continuation, persistence/reopen/undo/locks, retained
-   fonts/source assets, editable package round trips, two immutable publications,
-   bilingual export diagnostics and the no-text regression.
-7. Append reproducible results to the validation record: input SHA and file
-   hashes, OS/architecture, versions, exact commands, exit codes, pass/fail/skip
-   counts, wheel hash, actual frames/screenshots and limitations. Preserve older
-   evidence as historical results. Commit the ACL fix, portable helpers, tests and
-   evidence together as appropriate; synchronize with the existing upstream and
-   push normally to the same PR branch. Keep the PR Draft until the final native
-   acceptance and outstanding review items are resolved.
+   ```powershell
+   & $env:PYTHON -m pytest tests/test_owner_rights.py tests/test_owner_rights_journal.py tests/test_owner_rights_lifecycle.py tests/test_owner_rights_resume.py tests/test_native_runtime.py tests/test_native_sessions.py tests/test_directory_links.py tests/test_skill_snapshot.py tests/test_execution_files.py tests/test_posix_execution_files.py tests/test_timeline_packages.py -q -ra
+   node --test tests/browserHost.test.ts
+   ```
 
-Use isolated generated projects and browser profiles. No user content, paid
-models, SSH/remote-control configuration or machine security-policy changes are
-needed for this task.
+   Confirm that a successful cleanup write followed by a real oplock conflict preserves an external identical deny. Confirm real command preparation on two Claude fixture turns, refreshed skills, stable session/workspace and refusal to remove ordinary directories. POSIX open-file rename cases are explicitly skipped on Windows; adapter tests do not certify native POSIX behavior.
+3. Run complete Python/Node suites, generated contracts, i18n, browser locale/manifest, four import-boundary contracts and build. Record every failure and skip reason. The new host regression independently covers PATH-only Python, explicit overrides and project venv preference.
+4. Run `timeline_text_editing.mjs` and `timeline_text_render.mjs` with the existing Playwright/Chrome settings. Verify live move/start-trim/end-trim previews before pointer release, Escape cancellation, single undo, bilingual UI/Agent persistence and real MP4 output. These scripts create isolated projects and services.
+5. Build a fresh Windows wheel from this final source and install it into a new venv. Set `OPENDIRECTOR_INSTALLED_PYTHON` to the absolute Python executable path in that new venv, then run:
+
+   ```powershell
+   & $env:PYTHON scripts/verify_install.py --python $env:OPENDIRECTOR_INSTALLED_PYTHON
+   node tests/browser/timeline_text_installed.mjs
+   ```
+
+   Verify no source imports and no Node on the backend PATH; an old wheel hash does not identify this source.
+6. Broaden browser/native-engine checks only when the changes or an observed failure justify them. Retain `733001a2`'s seven-suite, 1080p and performance evidence under its original revision; do not claim those measurements were repeated.
+7. Append the exact SHA, commands/exit codes, pass/fail/skip counts, wheel hash, observed browser results and limitations to the [validation record](issue-87-validation.md). Reproduce and fix any failures before rerunning affected and complete checks. Commit evidence/necessary repairs, synchronize the configured upstream and push normally to the same branch. Keep Draft; do not force push or merge.
+
+No SSH/remote-control setup, paid models or machine security-policy changes are needed. Deterministic macOS ACL tests do not replace WinAPI; previous Windows acceptance does not certify the new cleanup cases.

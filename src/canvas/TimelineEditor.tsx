@@ -2105,6 +2105,7 @@ export function TimelineEditor({
             </div>
             <TimelineTextLane
               {...textCallbacks}
+              timeline={dragPreview ?? timeline}
               pixelsPerSecond={pixelsPerSecond}
               visibleDuration={visibleDuration}
               position={position}

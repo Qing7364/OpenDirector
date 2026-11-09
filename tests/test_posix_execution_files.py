@@ -86,7 +86,9 @@ def test_posix_fdopen_failures_close_original_and_duplicate(tmp_path, posix_file
         with pytest.raises(failure, match='fdopen failed'):
             with files.execution_file(tmp_path, 'output' if create else 'input', create=create):
                 pytest.fail('Failed wrapper was yielded')
-        assert not (tmp_path / 'output').exists()
+        if create:
+            assert (tmp_path / 'output').read_bytes() == b''
+            (tmp_path / 'output').unlink()
     assert len(duplicated) == 30
     assert len(closed) == len(opened) + len(duplicated)
     for fd in set(opened + duplicated):
@@ -108,7 +110,8 @@ def test_posix_dup_failure_releases_directories_and_file(tmp_path, posix_files, 
             pytest.fail('Failed duplicate was yielded')
     assert duplicated == []
     assert len(opened) == len(closed)
-    assert not (tmp_path / 'output').exists()
+    if create: assert (tmp_path / 'output').read_bytes() == b''
+    else: assert not (tmp_path / 'output').exists()
     assert (tmp_path / 'input').read_bytes() == b'keep'
 
 
@@ -128,3 +131,25 @@ def test_posix_regular_binary_file_roundtrip_and_exclusive_creation(tmp_path, po
     for fd in set(opened + duplicated):
         with pytest.raises(OSError):
             os.fstat(fd)
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='requires POSIX rename of an open file')
+@pytest.mark.parametrize('replacement', [False, True])
+def test_posix_failed_output_never_unlinks_a_replaced_name(tmp_path, posix_files, replacement):
+    _, opened, duplicated, _ = posix_files
+    target, moved = tmp_path / 'output', tmp_path / 'moved'
+    with pytest.raises(RuntimeError, match='export failed'):
+        with files.execution_file(tmp_path, 'output', create=True) as stream:
+            stream.write(b'owned partial output')
+            target.rename(moved)
+            if replacement: target.write_bytes(b'other writer bytes')
+            raise RuntimeError('export failed')
+    assert moved.read_bytes() == b'owned partial output'
+    if replacement:
+        assert target.read_bytes() == b'other writer bytes'
+        with pytest.raises(FileExistsError):
+            with files.execution_file(tmp_path, 'output', create=True):
+                pytest.fail('Retry overwrote another writer')
+    else: assert not target.exists()
+    for fd in set(opened + duplicated):
+        with pytest.raises(OSError): os.fstat(fd)

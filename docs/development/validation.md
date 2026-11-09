@@ -226,6 +226,10 @@ OPENDIRECTOR_INSTALLED_PYTHON=/absolute/path/to/wheel-venv/bin/python \
 
 The seven timeline suites share the tracked host adapter. Source imports use the native path delimiter; installed servers have no source import path or ambient Node PATH. Windows uses a private job and actual kernel working-set samples for CDP PIDs. Set `PYTHON` to an unpackaged Python.org venv and `OPENDIRECTOR_INSTALLED_PYTHON` to a fresh wheel venv. Packaged Microsoft Store Python is explicitly rejected before launching the test application because native tests observed descendants outside job ownership. This is a host prerequisite, not a skipped test or a product sandbox change.
 
+解释器发现顺序为显式 `PYTHON`、工程 `.venv`、PATH 中的 `python3` / `python`。显式路径无效时报错；不会静默换解释器。CI 不必创建 `.venv`，但 PATH 必须提供满足项目版本要求的 Python。
+
+Interpreter discovery uses explicit `PYTHON`, then the project `.venv`, then PATH `python3` / `python`. Invalid explicit overrides fail instead of selecting another interpreter. CI may install Python globally; the interpreter must meet the project's supported version requirement.
+
 MOSS 图像与语音接入使用以下检查。浏览器命令连接本文前述隔离 API 和 Vite；可通过环境变量改用其他端口。
 
 ```sh

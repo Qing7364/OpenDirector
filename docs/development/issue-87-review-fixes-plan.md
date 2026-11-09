@@ -73,6 +73,8 @@
 
 - [x] Run complete Node/Python checks, contracts, i18n, build and representative text/edit/export/browser workflows; report any known/environment failures separately.
 - [x] Obtain one fresh review of this final change range, address important findings with regression tests.
-- [ ] Commit reviewed task changes, run required upstream synchronization and fast-forward push the PR branch without force.
-- [ ] Update Draft PR with actual shared fixes, new checkpoint and remaining Windows ACL/runner validation scope.
-- [ ] Give the user copyable Windows instructions bound to the published checkpoint.
+- [x] Commit reviewed task changes, run required upstream synchronization and fast-forward push the PR branch without force.
+- [x] Update Draft PR with actual shared fixes, new checkpoint and remaining Windows ACL/runner validation scope.
+- [x] Give the user copyable Windows instructions bound to the published checkpoint.
+
+These steps were delivered at `91c2f09f`. Windows follow-up was delivered at `733001a2`; the subsequent complete review and repairs are tracked in [the final review plan](issue-87-final-review-plan.md) and the validation record.

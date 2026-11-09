@@ -189,8 +189,9 @@ try {
   const undo = page
     .locator(".cw-timeline-dialog")
     .getByRole("button", { name: "Undo", exact: true });
-  async function drag(locator, dx, dy = 0, cancel = false) {
+  async function drag(locator, dx, dy = 0, cancel = false, preview = null) {
     const b = await locator.boundingBox();
+    const before = await page.locator('.cw-timeline-text-item').boundingBox();
     await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
     await page.mouse.down();
     await page.mouse.move(
@@ -198,10 +199,24 @@ try {
       b.y + b.height / 2 + dy / 2,
     );
     await page.mouse.move(b.x + b.width / 2 + dx, b.y + b.height / 2 + dy);
+    if (preview) {
+      // Assert while the pointer is still held: release-only jumps are wrong.
+      await page.waitForFunction(({ x, width }) => {
+        const rect = document.querySelector('.cw-timeline-text-item').getBoundingClientRect();
+        return Math.abs(rect.x - x) < 2 && Math.abs(rect.width - width) < 2;
+      }, {
+        x: before.x + (preview === 'end' ? 0 : dx),
+        width: before.width + (preview === 'move' ? 0 : preview === 'start' ? -dx : dx),
+      }, { timeout: 3000 });
+    }
     if (cancel) await page.keyboard.press("Escape");
     await page.mouse.up();
+    if (cancel && preview) {
+      const after = await page.locator('.cw-timeline-text-item').boundingBox();
+      assert(Math.abs(after.x - before.x) < 2 && Math.abs(after.width - before.width) < 2);
+    }
   }
-  await drag(page.locator(".cw-timeline-text-move"), 20);
+  await drag(page.locator(".cw-timeline-text-move"), 20, 0, false, 'move');
   assert.equal(
     await page.getByLabel("Start (s)", { exact: true }).inputValue(),
     "1.5",
@@ -217,7 +232,7 @@ try {
   );
   await drag(
     page.getByRole("button", { name: "Adjust text end", exact: true }),
-    40,
+    40, 0, false, 'end',
   );
   assert.equal(
     await page.getByLabel("End (s)", { exact: true }).inputValue(),
@@ -228,6 +243,11 @@ try {
     await page.getByLabel("End (s)", { exact: true }).inputValue(),
     "4",
   );
+  await drag(page.getByRole('button', { name: 'Adjust text start', exact: true }), 20, 0, false, 'start');
+  assert.equal(await page.getByLabel('Start (s)', { exact: true }).inputValue(), '1.5');
+  assert.equal(await page.getByLabel('End (s)', { exact: true }).inputValue(), '4');
+  await undo.click();
+  assert.equal(await page.getByLabel('Start (s)', { exact: true }).inputValue(), '1');
   const seek = page.getByRole("slider", {
     name: "Timeline playhead",
     exact: true,
@@ -248,7 +268,7 @@ try {
     await page.getByLabel("Horizontal position", { exact: true }).inputValue(),
     "0.1",
   );
-  await drag(page.locator(".cw-timeline-text-move"), 40, 0, true);
+  await drag(page.locator(".cw-timeline-text-move"), 40, 0, true, 'move');
   assert.equal(
     await page.getByLabel("Start (s)", { exact: true }).inputValue(),
     "1",
