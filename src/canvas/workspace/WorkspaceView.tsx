@@ -138,6 +138,7 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
     editorOutputs,
     editorSession,
     editorSaving,
+    invalidateScheduledAutosave,
     saveQueue,
     setEditing,
     end,
@@ -2417,6 +2418,7 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
                 editorSaving.current
               )
                 throw new Error(t("canvas.workspace.error.editorUnavailable"));
+              invalidateScheduledAutosave();
               editorSaving.current = true;
               try {
                 await saveQueue.current!.wait();

@@ -59,3 +59,10 @@ When work exposes a consequential risk or a recurring problem, add a lesson or u
 - **Trigger:** Accepting a cross-origin result URL from a configured model service.
 - **Lesson:** [PR #210](https://github.com/ThinkFlowLab/OpenDirector/pull/210) added compatible image CDN downloads without provider credentials, but initially left arbitrary local and private hosts reachable. Credential isolation and bounded responses do not constrain the network destination.
 - **Check:** Preserve explicitly configured local service origins; validate all DNS answers for unconfigured hosts, connect to a checked public IP while retaining the original Host and TLS identity, and revalidate every redirect. Cover local metadata addresses, IPv6, mixed DNS answers, redirect loops, and recovery without another model submission.
+
+
+## An acknowledged editor save invalidates earlier automatic callbacks
+
+- **Trigger:** A workspace timer retains its document while an editor commit installs a newer authoritative baseline.
+- **Lesson:** A timer may run after the editor's saving flag clears but before React installs the new document. Comparing that old closure against the new baseline can turn a view-only save into a business rollback, invalidating a previously captured publication version.
+- **Check:** Invalidate scheduled automatic callbacks when the editor transaction starts, drain queued saves and explicitly persist the current draft before the edit. Preserve publication CAS checks. Exercise the real due callback at the acknowledgment boundary; isolate projection-test gates by snapshot identity, assert release/restoration and always clean up. Distinguish a forced reproduction from proof of the exact CI schedule.

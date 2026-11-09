@@ -1558,3 +1558,48 @@ revision-bound. This is not another full Windows media/performance acceptance cy
 包括十一项新安装时序、已调整的安装冲突合同、十二项已有清理时序和会话恢复。原 Windows 完整 Python、
 五组媒体浏览器、1080p/性能和 wheel 保留原 SHA，不改标、不机械重跑。当前没有新 Windows wheel 的交付声明。
 完成原生确认前保持 Draft；既有 CHANGES_REQUESTED 仍需维护者复审。未发送 reviewer 或外部聊天消息。
+
+
+## 2026-11-09 浏览器发布重试与过期自动保存
+
+`3cb30b64` 的 [Linux Release checks](https://github.com/ThinkFlowLab/OpenDirector/actions/runs/42595923987)
+通过 Python **1496 passed / 98 skipped**、Node **734 passed**、构建、安装包、契约、双语、音色和助手检查；
+标准浏览器为 **18/19**，导演预览发布重试显示版本冲突。该次失败保留，不用重跑覆盖原结果。
+
+[最新评论](https://github.com/ThinkFlowLab/OpenDirector/pull/193#issuecomment-6738222633)
+建议隔离投影测试的挂起对象、明确释放并确保清理。这些改进已纳入测试。其“0.5 秒读取先于 release
+赋值”的推断不能由现有控制流支持：测试先等待 held 标记，Promise executor 在同一任务内同步赋值
+release，之后才点击渲染。CI 的可见状态也是版本冲突，不能直接认定为投影死锁。
+
+本机在隔离项目中保留一个真实到期的自动保存回调，并在编辑确认后、React 更新引用前运行原闭包。
+旧控制流实际写出 **0.5 秒 / revision 3 → 6 秒 / revision 4 → 0.5 秒 / revision 5**，发布仍固定
+revision 3，因而收到与 CI 相同的 `revision_conflict`。该受控调度证明缺陷存在，不声称还原了 CI 的每个调度步骤。
+正式浏览器回归先在旧代码上因 **revision 4 != 3** 失败，再在修复后通过。
+
+修复在编辑保存、媒体发布和时间线包导入开始时使旧自动保存失效。已经入队的保存仍完成，当前画布草稿
+仍在编辑提交前显式保存；没有刷新发布版本或绕过冲突检查。隐藏页面的自动刷新使用同一保护；过期项目
+的回调在修改自动保存状态前被拒绝。测试只挂起指定快照，检查一次挂起、一次释放、读取返回及方法恢复，
+并在 finally 清理。测试保留原来的回执与 React 更新间隙，未通过延长断言超时掩盖失败。
+
+本机使用与 CI 相同的 Playwright **1.58.2 / Chromium headless shell 145**，保留隔离项目和独立端口。
+最初使用其他本地浏览器版本时发生的界面等待失败不计入通过证据。源码 Python 仍使用上一节的隔离依赖目录，
+不修改共享 venv。本批未修改 Python、WinAPI、权限测试或 Windows 交接范围。
+
+English: Linux CI at 3cb30b64 failed the stage publication retry after 18/19 standard browser workflows.
+A controlled real autosave callback reproduced a source-editor rollback and the same revision-conflict error;
+this establishes a defect, not the exact CI schedule. Editor transactions now invalidate earlier automatic
+callbacks while preserving queued writes, explicit draft saving and fixed publication versions. The regression
+failed before the change and passed afterward. Projection hooks now select the injected snapshot, assert release
+and restoration, and clean up unconditionally. Windows acceptance remains the focused native assignment above.
+
+本批最终源码本地验证：
+
+- `structured_editors.mjs --publish`：修复前回归失败，修复后两次通过；真实 MP4、422 后重试、来源快照和重开均通过。
+- 五项定点浏览器流程：structured editors、editor save、canvas switch、local output delivery、timeline text archive，**5/5 通过**。可编辑包流程包含真实 UI↔CLI 跨工程往返、重启、继续编辑、再次发布和中英拒绝提示。
+- Node **734 passed / 0 skipped**；TypeScript 与 production build 通过；i18n **2996 keys / 0 problems**，browser locale 与 manifest 检查通过。
+- 独立只读复审未确认新问题。后续 Linux CI 以当前 PR 检查结果为准；原生 Windows 权限确认仍待执行，不能由本批浏览器结果替代。
+
+Final-source local validation: five focused browser workflows passed, including a second pass of the real
+stage publication regression and UI↔CLI editable-package/restart/publication/bilingual refusal checks.
+All 734 Node tests, production build, i18n and browser manifest/locale checks passed. Independent review found
+no confirmed new issue. The PR records post-push Linux CI; focused Windows native acceptance remains pending.

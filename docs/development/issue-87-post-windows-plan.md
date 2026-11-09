@@ -7,9 +7,10 @@
 1. 整合固定 main `63100975`，保留会话目录验证与缺失 rollout 恢复；同时保留两侧 localization 和 lessons。
 2. 先复现再修复安装回执后的归属不确定性：明确停止初始化，保留外部 ACL，不靠 ACE 数量推断归属；保留写入前重试及既有清理合同。
 3. 对本批差异独立复审；运行相关后端/原生控制流、Node、契约、i18n、边界、build，正常推送并处理 Linux CI。
-4. Windows 运行 handoff 指定七个模块，记录新安装矩阵与既有清理、续聊结果；不重做未变媒体和性能验收。旧 wheel 不冒充新源码结果。
+4. 处理 `3cb30b64` CI 暴露的浏览器发布重试：保留真实过期自动保存回调复现版本回滚，修复编辑事务前的自动保存失效，并隔离、清理投影测试钩子。由 Mac 完成回归和 CI，不增加 Windows 媒体验收。
+5. Windows 运行 handoff 指定七个模块，记录新安装矩阵与既有清理、续聊结果；不重做未变媒体和性能验收。旧 wheel 不冒充新源码结果。
 
-English: the previous Windows assignment is complete. This follow-up integrates main 63100975 and rejects uncertain post-ack ACL installations. Mac owns implementation/CI; Windows owns only the focused seven-module native handoff. Historical evidence retains its original revision.
+English: the previous Windows assignment is complete. This follow-up integrates main 63100975 and rejects uncertain post-ack ACL installations. Mac owns implementation/CI; Windows owns only the focused seven-module native handoff. Historical evidence retains its original revision. Mac also owns the CI-discovered stale-autosave regression and the projection-test cleanup; this adds no Windows media rerun.
 
 ## 上一批执行状态
 
