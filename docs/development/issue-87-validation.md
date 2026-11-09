@@ -1603,3 +1603,157 @@ Final-source local validation: five focused browser workflows passed, including 
 stage publication regression and UI↔CLI editable-package/restart/publication/bilingual refusal checks.
 All 734 Node tests, production build, i18n and browser manifest/locale checks passed. Independent review found
 no confirmed new issue. The PR records post-push Linux CI; focused Windows native acceptance remains pending.
+
+
+## 2026-11-09 Windows 七模块原生收尾（d0d89993）
+
+本批按最新用户责任安排完成原生收尾、独立只读复审与交付；不重新执行历史 handoff 的全量任务。
+测试源码为 **`d0d89993ce60eed5989292db4cef734dfb1b190d`**，已包含 main
+`63100975dae048dfd591eaa0ec31a63b033e43ea`；从本机 `83b341e6` 安全快进到该版本，
+configured upstream 为 `pr193/codex/issue-87-timeline-text`。初始工作区和索引干净，状态/差异已保留，
+没有 reset/clean、追赶后续 main、重写 merge 历史或强推。
+本批**没有生产代码、测试、依赖、构建或打包变更**，正式提交仅交付本节、双语 handoff 和当前计划状态。
+文档提交 SHA 由提交后的 PR 交付回执及最终报告记录，不在提交内容中虚构自身 SHA。
+
+English: focused native acceptance is complete at the full source SHA above. This batch changes only evidence
+and handoff/plan documents. A real host ACL prerequisite failed first and was repaired with explicit user
+authorization; product validation and sandbox checks were retained. Historical Windows full-suite, media,
+performance and wheel results keep their original revisions and were not rerun or relabeled.
+
+### 环境、输入与命令
+
+- Windows 11 Pro 25H2，build 26200，AMD64；复用 Python.org **3.12.10 / 64 bit**，
+  `$TaskPython = 'C:\Users\Qing Peng\OpenDirector\test-results\issue87\handoff-91c2\svenv\Scripts\python.exe'`。
+  base 为 `C:\Users\Qing Peng\.opendirector-tools\python31210`，未使用 Microsoft Store Python。
+- 实际导入来自当前 checkout 的 `packages/core/src/opendirector/agent/native.py` 与
+  `apps/api/src/opendirector_api`。`PYTHONPATH` 只包含这两处绝对源码路径；
+  `PYTHONUTF8=1`、`PYTHONNOUSERSITE=1`、`TEMP/TMP=C:\Users\Qing Peng\od-tmp`。
+- **36 项适用锁定依赖全部匹配**，`pip check` 退出 **0**，不安装或升级依赖。
+  bundled OpenCode **1.19.5** 的 `--version` 退出 **0**，二进制 SHA-256
+  `d7b473388cb62555970e400ce54cdfb6d6573608beea6f8fdf382cd1a698a3fa`。沿用既有 rg 15.2.0，SHA-256
+  `2d72d90150ab24f04d9849f7e7c7a64d2d1df322c5067f942ca3ab9e84f55d41`。显式开启 `OPENDIRECTOR_REAL_CLI=1`。
+- 冻结清单覆盖 **878 个跟踪输入**（生产/全部测试/依赖/CI/构建/技能/资源等），
+  只排除不参与运行的七份 issue-87 状态文档。`inputs.json` SHA-256 为
+  `26551d759b34128595cff2ca0ca2a64acbfd2dc99d1152cdfb041b2e796aee48`。初次失败与最终复验清单逐字节相同；
+  最终文档提交继续对同一清单核对，纯文档变化不重跑 Windows。
+
+```powershell
+$TaskRoot = (Get-Location).Path
+$TaskPython = (Resolve-Path 'test-results/issue87/handoff-91c2/svenv/Scripts/python.exe').Path
+$EvidenceDir = Join-Path $TaskRoot 'test-results/issue87/windows-final-20261109-103814'
+$env:PYTHONPATH = (Join-Path $TaskRoot 'packages/core/src') + ';' + (Join-Path $TaskRoot 'apps/api/src')
+$env:OPENDIRECTOR_REAL_CLI = '1'
+$env:OPENDIRECTOR_ACL_EVIDENCE = Join-Path $EvidenceDir 'acl-native.jsonl'
+& $TaskPython -m pytest tests/test_owner_rights.py tests/test_owner_rights_journal.py tests/test_owner_rights_lifecycle.py tests/test_owner_rights_resume.py tests/test_native_runtime.py tests/test_native_sessions.py tests/test_directory_links.py -q -ra --tb=short "--junitxml=$EvidenceDir\native.xml" 2>&1 | Tee-Object -FilePath (Join-Path $EvidenceDir 'pytest.log')
+$TestExitCode = $LASTEXITCODE
+Set-Content -Path (Join-Path $EvidenceDir 'exit-code.txt') -Value $TestExitCode
+```
+
+完整 PATH、实际 argv/cwd/开始结束时间/退出码在本轮 `runtime.json`、`command.json`、`status.json`。
+局部防空闲休眠请求在 finally 中恢复；不修改系统电源策略。
+
+### 失败与实际处置
+
+1. 初次尝试 E1=`test-results/issue87/windows-final-20261109-102238`：**101 passed / 53 failed / 0 skipped**，
+   **318.38 秒，退出 1**。53 项都被 `native_owner_access` 的协调目录主体白名单拒绝；
+   当时十一安装、十二清理的 writer 未运行，不能把收集数或空 JSONL 记为原生通过。
+   OpenCode fresh/resume/watchdog 三项确已通过，且记录的 watchdog PID 经真实 WinAPI 确认退出。
+2. 既有 `C:\Users\Qing Peng\.opendirector-owner-rights` 和 3943 个锁文件含孤立 SID（后缀 1005）
+   的 `0x1200A9` 读取/执行 allow。它没有写入权限，但读句柄也能申请独占字节锁，
+   不能据此直接放宽“私有协调目录”的主体校验。独立复审未将保守拒绝误报为权限完整性缺陷。
+3. 用户明确授权备份后收紧这一目录。完整逐对象 owner/group/SDDL/DACL/身份备份及原始 icacls 导出保留 E1。
+   仅移除指定 SID 的 allow，核对 **3944 个对象**的其他 ACE 字节、owner、group 和 DACL 保护不变；
+   不改目录位置、测试 TEMP、token、沙箱或产品白名单，也不删除锁文件或 deny。
+   WinAPI 将 AUTO_INHERITED 元数据规范化清除；逐对象记录该实差，不声称全部控制位不变。
+   第一次维护脚本在首个根目录写入后因该元数据差异停止，原日志保留；
+   后续从不可变备份核对已完成根写入并完成 3943 个锁文件，退出 **0**。
+   `authorized-acl-before.json` SHA-256：`b0bc068d8a8181698f3d27eae739c4326e6ab0fc1a9a9bb1398a40984d740835`。
+4. 同一原目录定点重跑首个失败用例，**1 passed，3.24 秒，退出 0**，之后执行最终七模块。
+   初始本地 PowerShell 防休眠包装器另有 UInt32 转换错误，未阻止 pytest，但不算有效防休眠证据；
+   新包装器使用明确 UInt32 十进制常量并验证恢复，旧日志未覆盖。
+
+### 最终七模块
+
+E2=`test-results/issue87/windows-final-20261109-103814`：**154 passed / 0 failed / 0 skipped**，
+控制台 **291.10 秒**（JUnit suite time `291.086`），**原生退出码 0**。
+保留一项既有 Starlette/httpx 弃用警告。没有任何 skip 原因，也没有漏设 CLI 门禁、修改断言或扩大跳过范围。
+
+| 模块 | passed | failed | skipped |
+| --- | ---: | ---: | ---: |
+| `test_owner_rights.py` | 33 | 0 | 0 |
+| `test_owner_rights_journal.py` | 28 | 0 | 0 |
+| `test_owner_rights_lifecycle.py` | 49 | 0 | 0 |
+| `test_owner_rights_resume.py` | 8 | 0 | 0 |
+| `test_native_runtime.py` | 28 | 0 | 0 |
+| `test_native_sessions.py` | 6 | 0 | 0 |
+| `test_directory_links.py` | 2 | 0 | 0 |
+
+### 原生安装矩阵：11/11 实际执行
+
+每行均调用保存的原始 `NtSetSecurityObject`，状态 **0**、恰好一次安装回执；
+实际 writer 在最后写前检查返回后、成功回执后、最终检查后释放时或 setter 回执后异常时参与。
+所有场景均报告 `InstallationUnconfirmedError`、不进入 Agent body、不重试安装，
+完整 writer ACL 与 owner 保留；旧 ACL 回放、同数量替换及额外同字节 deny 均不被清理误删。
+
+| 阶段 | writer policy | native status / receipt | body / writer ACL | operation handles 开 = 闭 |
+| --- | --- | --- | --- | --- |
+| `after_final_check` | `stale_without_read` | 0 / 1 | 未进入 / 保留 | 29 = 29 |
+| `after_final_check` | `stale_equal_counts` | 0 / 1 | 未进入 / 保留 | 27 = 27 |
+| `after_native_ack` | `stale_without_read` | 0 / 1 | 未进入 / 保留 | 27 = 27 |
+| `after_native_ack` | `stale_equal_counts` | 0 / 1 | 未进入 / 保留 | 27 = 27 |
+| `after_native_ack` | `additive` | 0 / 1 | 未进入 / 保留 | 27 = 27 |
+| `after_final_post_check` | `stale_without_read` | 0 / 1 | 未进入 / 保留 | 27 = 27 |
+| `after_final_post_check` | `stale_equal_counts` | 0 / 1 | 未进入 / 保留 | 27 = 27 |
+| `after_final_post_check` | `additive` | 0 / 1 | 未进入 / 保留 | 27 = 27 |
+| `after_ack_exception` | `stale_without_read` | 0 / 1 | 未进入 / 保留 | 27 = 27 |
+| `after_ack_exception` | `stale_equal_counts` | 0 / 1 | 未进入 / 保留 | 27 = 27 |
+| `after_ack_exception` | `additive` | 0 / 1 | 未进入 / 保留 | 27 = 27 |
+
+### 原生清理矩阵：12/12 实际执行
+
+每行状态 **0**、一次移除回执，真实 oplock break completion 成功；
+stale 回放明确报告 `CleanupUnconfirmedError`，不再次消费移除 delta；
+benign 更新保留正常回滚及原 body 异常。完整 ACL/owner、外部同字节 deny、独立无关 deny 均保留。
+
+| 阶段 | outcome | stale replay | 预期/实际合同 | operation handles 开 = 闭 |
+| --- | --- | --- | --- | --- |
+| `after_final_check` | `complete` | False | 正常 | 33 = 33 |
+| `after_final_check` | `complete` | True | CleanupUnconfirmedError | 33 = 33 |
+| `after_final_check` | `body_failure` | False | 原 body 异常 | 35 = 35 |
+| `after_final_check` | `body_failure` | True | CleanupUnconfirmedError | 35 = 35 |
+| `after_final_check` | `cancel` | False | 原 body 异常 | 35 = 35 |
+| `after_final_check` | `cancel` | True | CleanupUnconfirmedError | 35 = 35 |
+| `after_final_post_check` | `complete` | False | 正常 | 33 = 33 |
+| `after_final_post_check` | `complete` | True | CleanupUnconfirmedError | 33 = 33 |
+| `after_final_post_check` | `body_failure` | False | 原 body 异常 | 35 = 35 |
+| `after_final_post_check` | `body_failure` | True | CleanupUnconfirmedError | 35 = 35 |
+| `after_final_post_check` | `cancel` | False | 原 body 异常 | 35 = 35 |
+| `after_final_post_check` | `cancel` | True | CleanupUnconfirmedError | 35 = 35 |
+
+23 项全部无遗留 owned handle，事件/worker 结束，nodes/journal 清空；
+fixture 仅恢复其已知策略后，**23 次真实租约重新取得成功**。
+写入前四项实际冲突仍可重试，guard 正常结束时的 setter 后异常、取消与普通回滚仍通过；
+部分初始化、目录复用/别名/hardlink 身份拒绝和会话恢复均通过。
+`acl-native.jsonl` 的 **23 主回执 + 23 租约回执**与 JUnit 具体参数身份、控制台摘要、退出码及冻结测试输入交叉核对，
+不是只数日志行。`evidence-audit.json` 保存核对与四份原始文件哈希。
+
+### CLI、复审与边界
+
+- bundled OpenCode **fresh / resume / watchdog 三项全部执行通过**。技能读取、真实业务 CLI 写入与会话延续均实际执行，
+  模型 HTTP 使用协议夹具，不是真实付费模型服务。E1 的 watchdog 记录 PID 另通过 OpenProcess/零等待核对退出，
+  结论限该次该 PID；E2 本项再次通过，但临时目录经 pytest retention 清理，不虚称额外取得第二份 PID 核查。
+  取消回归自身检查受控父子进程。
+- Codex 缺失 rollout 的完整历史恢复与已验证目录保留通过；Codex/Claude 协议子进程夹具、真实业务 CLI
+  与真实 OpenCode 是不同证据，未宣称调用真实 Codex/Claude 模型服务。
+- 独立只读复审核对安装归属/拒绝执行、正常回滚、清理、会话恢复和冻结输入，未确认新的范围内产品缺陷。
+  另指出旧清理夹具撤销 CloseHandle 拦截前后的一种可能记账时序；本批未复现该假设，
+  实际十二项句柄严格守恒全部通过，未据此删除断言或更换测试。
+- 七模块没有文件符号链接权限跳过；历史 WinError 1314 限制仍保留原记录，不能借此次无 skip 宣称取得系统符号链接权限。
+  本批未重复完整 Windows Python/Node、媒体/字幕浏览器、音色库、1080p、2000 cue 或新 Windows wheel。
+  历史 wheel `f013d6270e87be2ee097f6cafa65188571e8398a5562b913021037d7de8caa67` 仍只属于其原源码边界。
+- 原生权限支持范围继续限当前 owner 的受支持本地 NTFS/simple ACL/oplock；
+  不确定安装/清理可以明确失败并留下未推断归属的 ACE，独立 WRITE_DAC actor 可在释放后再次改策略。
+  没有承诺任意 ACL、UNC、进程崩溃、二次取消后的无条件物理回滚。
+
+本批 Windows 原生技术阻塞已消除；纯证据提交的输入一致性、正常推送、最终 CI 和 PR 状态由交付回执关账。
+继续保持 Draft，既有 CHANGES_REQUESTED 留待维护者复审；不发送 reviewer/外部聊天消息，不合并 PR。

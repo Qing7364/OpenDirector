@@ -1,6 +1,19 @@
 # Issue #87 Windows 收尾执行指令
 
-## 当前待办：安装冲突定点验收（2026-11-09）
+## 本次定点验收已完成（2026-11-09）
+
+测试源码 `d0d89993ce60eed5989292db4cef734dfb1b190d`（main `63100975`）：七模块 **154 passed / 0 failed / 0 skipped**，
+十一安装、十二清理原生窗口与真实 OpenCode fresh/resume/watchdog 全部执行，完整 ACL/owner、同字节 deny、资源释放及租约重获通过。
+首轮 101/53/0 的主机协调目录 ACL 阻塞经用户授权、完整备份和精确收紧后消除；代码白名单、沙箱、测试和依赖未变。
+独立只读复审完成，没有新增确认的产品缺陷。完整命令、原生矩阵、失败过程、输入哈希和边界见
+[最终原生验收记录](issue-87-validation.md#2026-11-09-windows-七模块原生收尾d0d89993)。
+本批仅提交证据和状态文档，提交/正常推送/最终 CI 由同一 Windows 执行者连续关账，最终 SHA 以 PR 交付回执为准。
+不重做历史全量/浏览器/媒体/性能/wheel；保持其原 SHA。继续 Draft，等待维护者复审。
+
+English: all seven focused Windows modules passed at the source above, with zero skips and no source/test/dependency changes.
+The explicitly authorized host ACL restriction retained product security checks. The original instructions below are historical.
+
+### 原定点交接（已完成，保留复核）
 
 `83b341e6` 交付后的复审发现 main 新增 #210/#229 的三处冲突，以及 ACL **安装**成功后发生并发回写时，旧记录可能误删外部同字节拒绝规则。Mac 负责本批整合、修复和 CI；此前 Windows 已完成约定任务。本节替代下面的历史启动指令。
 

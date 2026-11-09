@@ -1,8 +1,20 @@
 # PR #193 Windows 补验后审查与后续计划
 
-## 2026-11-09 交付后续项
+## 2026-11-09 后续项完成状态
 
-`83b341e6` 已完成上一轮交接。随后 main 的 #210/#229 带来三处真实冲突；复审另确认 ACL 安装重试的旧记录在外部回写后可能误删拒绝规则。用户要求继续处理，当前 Mac 会话负责本批代码与 CI，Windows 仅负责[安装冲突定点验收](issue-87-windows-handoff.zh-CN.md#当前待办安装冲突定点验收2026-11-09)。下面 2026-11-08 的完成状态与责任表属于原批次。
+最新用户安排由 Windows 执行者独立负责本批收尾。固定源码 `d0d89993ce60eed5989292db4cef734dfb1b190d`
+已整合 main `63100975`，此前 autosave 修复与 Linux CI 结果保留原边界。本次七模块 **154 passed / 0 failed / 0 skipped**，
+11 安装与 12 清理 WinAPI 矩阵、真实 CLI、会话恢复及独立只读复审完成。主机协调目录 ACL 前置阻塞经用户授权
+备份/精确收紧解决；生产代码、测试、锁和打包输入未变，未新增 Windows 全量/媒体/wheel 验收任务。
+[最终原生记录](issue-87-validation.md#2026-11-09-windows-七模块原生收尾d0d89993)列出失败、修复过程、输入和命令。
+本批文档提交、正常推送、最终头 CI 及 PR 描述由同一执行者连续完成，以最终 PR 交付回执关账，不留为新的用户待办。
+继续保持 Draft；维护者 review 状态不由本批撤销。
+English: the focused native assignment is complete; documentation-only delivery retains the tested source inputs.
+The original allocation below is historical and does not supersede the latest user ownership instruction.
+
+### 原交付后续项（已完成，保留分工历史）
+
+`83b341e6` 已完成上一轮交接。随后 main 的 #210/#229 带来三处真实冲突；复审另确认 ACL 安装重试的旧记录在外部回写后可能误删拒绝规则。用户要求继续处理，当前 Mac 会话负责本批代码与 CI，Windows 仅负责[安装冲突定点验收](issue-87-windows-handoff.zh-CN.md#本次定点验收已完成2026-11-09)。下面 2026-11-08 的完成状态与责任表属于原批次。
 
 1. 整合固定 main `63100975`，保留会话目录验证与缺失 rollout 恢复；同时保留两侧 localization 和 lessons。
 2. 先复现再修复安装回执后的归属不确定性：明确停止初始化，保留外部 ACL，不靠 ACE 数量推断归属；保留写入前重试及既有清理合同。

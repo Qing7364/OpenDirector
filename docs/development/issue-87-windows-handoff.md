@@ -1,6 +1,20 @@
 # Issue #87 Windows completion handoff
 
-## Pending: focused installation-conflict acceptance (2026-11-09)
+## Focused native acceptance completed (2026-11-09)
+
+Source `d0d89993ce60eed5989292db4cef734dfb1b190d` (main `63100975`): the seven modules passed **154/154, zero failures and skips**.
+All eleven installation windows, twelve cleanup windows and real bundled OpenCode fresh/resume/watchdog gates executed.
+Full writer ACL/owner, identical denies, handle/event/worker release and lease reacquisition passed.
+The initial 101-pass/53-failure host-coordinator ACL prerequisite was resolved by an explicitly authorized, backed-up restriction;
+product allowlists, sandbox rules, tests and dependencies were unchanged. Independent read-only review is complete with no new confirmed product defect.
+See the [final native record](issue-87-validation.md#2026-11-09-windows-七模块原生收尾d0d89993) for commands, matrices, failed attempts and input hashes.
+This batch commits only evidence/status documents. The same Windows executor owns normal push, final-head CI and the PR delivery receipt.
+Historical full-suite, browser/media/performance and Windows wheel evidence retains its original revisions; none was rerun or relabeled.
+Keep Draft and retain the maintainer's CHANGES_REQUESTED decision.
+
+中文：本次七模块及 11+12 原生矩阵均已通过，无跳过；以下原指令保留为历史复核，不是新待办。
+
+### Original focused handoff (completed; retained for audit)
 
 The audit after `83b341e6` found three new main conflicts from #210/#229 and an ACL **installation** retry that could remove an independent writer's identical deny after a stale replay. Mac owns this integration, repair and CI; Windows completed its previous assignment. This section supersedes the historical startup instructions below.
 
