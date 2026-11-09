@@ -1,5 +1,12 @@
 # 可编辑字幕与文字叠加 Implementation Plan
 
+**交付状态 / Delivery status（2026-11-08）：** 本计划的已交付步骤由后续整合与收尾记录关账，
+最终源码为 `97edaf4e`，main 基线 `c54d78eb`。`733001a2` 的桌面/1080p/性能及 `1799464f` 的补验证据
+保留原版本；最终范围、命令、失败处理、跳过项和剩余限制见[验收记录](issue-87-validation.md)
+及[收尾计划](issue-87-post-windows-plan.md)。原建议命令和提交标题保留作实施约定，
+复选框表示对应交付能力已完成，不表示在 Windows 逐字执行过 POSIX 示例命令。
+Historical planning and evidence are preserved; this completion notice does not relabel prior runs as new tests.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 在原生时间线中交付 UI 与 Agent 均可编辑的定时文字，完成保存、重开、预览、MP4 导出、成片版本追溯及可移植续编。
@@ -181,11 +188,11 @@
 
 **Interfaces:** 产出可追溯到基线 SHA 的无文字工程持久化 fixture（含实际 command / receipt / fingerprint）、固定小媒体样例和验收场景说明；后续任务直接复用。
 
-- [ ] 在修改契约前，用现有公开服务创建并保存无文字时间线，固化必要的提交记录；注明基线，不包含用户项目或凭证。
-- [ ] 固定 24 fps / 640×360 场景：两段视觉素材、两个音频片段；文字 A 为 `[1,3)` 的两行中文，B 为 `[2,4)` 的中英混排且覆盖 A，片尾文字延伸到媒体结束后 1 秒。
-- [ ] 固定纯文字、无文字、字体缺字/损坏、Agent 与 UI 交错、导出期间修改五组额外场景；使用同一组 ID 和预期时刻供所有任务验证。
-- [ ] 在基线运行相关现有测试，记录真实结果；已存在失败单列，不能当新功能通过。建议命令：`node --test tests/canvasTimeline.test.ts tests/canvasTimelineExport.test.ts` 及 `.venv/bin/python -m pytest tests/test_creation_timeline_render.py tests/test_creation_storage.py -q`。
-- [ ] 检查 fixture 是最小且可再分发的；作为后续 T1 提交的一部分保存，不提交本地运行日志或用户素材。
+- [x] 在修改契约前，用现有公开服务创建并保存无文字时间线，固化必要的提交记录；注明基线，不包含用户项目或凭证。
+- [x] 固定 24 fps / 640×360 场景：两段视觉素材、两个音频片段；文字 A 为 `[1,3)` 的两行中文，B 为 `[2,4)` 的中英混排且覆盖 A，片尾文字延伸到媒体结束后 1 秒。
+- [x] 固定纯文字、无文字、字体缺字/损坏、Agent 与 UI 交错、导出期间修改五组额外场景；使用同一组 ID 和预期时刻供所有任务验证。
+- [x] 在基线运行相关现有测试，记录真实结果；已存在失败单列，不能当新功能通过。建议命令：`node --test tests/canvasTimeline.test.ts tests/canvasTimelineExport.test.ts` 及 `.venv/bin/python -m pytest tests/test_creation_timeline_render.py tests/test_creation_storage.py -q`。
+- [x] 检查 fixture 是最小且可再分发的；作为后续 T1 提交的一部分保存，不提交本地运行日志或用户素材。
 
 ### T1：文字契约、时序与完整保存链路（2–3 人日）
 
@@ -199,14 +206,14 @@
 - Python `timeline_text_frame_range(start: float, end: float, fps: int) -> tuple[int, int]`、`timeline_duration(data: TimelineData) -> float` 放在领域编辑器模块；TypeScript `timelineTextFrameRange(start: number, end: number, fps: number): readonly [number, number]` 放在 `timelineText.ts`。
 - `activeTimelineText(timeline: TimelineData, frame: number): readonly TimelineTextOverlayView[]` 返回保留叠放顺序的当前文字；`timelineDuration` 包含文字结束时间。
 
-- [ ] 先写失败测试：空文字集合不进入旧文档序列化；T0 历史 fixture 原样重开/重放；重复 ID、未知字体、非法时间、非法颜色/范围/超限正文拒绝。
-- [ ] 明确断言：`timelineTextFrameRange(1, 3, 24)` 等于 `[24,72]`；帧 23/72 不显示，24/71 显示；仅文字 `[2,4)` 的总时长为 4；FPS 24→30 保持秒数。
-- [ ] 运行上述新增测试，确认失败原因是缺失功能；再实现契约与前后端对应逻辑。
-- [ ] 覆盖 `copyTimeline` 深拷贝、`sameNodeData` 对纯文字/字体变更的识别、投影双向映射、JSON 读取、节点复制及保存后的重开。仅靠 TypeScript 类型编译不视为覆盖。
-- [ ] `nodeResources`、跨工程复制及文本来源 hydration 同步处理 View 资源；字体留在专用资源集合，不能为接入字体而放宽普通媒体剪辑规则。正文来源缺失时保留可解释的来源信息并拒绝依赖该来源的保存/导出，不自动清空引用。
-- [ ] 执行 `.venv/bin/python scripts/generate_contracts.py`，再执行同脚本 `--check`；生成器若不能保留 `exclude_if` 字段可选性，修复生成规则并补对应测试，禁止手改生成文件。
-- [ ] 运行 `.venv/bin/python -m pytest tests/test_creation_timeline_text.py tests/test_creation_contracts.py tests/test_creation_storage.py -q` 和 `node --test tests/timelineText.test.ts tests/creationContracts.test.ts tests/creationEditorSession.test.ts`，预期全部通过。
-- [ ] 审查本任务差异后按明确路径提交：`feat: add retained timeline text contracts`。
+- [x] 先写失败测试：空文字集合不进入旧文档序列化；T0 历史 fixture 原样重开/重放；重复 ID、未知字体、非法时间、非法颜色/范围/超限正文拒绝。
+- [x] 明确断言：`timelineTextFrameRange(1, 3, 24)` 等于 `[24,72]`；帧 23/72 不显示，24/71 显示；仅文字 `[2,4)` 的总时长为 4；FPS 24→30 保持秒数。
+- [x] 运行上述新增测试，确认失败原因是缺失功能；再实现契约与前后端对应逻辑。
+- [x] 覆盖 `copyTimeline` 深拷贝、`sameNodeData` 对纯文字/字体变更的识别、投影双向映射、JSON 读取、节点复制及保存后的重开。仅靠 TypeScript 类型编译不视为覆盖。
+- [x] `nodeResources`、跨工程复制及文本来源 hydration 同步处理 View 资源；字体留在专用资源集合，不能为接入字体而放宽普通媒体剪辑规则。正文来源缺失时保留可解释的来源信息并拒绝依赖该来源的保存/导出，不自动清空引用。
+- [x] 执行 `.venv/bin/python scripts/generate_contracts.py`，再执行同脚本 `--check`；生成器若不能保留 `exclude_if` 字段可选性，修复生成规则并补对应测试，禁止手改生成文件。
+- [x] 运行 `.venv/bin/python -m pytest tests/test_creation_timeline_text.py tests/test_creation_contracts.py tests/test_creation_storage.py -q` 和 `node --test tests/timelineText.test.ts tests/creationContracts.test.ts tests/creationEditorSession.test.ts`，预期全部通过。
+- [x] 审查本任务差异后按明确路径提交：`feat: add retained timeline text contracts`。
 
 ### T2：固定字体、文本来源与实际依赖（2–3 人日）
 
@@ -222,13 +229,13 @@
 - `timeline_source_refs(data: TimelineData) -> tuple[AssetRef, ...]`：汇总实际使用的媒体、字体、文字来源并确定性去重。
 - `default_timeline_font() -> Path`：安装层返回只读资源路径；CLI `timeline default-font` 返回路径、版本、指纹 JSON。
 
-- [ ] 先写失败测试：后缀伪装、损坏字体、超限、集合/可变字体、错误 kind、缺字、相同 family 不同指纹、丢失正文来源均按约定拒绝。
-- [ ] 固定官方字体文件和解析库版本，记录 hash/许可证；验证从源码和 wheel 中均可读取，运行期间不下载字体。字体覆盖检查只承诺当前明确支持的文本范围。
-- [ ] 扩展 `inspect_file` 的字体分支，实际内容验证后登记为 `file` 和字体 MIME；使用原有上传事务和 `asset.import`，不新增私有文件写入口。
-- [ ] UI 默认字体和 Agent 导入同一资源后调用 T1 文档写入；从纯文本素材创建时读取固定版本正文，保存 `sourceAsset`。源正文之后变化不会自动替换文字。
-- [ ] 验证当前文档、可撤销历史及旧成片 provenance 中引用的字体/来源都能被 `asset.usage` 查到，删除预览和实际删除均保护；未引用资源按已有规则处理。
-- [ ] 运行 `.venv/bin/python -m pytest tests/test_timeline_fonts.py tests/test_creation_assets.py tests/test_creation_history_service.py tests/test_cli.py tests/test_installation.py -q`；预期通过且不访问真实模型。
-- [ ] 按明确路径提交：`feat: retain timeline fonts and text source assets`。
+- [x] 先写失败测试：后缀伪装、损坏字体、超限、集合/可变字体、错误 kind、缺字、相同 family 不同指纹、丢失正文来源均按约定拒绝。
+- [x] 固定官方字体文件和解析库版本，记录 hash/许可证；验证从源码和 wheel 中均可读取，运行期间不下载字体。字体覆盖检查只承诺当前明确支持的文本范围。
+- [x] 扩展 `inspect_file` 的字体分支，实际内容验证后登记为 `file` 和字体 MIME；使用原有上传事务和 `asset.import`，不新增私有文件写入口。
+- [x] UI 默认字体和 Agent 导入同一资源后调用 T1 文档写入；从纯文本素材创建时读取固定版本正文，保存 `sourceAsset`。源正文之后变化不会自动替换文字。
+- [x] 验证当前文档、可撤销历史及旧成片 provenance 中引用的字体/来源都能被 `asset.usage` 查到，删除预览和实际删除均保护；未引用资源按已有规则处理。
+- [x] 运行 `.venv/bin/python -m pytest tests/test_timeline_fonts.py tests/test_creation_assets.py tests/test_creation_history_service.py tests/test_cli.py tests/test_installation.py -q`；预期通过且不访问真实模型。
+- [x] 按明确路径提交：`feat: retain timeline fonts and text source assets`。
 
 ### T3：文字编辑交互与 UI/Agent 交错（3–4 人日）
 
@@ -242,14 +249,14 @@
 - `TimelineTextPatch` 只包含可编辑正文/时间/位置/宽度/fontId/style；顺序仅通过 reorder 修改。
 - Inspector/Lane 接收选中 ID 和操作回调，不直接持久化；Preview 的最终绘制由 T4 接入，临时占位不算交付。
 
-- [ ] 先写失败测试：CRUD 不丢其他轨道、重排不换 ID、一次拖动只增加一次撤销、删除已选文字清理选择；媒体裁剪与速度变化不移动文字。
-- [ ] 新增“添加文字”和“从文本素材创建”；文字时间条采用专用区域，重叠条目按叠放顺序分行，编辑器选择用 `{kind: 'clip'|'text', id}`，避免与媒体选择混淆。
-- [ ] 属性面板支持完整第 2.1 节样式，预览支持拖动定位；指针移动仅更新临时预览，结束后形成一次草稿变更，取消拖动不留历史。
-- [ ] 中文组合输入结束/字段确认后再建立一次正文编辑；文本框内 Delete、空格和撤销键优先交给输入控件。
-- [ ] 保存沿用 `CreationEditorSession`；新增资源导入失败、保存未知、版本冲突、节点/父组锁定均保留草稿及原版本依据。不能刷新 revision 后自动重试旧内容。
-- [ ] 用同一后端命令让 Agent 创建的文字在 UI 可见可改，再从 UI 保存结果经 Agent 修改；验证面板关闭不丢正式状态，面板未改草稿能刷新，已改草稿提示冲突。
-- [ ] 运行 `node --test tests/timelineText.test.ts tests/creationEditorSession.test.ts` 及 `node tests/browser/timeline_text_editing.mjs`；脚本自建隔离 API/Vite/工程，预期保存重启后数据一致。
-- [ ] 按明确路径提交：`feat: edit timed text in the native timeline`。
+- [x] 先写失败测试：CRUD 不丢其他轨道、重排不换 ID、一次拖动只增加一次撤销、删除已选文字清理选择；媒体裁剪与速度变化不移动文字。
+- [x] 新增“添加文字”和“从文本素材创建”；文字时间条采用专用区域，重叠条目按叠放顺序分行，编辑器选择用 `{kind: 'clip'|'text', id}`，避免与媒体选择混淆。
+- [x] 属性面板支持完整第 2.1 节样式，预览支持拖动定位；指针移动仅更新临时预览，结束后形成一次草稿变更，取消拖动不留历史。
+- [x] 中文组合输入结束/字段确认后再建立一次正文编辑；文本框内 Delete、空格和撤销键优先交给输入控件。
+- [x] 保存沿用 `CreationEditorSession`；新增资源导入失败、保存未知、版本冲突、节点/父组锁定均保留草稿及原版本依据。不能刷新 revision 后自动重试旧内容。
+- [x] 用同一后端命令让 Agent 创建的文字在 UI 可见可改，再从 UI 保存结果经 Agent 修改；验证面板关闭不丢正式状态，面板未改草稿能刷新，已改草稿提示冲突。
+- [x] 运行 `node --test tests/timelineText.test.ts tests/creationEditorSession.test.ts` 及 `node tests/browser/timeline_text_editing.mjs`；脚本自建隔离 API/Vite/工程，预期保存重启后数据一致。
+- [x] 按明确路径提交：`feat: edit timed text in the native timeline`。
 
 ### T4：共享布局、预览和真实 MP4（2–3 人日）
 
@@ -263,15 +270,15 @@
 - `prepareTimelineFonts(timeline, signal): Promise<TimelineFontSession>`；session 提供按 `fontId` 取 family 的函数及 `dispose()`。
 - `drawTimelineText(ctx, timeline, frame, fonts): void`；预览与 MP4 的唯一文字绘制入口。
 
-- [ ] 先写确定性布局失败测试：显式空行、中文换行、中英混排、不同对齐、背景内边距、描边和层次。换行按 Unicode grapheme 分段：保留显式换行，优先英文词边界，超宽单词才按 grapheme 拆分；不拆开组合字符。
-- [ ] 保持一个排版实现，使用加载完成后的真实字体测量；缓存键包含文字/样式/宽度/字体指纹，时间或播放头变化不重复计算未变排版。
-- [ ] 预览画布使用输出分辨率，播放头映射为 `floor(time*fps + 1e-9)`；文字与视觉内容使用同一输出画面边界。
-- [ ] 修改 MP4 draw：清黑底、可选绘制视觉、最后无条件查询并绘制当前帧文字；移除会跳过纯文字/片尾文字的提前返回。
-- [ ] 在 24 fps 样例中解码 MP4 的 23/24/47/48/71/72/95/96 帧，检查首末帧、重叠顺序、文字区域及片尾；不得用整帧缩成一个像素来证明中文正确。
-- [ ] 比较预览原尺寸文字区域与解码帧：帧边界必须准确，文本框定位偏差不超过 1 个输出像素；颜色/边缘允许 H.264 压缩误差。中文字形、换行及层次另保留人工对照截图，不能仅以像素阈值宣称文字正确。
-- [ ] 验证字体加载失败、缺字、取消导出、关闭编辑器和重复打开时资源可释放，不能产生缺字成片或泄漏对象 URL。
-- [ ] 运行 `node --test tests/timelineTextLayout.test.ts tests/timelineText.test.ts`、`node tests/browser/timeline_text_render.mjs` 和现有 MP4 脚本；预期真实文件及音频回归通过。
-- [ ] 按明确路径提交：`feat: render timeline text consistently in preview and MP4`。
+- [x] 先写确定性布局失败测试：显式空行、中文换行、中英混排、不同对齐、背景内边距、描边和层次。换行按 Unicode grapheme 分段：保留显式换行，优先英文词边界，超宽单词才按 grapheme 拆分；不拆开组合字符。
+- [x] 保持一个排版实现，使用加载完成后的真实字体测量；缓存键包含文字/样式/宽度/字体指纹，时间或播放头变化不重复计算未变排版。
+- [x] 预览画布使用输出分辨率，播放头映射为 `floor(time*fps + 1e-9)`；文字与视觉内容使用同一输出画面边界。
+- [x] 修改 MP4 draw：清黑底、可选绘制视觉、最后无条件查询并绘制当前帧文字；移除会跳过纯文字/片尾文字的提前返回。
+- [x] 在 24 fps 样例中解码 MP4 的 23/24/47/48/71/72/95/96 帧，检查首末帧、重叠顺序、文字区域及片尾；不得用整帧缩成一个像素来证明中文正确。
+- [x] 比较预览原尺寸文字区域与解码帧：帧边界必须准确，文本框定位偏差不超过 1 个输出像素；颜色/边缘允许 H.264 压缩误差。中文字形、换行及层次另保留人工对照截图，不能仅以像素阈值宣称文字正确。
+- [x] 验证字体加载失败、缺字、取消导出、关闭编辑器和重复打开时资源可释放，不能产生缺字成片或泄漏对象 URL。
+- [x] 运行 `node --test tests/timelineTextLayout.test.ts tests/timelineText.test.ts`、`node tests/browser/timeline_text_render.mjs` 和现有 MP4 脚本；预期真实文件及音频回归通过。
+- [x] 按明确路径提交：`feat: render timeline text consistently in preview and MP4`。
 
 ### T5：发布依据和历史锁定（0.5–1.5 人日）
 
@@ -281,12 +288,12 @@
 
 **Interfaces:** 发布调用 T1 `timeline_duration`、T2 `validate_timeline_resources/timeline_source_refs`；provenance 仍使用现有 `editorDocumentId/editorRevision/sources`，不另建执行台账。
 
-- [ ] 先写失败测试：文字延长总时长的合法视频可发布；错误时长/缺字体拒绝；改字后第二次发布使用新资产且旧输出、旧文档依据均不变。
-- [ ] 断言 `object.get` 指定旧 `revision` 返回原正文和字体引用，即使当前时间线已修改；不允许返回最新文档冒充旧版本。
-- [ ] 保存后开始渲染，再由另一写入者修改/锁定时间线，发布必须返回冲突/锁定拒绝，原生成文件可以下载，不能伪造成功。
-- [ ] 增加“编辑文字→锁定节点或父组→项目 undo/redo”测试；在共享历史恢复路径验证目标文档的 owner 锁。测试合法的解锁操作自身仍可按既有语义撤销，避免阻断正常历史。
-- [ ] 运行 `.venv/bin/python -m pytest tests/test_creation_timeline_render.py tests/test_creation_history_service.py -q` 及相关 TS 会话测试；预期来源、版本、锁定与重放一致。
-- [ ] 按明确路径提交：`fix: preserve timeline text publication and history constraints`。
+- [x] 先写失败测试：文字延长总时长的合法视频可发布；错误时长/缺字体拒绝；改字后第二次发布使用新资产且旧输出、旧文档依据均不变。
+- [x] 断言 `object.get` 指定旧 `revision` 返回原正文和字体引用，即使当前时间线已修改；不允许返回最新文档冒充旧版本。
+- [x] 保存后开始渲染，再由另一写入者修改/锁定时间线，发布必须返回冲突/锁定拒绝，原生成文件可以下载，不能伪造成功。
+- [x] 增加“编辑文字→锁定节点或父组→项目 undo/redo”测试；在共享历史恢复路径验证目标文档的 owner 锁。测试合法的解锁操作自身仍可按既有语义撤销，避免阻断正常历史。
+- [x] 运行 `.venv/bin/python -m pytest tests/test_creation_timeline_render.py tests/test_creation_history_service.py -q` 及相关 TS 会话测试；预期来源、版本、锁定与重放一致。
+- [x] 按明确路径提交：`fix: preserve timeline text publication and history constraints`。
 
 ### T6：UI/Agent 共用可编辑包与交换门禁（4–5 人日）
 
@@ -304,16 +311,16 @@
 - CLI：`timeline export --editor-id ID --revision N --output FILE`；`timeline import FILE --operation-id ID` 默认创建新时间线，显式 `--replace-editor ID --expected-revision N` 才替换。CLI 负责上传文件并调用相同 API，不另写包解析器。
 - 前端 `exportTimelinePackageFile(client, editorId, revision, signal): Promise<Blob>`、`importTimelinePackageFile(client, file, request, signal): Promise<TimelinePackageImportReceipt>` 只适配传输和进度；不重建业务规则。
 
-- [ ] 先写失败测试：包有真实字体/来源字节；导入后正文、时间、样式和层次不变；缺资源、重复路径、错误 CRC/hash、未知能力或跨项目伪引用拒绝。
-- [ ] 建立 v1 manifest 和正式时间线契约，拒绝任意其他业务对象。限额：归档最大 512 MiB、条目最多 4,096、声明及实际解压总量最大 2 GiB；单资源按现有媒体上限及 T2 字体上限检查。使用受控暂存目录和流式读取，解压前及过程中限制总量，不信任路径、链接或 ZIP 头。
-- [ ] 导出只读获取精确 revision，包含该版字体与来源；默认字体许可证随包交付。导入先验证全部清单和资源再进行登记，不能把输入包的来源描述当成真实本地执行记录。
-- [ ] 实现导入记录及确定性子操作 ID；复用 `CreationProjects.receipt`、上传与 `asset.import` 回执。覆盖“第 N 个资源登记后进程退出”“最终批次已成功但响应丢失”两种故障：重试不重复创建资源/时间线，同 ID 异输入拒绝。
-- [ ] 替换模式在最终提交时再次检查目标 revision、节点/父组锁；失败保留已有项目及可解释的已登记资源状态。创建模式不切换当前工程；取消、失败和部分登记不能显示完整成功。
-- [ ] UI 导出先保存草稿再指定版本；UI 导入成功后读取正式快照继续编辑。Agent 通过相同 API/CLI 能在面板关闭时完成包操作。
-- [ ] 含文字的 FCPXML / 旧 ZIP 明确拒绝；timeline JSON 提升版本。既有全画布 `.canvas` 含文字时提升能力/格式并收集 View 资源，旧客户端应拒绝，当前客户端往返不丢字。
-- [ ] 真实执行 UI 导出 A→CLI 导入 B，及 CLI 导出 B→UI 导入 C；关闭源工程后重开目标、改一字并再次导出 MP4。检查目标资源 ID 合法、字节指纹相同且不依赖源临时 URL。
-- [ ] 运行 `.venv/bin/python -m pytest tests/test_timeline_packages.py tests/test_cli.py -q`、`node --test tests/timelinePackages.test.ts tests/canvasArchive.test.ts tests/canvasTimelineExport.test.ts`、`node tests/browser/timeline_text_archive.mjs`；预期共用服务、故障恢复及真实往返全部通过。
-- [ ] 按明确路径提交：`feat: share editable timeline packages across UI and CLI`。
+- [x] 先写失败测试：包有真实字体/来源字节；导入后正文、时间、样式和层次不变；缺资源、重复路径、错误 CRC/hash、未知能力或跨项目伪引用拒绝。
+- [x] 建立 v1 manifest 和正式时间线契约，拒绝任意其他业务对象。限额：归档最大 512 MiB、条目最多 4,096、声明及实际解压总量最大 2 GiB；单资源按现有媒体上限及 T2 字体上限检查。使用受控暂存目录和流式读取，解压前及过程中限制总量，不信任路径、链接或 ZIP 头。
+- [x] 导出只读获取精确 revision，包含该版字体与来源；默认字体许可证随包交付。导入先验证全部清单和资源再进行登记，不能把输入包的来源描述当成真实本地执行记录。
+- [x] 实现导入记录及确定性子操作 ID；复用 `CreationProjects.receipt`、上传与 `asset.import` 回执。覆盖“第 N 个资源登记后进程退出”“最终批次已成功但响应丢失”两种故障：重试不重复创建资源/时间线，同 ID 异输入拒绝。
+- [x] 替换模式在最终提交时再次检查目标 revision、节点/父组锁；失败保留已有项目及可解释的已登记资源状态。创建模式不切换当前工程；取消、失败和部分登记不能显示完整成功。
+- [x] UI 导出先保存草稿再指定版本；UI 导入成功后读取正式快照继续编辑。Agent 通过相同 API/CLI 能在面板关闭时完成包操作。
+- [x] 含文字的 FCPXML / 旧 ZIP 明确拒绝；timeline JSON 提升版本。既有全画布 `.canvas` 含文字时提升能力/格式并收集 View 资源，旧客户端应拒绝，当前客户端往返不丢字。
+- [x] 真实执行 UI 导出 A→CLI 导入 B，及 CLI 导出 B→UI 导入 C；关闭源工程后重开目标、改一字并再次导出 MP4。检查目标资源 ID 合法、字节指纹相同且不依赖源临时 URL。
+- [x] 运行 `.venv/bin/python -m pytest tests/test_timeline_packages.py tests/test_cli.py -q`、`node --test tests/timelinePackages.test.ts tests/canvasArchive.test.ts tests/canvasTimelineExport.test.ts`、`node tests/browser/timeline_text_archive.mjs`；预期共用服务、故障恢复及真实往返全部通过。
+- [x] 按明确路径提交：`feat: share editable timeline packages across UI and CLI`。
 
 ### T7：端到端验收、双语和交付证据（2–3 人日）
 
@@ -321,14 +328,14 @@
 
 **Interfaces:** T0 场景贯穿 UI→正式项目→Agent→实际 MP4→原生包→新工程；证据记录代码 SHA、环境、命令和可复查文件。
 
-- [ ] 先按下方验收矩阵列明预期，运行代表场景；失败必须归入所属任务修复，不能靠删减验收范围结束。
-- [ ] 完成 UI 创建→Agent 改字→UI 改时间/样式→保存重开→导出→再改字发布新成片，并核对两份成片和各自编辑版本。
-- [ ] 实际切换 `zh-CN/en-US`，检查属性面板、错误、字体名称显示、导出提示、长英文布局及中文 IME；用户正文和业务 ID 不随语言改变。
-- [ ] 跑契约检查、全部相关单元/服务测试、前端构建和双语检查；最后跑既有时间线/MP4 浏览器回归，覆盖视觉剪辑和音频混音。
-- [ ] 在桌面 Chrome/Edge 实际验证 1080p 横屏和竖屏输出；无头 640×360 通过不能替代该项。若宣称跨平台，至少增加 Windows 的字体/编码/归档往返样例。
-- [ ] 记录 2,000 条文字、10 分钟时间线的编辑响应、峰值内存、导出时间及相对无文字样例的差异；字体布局应按需缓存，播放头拖动不逐条重新读文件。此项提供测量，不预先承诺倍速。
-- [ ] 检查默认字体随构建/wheel 分发且离线可用；记录来源许可证与解析依赖。运行库版本不得只写“latest”。
-- [ ] 审阅本次全部差异，保留失败处理和未验证平台的明确说明；按明确路径提交测试/文档，之后再准备 PR。不得关闭 Issue 直到全部必要验收有证据。
+- [x] 先按下方验收矩阵列明预期，运行代表场景；失败必须归入所属任务修复，不能靠删减验收范围结束。
+- [x] 完成 UI 创建→Agent 改字→UI 改时间/样式→保存重开→导出→再改字发布新成片，并核对两份成片和各自编辑版本。
+- [x] 实际切换 `zh-CN/en-US`，检查属性面板、错误、字体名称显示、导出提示、长英文布局及中文 IME；用户正文和业务 ID 不随语言改变。
+- [x] 跑契约检查、全部相关单元/服务测试、前端构建和双语检查；最后跑既有时间线/MP4 浏览器回归，覆盖视觉剪辑和音频混音。
+- [x] 在桌面 Chrome/Edge 实际验证 1080p 横屏和竖屏输出；无头 640×360 通过不能替代该项。若宣称跨平台，至少增加 Windows 的字体/编码/归档往返样例。
+- [x] 记录 2,000 条文字、10 分钟时间线的编辑响应、峰值内存、导出时间及相对无文字样例的差异；字体布局应按需缓存，播放头拖动不逐条重新读文件。此项提供测量，不预先承诺倍速。
+- [x] 检查默认字体随构建/wheel 分发且离线可用；记录来源许可证与解析依赖。运行库版本不得只写“latest”。
+- [x] 审阅本次全部差异，保留失败处理和未验证平台的明确说明；按明确路径提交测试/文档，之后再准备 PR。不得关闭 Issue 直到全部必要验收有证据。
 
 ## 5. 最终验收矩阵
 

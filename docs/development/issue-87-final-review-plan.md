@@ -1,5 +1,12 @@
 # PR #193 complete review and repair plan
 
+**交付状态 / Delivery status（2026-11-08）：** 本计划的已交付步骤由后续整合与收尾记录关账，
+最终源码为 `97edaf4e`，main 基线 `c54d78eb`。`733001a2` 的桌面/1080p/性能及 `1799464f` 的补验证据
+保留原版本；最终范围、命令、失败处理、跳过项和剩余限制见[验收记录](issue-87-validation.md)
+及[收尾计划](issue-87-post-windows-plan.md)。原建议命令和提交标题保留作实施约定，
+复选框表示对应交付能力已完成，不表示在 Windows 逐字执行过 POSIX 示例命令。
+Historical planning and evidence are preserved; this completion notice does not relabel prior runs as new tests.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans task by task. The user authorized review, planning and implementation in this session; continue without a separate approval stop.
 
 **Goal:** Repair every confirmed issue from the complete PR review and publish a verifiable follow-up to the existing Draft PR.
@@ -83,7 +90,7 @@
 
 - [x] Run complete Python and Node suites, generated contracts, four import-boundary checks, i18n, browser locale/manifest and production build.
 - [x] Obtain one independent final review of the repair diff plus full-review coverage; fix confirmed important findings with failing regressions and rerun affected checks.
-- [ ] Update evidence and a narrow Windows follow-up for this repair range; remove obsolete pending work from the PR description without claiming new native runs.
-- [ ] Commit the reviewed changes, synchronize the configured upstream while preserving merge history, and push normally to the existing Draft PR. Inspect new CI results and resolve failures attributable to the changes.
+- [x] Update evidence and a narrow Windows follow-up for this repair range; remove obsolete pending work from the PR description without claiming new native runs.
+- [x] Commit the reviewed changes, synchronize the configured upstream while preserving merge history, and push normally to the existing Draft PR. Inspect new CI results and resolve failures attributable to the changes.
 
 Task commits may be consolidated after verification so the review/fix/tests/evidence are delivered together. No test or platform acceptance is complete merely because it is listed here.

@@ -1,5 +1,12 @@
 # Issue #87 PR #193 review fixes implementation plan
 
+**交付状态 / Delivery status（2026-11-08）：** 本计划的已交付步骤由后续整合与收尾记录关账，
+最终源码为 `97edaf4e`，main 基线 `c54d78eb`。`733001a2` 的桌面/1080p/性能及 `1799464f` 的补验证据
+保留原版本；最终范围、命令、失败处理、跳过项和剩余限制见[验收记录](issue-87-validation.md)
+及[收尾计划](issue-87-post-windows-plan.md)。原建议命令和提交标题保留作实施约定，
+复选框表示对应交付能力已完成，不表示在 Windows 逐字执行过 POSIX 示例命令。
+Historical planning and evidence are preserved; this completion notice does not relabel prior runs as new tests.
+
 > **For agentic workers:** Use superpowers:executing-plans task by task. The user authorized implementation, integration and a final Windows handoff.
 
 **Goal:** Resolve the shared Mac-verifiable review findings, integrate current main without rewriting published history, and publish a fixed checkpoint for Windows ACL work and final validation.

@@ -1,8 +1,14 @@
 # Issue #87 Windows completion handoff
 
+**Executed on Windows, 2026-11-08.** Final source freeze is `97edaf4e` (main `c54d78eb`).
+Native windows, main integration, independent review, scoped Windows checks, a fresh wheel and Linux gates
+are complete. The startup instructions below are historical reproduction guidance, not new pending work.
+See the [validation record](issue-87-validation.md) and PR delivery receipt for exact revisions and limits.
+Keep Draft; maintainer review is still required. 中文：本交接已执行，保留历史版本边界，不重复改标旧验收。
+
 [中文](issue-87-windows-handoff.zh-CN.md) · [Complete allocation and acceptance plan](issue-87-post-windows-plan.md)
 
-`1799464f` completed the previous agreed Windows follow-up; retain that evidence. Remaining work is the final ACL check/write window, current main integration and final delivery. Publishing this plan changes documentation only and does not require repeated functional acceptance of unchanged product code.
+**Original handoff context:** `1799464f` completed the previous agreed Windows follow-up; retain that evidence. Remaining work is the final ACL check/write window, current main integration and final delivery. Publishing this plan changes documentation only and does not require repeated functional acceptance of unchanged product code.
 
 Windows Codex is the sole remaining product-code writer. It owns integration, native diagnosis/repair, independent pre-freeze review, final acceptance, evidence, normal pushes and CI corrections. The current Mac chat prepares this handoff and audits delivery read-only; Linux GitHub Actions covers the current revision's cross-platform gates.
 

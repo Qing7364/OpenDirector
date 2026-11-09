@@ -1,5 +1,14 @@
 # PR #193 Windows 补验后审查与后续计划
 
+**执行状态（2026-11-08，Windows）：Task 2、Task 1、独立复审及最终源码验收已完成。**
+最终源码冻结 `97edaf4e0b932cb1085d6d5dcb8b7c59def98749`，main 基线 `c54d78eb`；ACL 两个最终窗口的真实反例已修复，
+CI 额外暴露的异步 projection 竞态已定点修复并复审。最终 Windows/wheel 与 Linux 门禁及准确版本边界见
+[验收记录](issue-87-validation.md#2026-11-08-windows-最终整合与原生窗口验收97edaf4e)。
+本页的 Task 4 复选框记录**证据文档形成时**的状态；PR 描述、最终证据提交 SHA、正常推送和最终头 CI
+随后由本执行者完成，并以 PR 最终交付回执及最终回复关账，避免在提交内容中虚构自身 SHA。保持 Draft。
+English status: the source work and scoped acceptance are complete at 97edaf4e; delivery evidence,
+normal push and final-head CI are tracked by this same Windows executor. Historical evidence remains revision-bound.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans or superpowers:subagent-driven-development to execute the tasks. 用户已要求完整分配剩余工作并提供执行指令。按下述责任表连续执行；发布本计划不代表产品修复或验收已完成。
 
 **Goal:** 处理 Windows 补验后剩余的 ACL 并发边界和主分支冲突，使同一个最终版本具备可复核的代码、平台和 CI 证据。
@@ -93,13 +102,13 @@ Execution ownership: Windows Codex is the sole remaining product-code writer and
 
 **Interfaces:** 保留 `_Windows.set_acl(..., before_write, on_write)` 的原生成功事实；`_Projection.close()` 必须区分已确认完成和无法确认完成。输出为原生反例结果、修复或有证据的否定结论及回归。
 
-- [ ] 将额外反例加入正式测试，命名明确覆盖 `after_final_check`；保留准备阶段、成功写后冲突、setter 异常和外部同字节 deny 的全部既有断言。
-- [ ] 在 Windows 使用真实独立 writer，在 `before_write` 返回后、调用原始 `NtSetSecurityObject` 前定点启动。确认 writer 真正打破 oplock 且等待释放，记录原生成功回执、最终完整 ACL、owner、外部 deny、线程/句柄释放和租约重获。
-- [ ] 先运行新用例，保存失败或内核拒绝该时序的原始证据。若原生不允许该时序，解释模拟中不成立的假设，更新审查结论；不得仅以概率低或旧测试通过关闭问题。
-- [ ] 若原生复现，调整提交/冲突/清理状态语义：只有可确认结果才报告完成；无法安全归属的并发变化明确失败并保留诊断，不能静默变成空操作成功。具体回滚策略依据原生结果确定，不再靠增加一次 pre-check 宣称原子性。
-- [ ] 一次核对完整时序矩阵：未写入/准备阶段冲突、最后检查后原生调用前冲突、成功回执后冲突/异常、外部旧 ACL 回放、正常清理/初始化失败/取消/续聊。每个场景标明实际写入、回执、最终 ACL 和外部同字节 deny 的身份；不以函数名或检查次数代替阶段证据。
-- [ ] 在 Windows 运行 `python -m pytest tests/test_owner_rights.py tests/test_owner_rights_journal.py tests/test_owner_rights_lifecycle.py tests/test_owner_rights_resume.py -q -ra`。新反例按合同通过，原外部 deny、失败初始化、取消/续聊和权限保护回归不退化。确定性用例同时由 Linux CI 覆盖并明确跳过原生项；不依赖 Mac 另行执行才能继续本批次。
-- [ ] 将 Task 1 与 Task 2 的全部最终差异交独立审查者，一次核对上述矩阵和整合边界，处理确认的问题并定点复核；之后提交源码冻结点。若需要改变既有成功/失败合同，必须明确解释，不伪装成测试修补。审查中仍有明确新证据时不能为限制轮数而忽略。
+- [x] 将额外反例加入正式测试，命名明确覆盖 `after_final_check`；保留准备阶段、成功写后冲突、setter 异常和外部同字节 deny 的全部既有断言。
+- [x] 在 Windows 使用真实独立 writer，在 `before_write` 返回后、调用原始 `NtSetSecurityObject` 前定点启动。确认 writer 真正打破 oplock 且等待释放，记录原生成功回执、最终完整 ACL、owner、外部 deny、线程/句柄释放和租约重获。
+- [x] 先运行新用例，保存失败或内核拒绝该时序的原始证据。若原生不允许该时序，解释模拟中不成立的假设，更新审查结论；不得仅以概率低或旧测试通过关闭问题。
+- [x] 若原生复现，调整提交/冲突/清理状态语义：只有可确认结果才报告完成；无法安全归属的并发变化明确失败并保留诊断，不能静默变成空操作成功。具体回滚策略依据原生结果确定，不再靠增加一次 pre-check 宣称原子性。
+- [x] 一次核对完整时序矩阵：未写入/准备阶段冲突、最后检查后原生调用前冲突、成功回执后冲突/异常、外部旧 ACL 回放、正常清理/初始化失败/取消/续聊。每个场景标明实际写入、回执、最终 ACL 和外部同字节 deny 的身份；不以函数名或检查次数代替阶段证据。
+- [x] 在 Windows 运行 `python -m pytest tests/test_owner_rights.py tests/test_owner_rights_journal.py tests/test_owner_rights_lifecycle.py tests/test_owner_rights_resume.py -q -ra`。新反例按合同通过，原外部 deny、失败初始化、取消/续聊和权限保护回归不退化。确定性用例同时由 Linux CI 覆盖并明确跳过原生项；不依赖 Mac 另行执行才能继续本批次。
+- [x] 将 Task 1 与 Task 2 的全部最终差异交独立审查者，一次核对上述矩阵和整合边界，处理确认的问题并定点复核；之后提交源码冻结点。若需要改变既有成功/失败合同，必须明确解释，不伪装成测试修补。审查中仍有明确新证据时不能为限制轮数而忽略。
 
 ### Task 2：整合最新 main，保留两侧完整功能
 
@@ -117,13 +126,13 @@ Execution ownership: Windows Codex is the sole remaining product-code writer and
 
 **Interfaces:** 同一个工程能表达音色 connection/selection 与 timeline fonts/overlays/sourceAsset；生成文件来自合并后的后端。输出为可合并、通过契约检查的整合提交。
 
-- [ ] Windows 主执行者先 fetch PR 与 main，核对并保留本机改动；使用当前合适 checkout，将本次记录的 main 合入 PR 分支并保留已发布历史。以上七个路径是当前清单，执行时按实际新增冲突更新，不直接选择整侧。
-- [ ] 按表解决冲突；同时检查自动合并的 projection/dataBoundary、CLI、routes/localization、creation commands/schema、browser manifest 和 Release checks，保留 #232 缺失必要 measurement 时失败的语义。
-- [ ] 执行 `uv pip compile pyproject.toml --extra test --universal --output-file requirements.txt`；保留兼容锁定值，逐项解释必要变化。
-- [ ] 先同步生成器依赖，再生成契约：从新 requirements 创建只移除精确 `-e .` 条目的临时依赖文件，使用当前项目 Python 执行 `python -m pip install -r <临时依赖文件>`，保持其他锁定值/平台条件不变。显式设置当前源码 PYTHONPATH，执行 `python scripts/generate_contracts.py` 后 `--check`，核对 schema、generated.ts、ruleFacts.generated.ts。临时文件不替代或提交为正式锁文件。
-- [ ] 生成文件冲突解除后，执行 `python -m pip install -r requirements.txt` 和 `python -m pip check`，将 editable 安装指向当前 checkout。项目 build_backend 会执行 `npm ci` 与 production build；不能在 generated.ts 仍有冲突时提前触发完整安装。复用现有 Python/Node 运行时，记录实际解析版本和源码导入路径。
-- [ ] 聚焦执行 CLI、Agent voice、voice library、MOSS、daily benchmark、timeline text/fonts/packages 及 creation 契约/归档/参数测试；类型检查同时保留双方字段。
-- [ ] `git diff --name-only --diff-filter=U` 为空，`git diff --check` 通过；提交整合结果。main 已有但非本次整合新增的问题单独记录，不扩展为无关整改。
+- [x] Windows 主执行者先 fetch PR 与 main，核对并保留本机改动；使用当前合适 checkout，将本次记录的 main 合入 PR 分支并保留已发布历史。以上七个路径是当前清单，执行时按实际新增冲突更新，不直接选择整侧。
+- [x] 按表解决冲突；同时检查自动合并的 projection/dataBoundary、CLI、routes/localization、creation commands/schema、browser manifest 和 Release checks，保留 #232 缺失必要 measurement 时失败的语义。
+- [x] 执行 `uv pip compile pyproject.toml --extra test --universal --output-file requirements.txt`；保留兼容锁定值，逐项解释必要变化。
+- [x] 先同步生成器依赖，再生成契约：从新 requirements 创建只移除精确 `-e .` 条目的临时依赖文件，使用当前项目 Python 执行 `python -m pip install -r <临时依赖文件>`，保持其他锁定值/平台条件不变。显式设置当前源码 PYTHONPATH，执行 `python scripts/generate_contracts.py` 后 `--check`，核对 schema、generated.ts、ruleFacts.generated.ts。临时文件不替代或提交为正式锁文件。
+- [x] 生成文件冲突解除后，执行 `python -m pip install -r requirements.txt` 和 `python -m pip check`，将 editable 安装指向当前 checkout。项目 build_backend 会执行 `npm ci` 与 production build；不能在 generated.ts 仍有冲突时提前触发完整安装。复用现有 Python/Node 运行时，记录实际解析版本和源码导入路径。
+- [x] 聚焦执行 CLI、Agent voice、voice library、MOSS、daily benchmark、timeline text/fonts/packages 及 creation 契约/归档/参数测试；类型检查同时保留双方字段。
+- [x] `git diff --name-only --diff-filter=U` 为空，`git diff --check` 通过；提交整合结果。main 已有但非本次整合新增的问题单独记录，不扩展为无关整改。
 
 ### Task 3：对最终源码做一次一致的交付验证
 
@@ -131,11 +140,11 @@ Execution ownership: Windows Codex is the sole remaining product-code writer and
 
 **Interfaces:** 消费 Task 1/2 的最终源码，输出准确版本、命令、退出码、skip、wheel 哈希和 CI 结论。
 
-- [ ] Windows 在冻结源码上集中运行一次完整 Python/Node、production build、四项 import 边界、contracts `--check`、i18n、browser locale/manifest；源码 PYTHONPATH 指向当前 checkout，保留既有真实 CLI 门禁并列明 skip 原因。Linux 标准套件由当前提交的 CI 覆盖。
-- [ ] Windows 运行 timeline editing/render/archive；额外使用 `voice_library_server.py` 与其 health route 执行 voice library fixture，不能用普通 creation fixture 替代。核对保存对象、连接身份、跨工程包和真实 MP4。标准浏览器工作流及助手面板同时由 Linux CI 验证。
-- [ ] 最终 Windows 复验集中执行 Task 1 ACL 用例、受影响 native/host 回归、上述时间线浏览器与 voice fixture；复用已有环境。依赖和打包内容改变后重建 wheel，装进全新 venv，执行 `pip check`、`verify_install.py --python <wheel-python>` 与 installed 浏览器，确认无源码导入和后台 Node PATH。
-- [ ] 若解决冲突或 ACL 修复影响更广的宿主/资源边界，扩大对应测试；否则不机械重跑历史七组、1080p 或 2,000 cue 性能。可在同一最终 Windows 源码批次完成原生和包验证，减少中间版本反复验收。
-- [ ] 正常推送同一 PR，推送前按既有仓库规则同步 configured upstream 并保留 merge 历史，禁止为绕过冲突强推。确认冲突解除且新头的 Release checks 全绿；CI 可归因失败由 Windows 主执行者继续处理，按冻结规则复验，不交回用户逐项调度。保留失败与修复过程，不能引用 d5c6 的旧绿灯代替。
+- [x] Windows 在冻结源码上集中运行一次完整 Python/Node、production build、四项 import 边界、contracts `--check`、i18n、browser locale/manifest；源码 PYTHONPATH 指向当前 checkout，保留既有真实 CLI 门禁并列明 skip 原因。Linux 标准套件由当前提交的 CI 覆盖。
+- [x] Windows 运行 timeline editing/render/archive；额外使用 `voice_library_server.py` 与其 health route 执行 voice library fixture，不能用普通 creation fixture 替代。核对保存对象、连接身份、跨工程包和真实 MP4。标准浏览器工作流及助手面板同时由 Linux CI 验证。
+- [x] 最终 Windows 复验集中执行 Task 1 ACL 用例、受影响 native/host 回归、上述时间线浏览器与 voice fixture；复用已有环境。依赖和打包内容改变后重建 wheel，装进全新 venv，执行 `pip check`、`verify_install.py --python <wheel-python>` 与 installed 浏览器，确认无源码导入和后台 Node PATH。
+- [x] 若解决冲突或 ACL 修复影响更广的宿主/资源边界，扩大对应测试；否则不机械重跑历史七组、1080p 或 2,000 cue 性能。可在同一最终 Windows 源码批次完成原生和包验证，减少中间版本反复验收。
+- [x] 正常推送同一 PR，推送前按既有仓库规则同步 configured upstream 并保留 merge 历史，禁止为绕过冲突强推。确认冲突解除且新头的 Release checks 全绿；CI 可归因失败由 Windows 主执行者继续处理，按冻结规则复验，不交回用户逐项调度。保留失败与修复过程，不能引用 d5c6 的旧绿灯代替。
 
 ### Task 4：同步交付状态，准备维护者复审
 
@@ -143,9 +152,9 @@ Execution ownership: Windows Codex is the sole remaining product-code writer and
 
 **Interfaces:** 消费最终检查结果，输出可准确审阅的 PR 状态和剩余事项清单。
 
-- [ ] 将 Windows 已完成项与新发现的 ACL 边界项分开，标明 `1799464f` 已完成的范围；旧计划添加替代说明，保留历史事实。关闭确已交付的计划步骤。
+- [x] 将 Windows 已完成项与新发现的 ACL 边界项分开，标明 `1799464f` 已完成的范围；旧计划添加替代说明，保留历史事实。关闭确已交付的计划步骤。
 - [ ] PR 描述更新到最终头，附当前 CI、原生/wheel 结果、限制和 Issue #87 五项验收映射。
-- [ ] 准备对原 reviewer 各项建议的处理说明；发送评论或请求复审前遵守既有对外消息授权边界。当前 CHANGES_REQUESTED 需维护者重新审阅，不能自行当作批准。
+- [x] 准备对原 reviewer 各项建议的处理说明；发送评论或请求复审前遵守既有对外消息授权边界。当前 CHANGES_REQUESTED 需维护者重新审阅，不能自行当作批准。
 - [ ] 输出一次完整交接：源码冻结 SHA、最终交付 SHA 及文件一致性、main 基线、ACL 结论/真实回归、逐项检查与 skip、wheel 哈希、CI URL/结论、剩余阻塞。Mac 最终核对只读进行。ACL 结论明确、无真实合并冲突、当前 CI 通过、最终平台证据和状态一致后，才建议转为 Ready；继续保持 Draft，本计划不授权合并 PR。
 
 ## 执行顺序与停止条件

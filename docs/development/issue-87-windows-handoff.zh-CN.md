@@ -1,8 +1,14 @@
 # Issue #87 Windows 收尾执行指令
 
+**当前交接已执行完成（2026-11-08）。** 最终源码冻结 `97edaf4e`（main `c54d78eb`），
+原生窗口、main 整合、独立复审、Windows scoped checks、新 wheel 和 Linux 门禁已完成。
+本文件下方启动指令保留作历史复核，不是新的重复验收待办；原版本结果不改标。
+完整结果、最终交付回执和限制见[验收记录](issue-87-validation.md)及 PR 描述。保持 Draft，等待维护者复审。
+English: this handoff is executed; retain its original instructions and revision boundaries for audit.
+
 [English](issue-87-windows-handoff.md) · [完整分工与验收计划](issue-87-post-windows-plan.md)
 
-`1799464f` 已完成上一轮约定的 Windows 补验，结果继续有效。本次剩余的是 ACL 最终检查/写入窗口、最新 main 整合和最终交付。发布本计划只改变文档，不改变该版本的产品代码，不触发重复功能验收。
+**原交接时的背景：** `1799464f` 已完成上一轮约定的 Windows 补验，结果继续有效。本次剩余的是 ACL 最终检查/写入窗口、最新 main 整合和最终交付。发布本计划只改变文档，不改变该版本的产品代码，不触发重复功能验收。
 
 Windows Codex 是剩余产品代码的唯一写入方，连续负责整合、原生验证/必要修复、冻结前独立复审、最终验收、证据、正常推送及 CI 问题处理。当前 Mac 会话负责任务准备与交付后的只读核对；Linux GitHub Actions 负责当前提交的跨平台门禁。
 

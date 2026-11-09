@@ -1304,3 +1304,193 @@ Microsoft Store Python 的测试宿主限制不变，本轮使用 Python.org，�
 失败过程、最终 JUnit、输入清单/逐文件与用例身份审计、完整命令回执、wheel 字节审计和真实媒体保留在
 ignored `test-results/issue87/supplement-d5c6-20261108`；理解本次结论所需条件已直接写在本节。
 按本轮授权提交必要修复与证据，先同步既有 upstream 再正常推送同一 PR 分支；保持 Draft，不强推或合并。
+
+
+## 2026-11-08 Windows 最终整合与原生窗口验收（97edaf4e）
+
+本节记录美国太平洋时间 2026-11-08 的实际执行。main 基线为
+`c54d78eb5314d7068b6bf465dbbb2cf199ab1df9`，保留 `5fd0556128f98b5f3bf3b00417a1a2728425df54`
+及全部已发布历史。源码先冻结为 `2ddb74ee99e53e44fb1696402b745002d4281be7`；
+处理 CI 暴露的前端竞态后，最终源码冻结为 **`97edaf4e0b932cb1085d6d5dcb8b7c59def98749`**。
+本记录和计划/handoff 的后续状态提交不改变产品输入；最终证据提交的自身 SHA 不在提交内容内自引用，
+由 PR 交付回执及本机 `final-delivery.json` 记录真实值。
+
+English summary: main integration, native ACL diagnosis, independent read-only review and final
+Windows acceptance are complete at source freeze `97edaf4e0b932cb1085d6d5dcb8b7c59def98749`. The earlier
+Windows full Python result remains **1503 passed / 17 skipped at 2ddb74ee**; every one of the
+241 Python files and both dependency locks is byte-identical after the UI-only increment.
+Final frontend checks, five Windows browser groups, a new clean Windows wheel and its **324 passed /
+3 skipped** regressions passed. Linux Release checks passed at this freeze, including full Python,
+all 19 standard browser workflows, the independent voice fixture and assistant panels.
+The first CI failure and failing/passing deterministic browser proof remain recorded below.
+No security checks, existing test assertions or skip gates were removed or relaxed. Keep Draft;
+the existing CHANGES_REQUESTED review still requires the maintainer's assessment.
+
+### 输入、整合及失败过程
+
+- 开始时 checkout 为 `1799464f`，工作区无既有未提交文件；保存 status/diff/untracked 清单后安全快进到
+  `5fd05561`。合入上述 main，逐项解决实际七处冲突，保留音色库和字幕/字体/package 两侧能力。
+  检查自动合并的 projection/dataBoundary、CLI、routes/localization、schema、manifest 和 CI；
+  #232 缺少必要 benchmark measurement 必须失败的语义保留。
+- 执行 `uv pip compile pyproject.toml --extra test --universal --output-file requirements.txt`，
+  相对原 PR 只新增 `python-multipart==0.0.33`，其余已有版本未变。uv 0.13.7 输出不包含既有 `-e .`，
+  因 CI 仅安装这份 requirements，保留原 editable 根条目。先用仅删除该精确条目的临时依赖清单同步生成器，
+  再生成契约及 `--check`，最后安装完整 requirements；editable 安装、npm ci/build、pip check 均退出 0。
+- 整合时真实回归发现 Agent 音色上传直接 resolve/open 接受执行根重定向和硬链接；初始新增用例
+  **4 failed / 5 passed**。改用共用 handle-relative `execution_file`，并在共用 fstat 边界拒绝硬链接，
+  保留重解析点、根目录绑定、普通文件、独占输出和现有路径校验。新增稳定错误码有中英显示。
+- 新上游音频参数测试把完整 WAV 字节放入 pytest 节点名，Windows 超过 32767 字符，产生 setup/teardown
+  两项错误；只增加三个明确 ids，输入与断言不变。组合回归还观察到旧进程句柄用例计数 738→734，
+  原因是其他测试的后台线程收尾；原八次原生失败、错误码及严格 `handle_count == before` 全部保留在
+  精确同一用例的独立子进程，父用例必须验证退出 0，30 秒超时仍失败，未改成宽松阈值。
+- 本机独立只读复审覆盖整合和 ACL，并发现释放前的额外窗口；根执行者是唯一产品/index/分支写入者。
+  复审后的 ACL 集合 **94 passed / 0 skipped**，定点 native/voice/file 集合 **214 passed / 1 skipped**。
+- 首个源码冻结的 [Release checks 42565840952](https://github.com/ThinkFlowLab/OpenDirector/actions/runs/42565840952)
+  中 Linux Python **1433 passed / 87 skipped**，标准浏览器 **18/19**，唯独
+  `structured_editors.mjs:209` 等待 Added to canvas 超时，界面显示版本冲突；其余步骤通过。
+  没有用重复全量测试或扩大超时代替定位。
+- 对真实后台 projection.read 做确定性延迟，复现已确认的舞台保存 rev2→3 后，晚到读取恢复旧基线，
+  后续 creation.batch 仍带 rev2 而被正确拒绝。正式用例无修复退出 **1**、有修复退出 **0**；
+  产品只在异步读取完成时重检 editorSaving 和捕获的 snapshot，发布版本/执行快照/重试身份不变。
+  原 CI 没有网络跟踪，因此不声称已经还原它的确切调度；定点回归独立证明了相同失败症状的业务缺陷。
+  泛化 alert 等待改为必须观察到注入的发布拒绝原文，原时长、重试、保存重开和来源断言全部保留。
+  最后又进行只读复审。反证实测后的产品文件仅补三行解释注释，原始哈希区别在 proof/审查记录保留。
+- GPG 首次提交曾超时（128），用户处理后重试签名成功；没有关闭签名。HTTPS 首次推送缺 workflow scope
+  被拒绝；复用已有 SSH 凭证正常推送，无 SSH/远控配置修改。每次推送前同步 configured upstream，
+  `rebase --rebase-merges` 保留既有 merge，未强推或合并 PR。
+- 最终 wheel 首次相关集合为 **322 passed / 3 skipped / 2 failed**，两项真实 OpenCode 技能用例
+  返回 `ripgrep execution failed`。两版 wheel 内 OpenCode 二进制 SHA-256 完全相同；日志显示进入
+  ripgrep 获取路径但未获得可用工具，底层日志不足以区分下载和解包失败，不把它写成产品代码损坏。
+  对照[固定 OpenCode 版本的解析代码](https://github.com/anomalyco/opencode/blob/v1.19.5/packages/core/src/ripgrep/binary.ts)，
+  验收脚本隔离 PATH 漏掉了主机已有的 rg；复用现有 **ripgrep 15.2.0**，核对 SHA-256
+  `2d72d90150ab24f04d9849f7e7c7a64d2d1df322c5067f942ca3ab9e84f55d41`，并确认该目录无 Node。
+  不改产品、不改测试、不换 OWNER RIGHTS 场景、不关闭沙箱；两项定点 **2 passed** 后重跑同一 wheel 集合，
+  最终 **324 passed / 3 skipped**。初次失败的完整日志/XML/环境另存 wheel-attempt1，未覆盖丢弃。
+
+### ACL 结论及真正命中的原生阶段
+
+两个窗口均在真实 Windows 上成立：最终 `before_write` 返回后、调用保存的原始
+`NtSetSecurityObject` 之前，以及最终 post-write 检查返回后、原始 `CancelIoEx` 之前。
+独立 writer 持另一 FILE_OBJECT，实际打破 RH oplock 并等待 acknowledgment；原始原生 setter 返回
+NTSTATUS **0**，成功回执只消费一次 delta。第一个窗口修复前 **3 failed / 3 passed**；
+释放窗口修复前同样 **3 failed / 3 passed**。不是只重复准备阶段测试或模拟 WinAPI setter。
+
+清理在重试的新 guard 内核对已提交移除后 ACE 的数量。外部旧 ACL 回放导致无法区分归属时，明确抛
+`CleanupUnconfirmedError`，不静默成功、不再次删除外部同字节 deny。原请求成功完成表示真实 break，
+主动取消完成 995 表示正常释放；已有 body 异常保留。正常、body failure、cancel，保持移除/旧 ACL 回放，
+两个窗口共 **12** 场景在最终 wheel 原生回归实际执行。下表最后 ACL SHA-256 对应完整原生快照；
+原始 owner、完整 ACL/ACE、线程及回执记录保存在本机原始证据，owner 在全部场景保持不变。
+
+| 原生阶段 | 退出方式 | 外部写入 | NTSTATUS / 移除回执 | 临时 READ / 同字节 deny 数 | 操作句柄打开 / 关闭 | 租约 | 最终 ACL SHA-256 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| after_final_check | complete | 保持移除结果 | 0 / 1 | 0 / 1 | 27 / 27 | 已重获 | `c3e05099bfa58118a0de16eed5b9f9bc7cfff2f180332725b39bf83432ee2667` |
+| after_final_check | complete | 旧 ACL 回放 | 0 / 1 | 1 / 2 | 27 / 27 | 已重获 | `a6ec0734f738014f274e722bcc31ee99dfcea5dd11670d6b6de5f5382ada1f6e` |
+| after_final_check | body_failure | 保持移除结果 | 0 / 1 | 0 / 1 | 29 / 29 | 已重获 | `c3e05099bfa58118a0de16eed5b9f9bc7cfff2f180332725b39bf83432ee2667` |
+| after_final_check | body_failure | 旧 ACL 回放 | 0 / 1 | 1 / 2 | 29 / 29 | 已重获 | `a6ec0734f738014f274e722bcc31ee99dfcea5dd11670d6b6de5f5382ada1f6e` |
+| after_final_check | cancel | 保持移除结果 | 0 / 1 | 0 / 1 | 29 / 29 | 已重获 | `c3e05099bfa58118a0de16eed5b9f9bc7cfff2f180332725b39bf83432ee2667` |
+| after_final_check | cancel | 旧 ACL 回放 | 0 / 1 | 1 / 2 | 29 / 29 | 已重获 | `a6ec0734f738014f274e722bcc31ee99dfcea5dd11670d6b6de5f5382ada1f6e` |
+| after_final_post_check | complete | 保持移除结果 | 0 / 1 | 0 / 1 | 27 / 27 | 已重获 | `c3e05099bfa58118a0de16eed5b9f9bc7cfff2f180332725b39bf83432ee2667` |
+| after_final_post_check | complete | 旧 ACL 回放 | 0 / 1 | 1 / 2 | 27 / 27 | 已重获 | `a6ec0734f738014f274e722bcc31ee99dfcea5dd11670d6b6de5f5382ada1f6e` |
+| after_final_post_check | body_failure | 保持移除结果 | 0 / 1 | 0 / 1 | 29 / 29 | 已重获 | `c3e05099bfa58118a0de16eed5b9f9bc7cfff2f180332725b39bf83432ee2667` |
+| after_final_post_check | body_failure | 旧 ACL 回放 | 0 / 1 | 1 / 2 | 29 / 29 | 已重获 | `a6ec0734f738014f274e722bcc31ee99dfcea5dd11670d6b6de5f5382ada1f6e` |
+| after_final_post_check | cancel | 保持移除结果 | 0 / 1 | 0 / 1 | 29 / 29 | 已重获 | `c3e05099bfa58118a0de16eed5b9f9bc7cfff2f180332725b39bf83432ee2667` |
+| after_final_post_check | cancel | 旧 ACL 回放 | 0 / 1 | 1 / 2 | 29 / 29 | 已重获 | `a6ec0734f738014f274e722bcc31ee99dfcea5dd11670d6b6de5f5382ada1f6e` |
+
+上表“旧 ACL 回放”保留残留 READ 并报告清理未确认，是明确失败语义；不能把它描述为物理清理已完成。
+测试仅在 fixture 自己恢复已知策略后验证租约重获，不代表产品会猜测归属并删除外部 ACE。
+保留 sandbox token、workspace capability、deny 扣除、read-only/目录外拒绝和 WRITE_DAC/OWNER 限制。
+原生范围为当前调用者拥有的普通本地 NTFS、受支持简单 ACL 与可用 oplock；独立 WRITE_DAC 主体在
+guard 已释放后仍可重写 ACL，不承诺永久不变、任意持续重写、权限撤销、崩溃或任意二次取消下物理恢复。
+
+### 检查、命令和版本边界
+
+复用 Python.org 3.12.10 AMD64 的既有 source venv，Node 24.22.1、npm 11.19.1、Chrome 156.0.8078.80、
+Playwright 1.62.1、FFmpeg/ffprobe 9.0.2。源环境显式 PYTHONPATH 指向本 checkout 的 core/src 与 api/src。
+Pydantic **2.14.1**、Pillow **13.0.0**、fonttools **4.68.0**、pytest **9.1.1**、FastAPI **0.143.2**、
+httpx **0.28.1**；两份依赖锁未因 UI 增量变化。真实 CLI 门禁 OPENDIRECTOR_REAL_CLI、
+DEEPSEEK_ENGINE_TEST、JIUWENSWARM_ENGINE_TEST 保持 1，使用既有 dsh 0.2.2rc1 / WorkSwarm 0.2.8。
+
+| 检查 / 可复现命令 | 版本 | 实际结果 | 退出码 |
+| --- | --- | --- | --- |
+| `python -m pytest tests -q -ra --tb=short -o faulthandler_timeout=180 --junitxml=<E1>/python-full.xml` | 2ddb74ee | 1503 passed / 17 skipped，988.20 秒 | 0 |
+| `npm test` | 97edaf4e | 730 passed / 0 skipped | 0 |
+| `python scripts/generate_contracts.py --check` | 97edaf4e | 一致 | 0 |
+| `npm run check:i18n` | 97edaf4e | 2995 keys / 0 problems | 0 |
+| `npm run check:browser-locale`、`npm run check:browser-manifest` | 97edaf4e | 两项通过 | 各 0 |
+| `lint-imports` | 97edaf4e | 四项边界 kept / 0 broken | 0 |
+| `npm run build`、source `python -m pip check` | 97edaf4e | production build / 无依赖冲突 | 各 0 |
+| `node tests/browser/timeline_text_editing.mjs` | 97edaf4e | IME、撤销重做、UI↔Agent、保存、API 重启重开 | 0 |
+| `node tests/browser/timeline_text_render.mjs` | 97edaf4e | 中文预览/解码帧、层序时间位置、纯文字及真实音频 | 0 |
+| `node tests/browser/timeline_text_archive.mjs` | 97edaf4e | UI A→CLI B→UI C、重启续编、两次真实 MP4/版本来源 | 0 |
+| `node tests/browser/voice_library.mjs`，独立 `voice_library_server.py` | 97edaf4e | en-US/zh-CN，真实 probing/storage/WAV，provider HTTP mock | 0 |
+| `python -m pip wheel <E2>/wsrc --no-deps -w <E2>/wheel` | 97edaf4e | 新 Windows wheel | 0 |
+| 新 venv：安装锁定依赖、wheel；`python -m pip check` | 97edaf4e | 全新环境无冲突 | 各 0 |
+| `python scripts/verify_install.py --python <E2>/wvenv/Scripts/python.exe` | 97edaf4e | 无源码导入、服务 PATH 无 Node；PE CLI/OpenCode/skills/web/保存通过 | 0 |
+| wheel Python 运行 owner_rights/journal/lifecycle/resume、native_runtime/sessions、directory_links、skill_snapshot、execution_files/posix_execution_files、timeline_packages、deepseek_engine/runtime、agent_tools_voices、voice_library、cli | 97edaf4e | 324 passed / 3 skipped | 0 |
+| `node tests/browser/timeline_text_installed.mjs`，显式 OPENDIRECTOR_INSTALLED_PYTHON | 97edaf4e | 新 wheel Add text、预览、缺字错误、草稿恢复、保存重开 | 0 |
+| [Linux Release checks 42569337698](https://github.com/ThinkFlowLab/OpenDirector/actions/runs/42569337698) | 97edaf4e | Python 1433 passed / 87 skipped；19/19 标准浏览器、独立音色和助手面板、wheel、全部门禁通过 | 0 |
+
+本机实际用 source Python 的绝对路径和 `node <npm-cli.js>` 调用以避免 .cmd 差异；上表 npm/python 是等价写法。
+E1=`test-results/issue87/post-windows-5fd05561-20261108`，E2=`test-results/issue87/post-windows-projection-20261108`。
+完整 argv、cwd、环境、开始结束时间和原生退出码在对应 `*-command.json` / `*-status.json`，不是只保存末尾摘要。
+这些 ignored 原始诊断不是其他开发者的必读依赖；正式命令、条件、结论与边界已在本节和仓库测试说明中给出。
+
+源冻结输入覆盖 875 个生产、测试、构建/CI、锁、技能、契约、字体及其他跟踪文件，排除七份不参与构建运行的
+issue-87 状态/验收文档。最终清单 SHA-256：`f7d306860193c70b4970423e2406e2becd8d5baf8126f5ebc9ec887479dc4bee`。
+由 2ddb74ee 到 97edaf4e 只有 workspace hydration、对应浏览器回归和 lessons 三文件变化，
+其余 **872/875** 文件字节一致，包括全部 **241 个 Python 文件**及依赖锁。
+Windows 完整 Python 结果保留原 SHA，按 UI 影响范围复验前端、五组浏览器和新 wheel，没有冒充新版本全量重跑。
+最终证据文档提交再对这 875 项逐字节核对；文档更新不重跑 Windows 功能，自动触发的最终头 CI 继续由本执行者跟踪。
+源冻结 CI 实际检出 `f4b6ec41fa825acfabde3db2b026b2517de599fd`，其完整 Git tree
+`9945083c1eaff6a8e961603a22636d23af2cd6aa` 与 97edaf4e 完全相同；不是仅凭运行名推断输入一致。
+
+### 新 wheel、真实媒体与 Issue #87 对照
+
+最终 wheel 为 `opendirector-0.1.1-py3-none-win_amd64.whl`，**97,609,142 bytes**，SHA-256：
+`f013d6270e87be2ee097f6cafa65188571e8398a5562b913021037d7de8caa67`。在新建 venv 安装，PYTHONPATH/PYTHONHOME 清除；
+SOURCE_ROOT=None、服务 PATH 查找不到 Node。逐字节对照当前源码/冻结副本/ZIP/安装目录的
+**133 Python 文件、31 打包资源**，以及 source/snapshot 的
+**23 web 文件**全部一致。先前 efef6893… wheel 仍仅属于 2ddb74ee，不作为最终 wheel。
+
+五组浏览器留下 44 份带哈希 PNG/MP4；检查 fixture 端口均关闭，测试使用 owned 进程/私有 job，
+没有按用户 PID 名称杀进程。音色验收明确启动独立 fixture，直连及 Vite 代理都核对 `/api/voice-test-health`；
+不拿普通 creation fixture 冒充。E1 最初本地 driver 临时目录前缀错误，被 fixture 安全拒绝（退出1），
+只修正 ignored driver 前缀后通过；原失败日志保留，未改产品安全校验。
+
+实际解码检查中文在帧 24 出现、48 样式/层序转换、96 后消失；真实混音 MP4 H.264 640×360、99 帧、
+4.16 秒，AAC 48 kHz 双声道，RMS **3516.068941283685**；纯文字另导出 96 帧/4 秒 MP4。
+预览与解码帧在边界帧逐项比较；实际查看中文帧及中英文 package/installed 界面截图。
+跨工程字体和文字重新取得目标身份但字节指纹不变，源工程关闭后 C 重开续编；两份 24 帧/1 秒新成片
+各自保留 editorRevision 2 与
+3 及来源，旧成片条目不变。
+
+| Issue #87 验收 | 对应证据 |
+| --- | --- |
+| UI/Agent 编辑、保存重开及撤销重做 | editing + shared editor/CLI/service tests + installed restart |
+| 中文预览与实际 MP4 的时间/位置/层序一致 | render 的实际解码帧比较和纯文字成片 |
+| 改字发布新成片，旧编辑版本不变 | archive 两次 publication、来源/字节/历史断言 |
+| 素材依赖、删除保护、可编辑包、格式拒绝 | shared dependency/package 测试，真实 A↔B↔C 与双语禁用/拒绝 |
+| 原画面、混音、无字幕导出不回退 | Node/完整 Python、Linux mp4_export/timeline_workflow 及真实混音帧/音频 |
+
+### 跳过项、复审及剩余边界
+
+Windows 完整 Python 的 **17 项**逐项保留：agent_gateway 1 项 POSIX、creation_storage 1 项 POSIX 和
+4 项 POSIX change-time、posix_execution_files 2 项打开文件 rename、runtime_readiness 8 项 POSIX，
+另 execution_files 1 项文件 symlink。最终 wheel 子集 **3 项**为上述两项 POSIX rename + 一项 symlink。
+本机独立创建文件符号链接仍 WinError **1314**；没有修改系统安全策略。真实 junction、硬链接、根重定向、
+只读/目录外拒绝与原生 sandbox 场景实际执行。Linux 的 87 个既有条件跳过主要为 Windows 原生和可选 CLI/
+宿主能力门禁，完整原始 reason 保留 CI 日志；不能把它们写成 Linux 实测了 WinAPI。
+所有既有 Python 测试函数身份保留，原 skip/xfail decorators 和模块门禁通过 AST 对照，未扩大跳过范围。
+上游将旧 MOSS 音色 UI 场景迁入独立 voice fixture，未由本批删除覆盖来取得全绿。
+
+独立只读整合审查另记录 main 已有 `voiceSelection` 引用比较行为（sameObject=true / equalClone=false），
+与 main 相同且未确认数据丢失或 UI 缺陷，未扩成无关整改。确认的本批 ACL/路径/异步基线问题均已处理。
+既有 `733001a2` 的七组、桌面横竖 1080p 与 2,000 cue 性能仍保留原版本，
+不把它们写成最终冻结点新实测；本轮 archive 的 headless 2,000 cue 校验也不能替代 headed 性能验收。
+本轮未验收费模型、远控或后台自主 MP4 渲染，浏览器合成条件不变。
+OpenCode 的技能/搜索还需要主机 rg 或上游首次获取成功；本轮复用已安装工具，没有宣称 wheel 离线包含 rg。
+字体与安装后编辑器的离线资源验证仍使用 wheel 实际打包文件，与该上游 CLI 依赖是不同条件。
+
+原 reviewer 五项建议的处理：main 冲突与生成契约已整合；Pydantic 下限保持>=2.12；六项规则事实共用生成；
+错误按稳定码显示中英；不支持文字的 FCPXML/legacy ZIP 动作禁用并保留后端拒绝。
+处理说明已准备，未发送 reviewer 评论或请求复审。PR 保持 Draft，CHANGES_REQUESTED 不等于已批准。
