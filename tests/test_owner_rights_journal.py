@@ -21,7 +21,8 @@ def projection(monkeypatch, stage):
     work = rights._acl(b'\x02\0', [rights._ace(0, 3, 0x1F01FF, rights.OWNER)])
     external = rights._ace(1, 0, 2, owner)
     acls, writes, closed, races = {1: ancestor, 2: work}, [], [], []
-    def write(handle, acl, *, on_write=None):
+    def write(handle, acl, *, before_write=None, on_write=None):
+        if before_write is not None: before_write()
         if stage == 'setter_failure': raise failure(5)
         acls[handle % 100] = acl
         writes.append((handle % 100, acl))
@@ -35,12 +36,13 @@ def projection(monkeypatch, stage):
         set_acl=write)
     @contextmanager
     def guard(api, handle):
+        # Read/transform check, native pre-write check, then post-write check.
         checks = 0
         def unchanged():
             nonlocal checks
             checks += 1
             if (handle % 100 == 1 and not races
-                    and checks == (1 if stage == 'before_write' else 2)
+                    and checks == (1 if stage == 'before_write' else 3)
                     and stage != 'setter_failure'):
                 races.append({'writesBeforeConflict': len(writes)})
                 current = acls[1]
@@ -98,7 +100,8 @@ def test_cleanup_consumes_only_its_committed_removal(monkeypatch, stage, complet
         raced = True
         acls[1] = rights._acl(acls[1], [unrelated] + rights._entries(acls[1]))
         raise failure(995)
-    def write(handle, acl, *, on_write=None):
+    def write(handle, acl, *, before_write=None, on_write=None):
+        if before_write is not None: before_write()
         acls[handle % 100] = acl
         if on_write is not None: on_write()
         if cleanup and handle % 100 == 1:
@@ -106,13 +109,15 @@ def test_cleanup_consumes_only_its_committed_removal(monkeypatch, stage, complet
             if stage == 'setter_conflict' and not raced: compete()
     @contextmanager
     def guard(api, handle):
+        # Keep after_write injection after the native acknowledgment, not the
+        # additional validation immediately preceding that native write.
         checks = 0
         def unchanged():
             nonlocal checks
             checks += 1
             if (cleanup and handle % 100 == 1 and not raced
                     and stage != 'setter_conflict'
-                    and checks == (1 if stage == 'before_write' else 2)):
+                    and checks == (1 if stage == 'before_write' else 3)):
                 compete()
         try: yield unchanged
         finally: closed.append(handle)

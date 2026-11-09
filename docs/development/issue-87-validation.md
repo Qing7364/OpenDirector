@@ -1133,3 +1133,174 @@ Critical/Important 问题；另独立运行 **93 项 Python 通过 / 43 项平�
 **7 项 Node host 通过**，以及真实 POSIX“输出替换后 fsync 失败”组合反例。
 该组合检查确认两份文件、原异常及描述符释放都保留。审查不等于原生 Windows 运行，
 最终平台状态仍按补验结果确认。没有需要额外处理的代码缺陷或被隐藏的失败结论。
+
+## 2026-11-08：d5c6b3a1 Windows 原生补验与 setter 写前检查
+
+本机起点为 `733001a2811399e668ccf46256034864ae8a9ed6`，tracked 工作区干净；保存状态、
+差异和未跟踪清单后，以 fast-forward 同步到
+`d5c6b3a1d4aa249f034a8d7e79be67c99bc59b4c`。本节覆盖该输入及本节所在提交的必要修复。
+提交后的完整 SHA 由 Git 回执/PR 头核对另行记录，不把未存在的提交号写入旧日志。
+按更新后的 [Windows 补验指令](issue-87-windows-handoff.zh-CN.md) 复用现有环境；
+此前 `733001a2` 七组浏览器、1080p 与性能记录保留其原始版本范围。
+
+English summary: the new native cleanup regressions passed, but the existing real concurrent-setter
+case exposed a Windows regression: an already broken guard could still reach the native write,
+consume the removal receipt, and leave a temporary read grant after a competing stale ACL replay.
+The setter now rechecks the guard immediately before NtSetSecurityObject while retaining successful
+write acknowledgment and one-time cleanup consumption. Native regressions, the complete source
+checks, focused browsers and a freshly built Windows wheel passed within the explicit skip limits.
+No sandbox, deny rule, assertion or existing platform gate was relaxed.
+
+### 实际失败与修复
+
+- 输入提交新增的两项真实 WinAPI 清理用例先实际执行 **2 passed，0.38 秒**；独立 host
+  **7 passed，0 skipped，5.92 秒**，包括无 `.venv` 的 PATH 解释器、显式覆盖/无效覆盖及 venv 优先级。
+- 首轮 11 个相关模块为 **183 passed、1 failed、3 skipped，238.83 秒，退出 1**。
+  四个 ACL 模块独立复现 **76 passed/1 failed，8.88 秒**。失败为既有
+  `test_cleanup_retry_preserves_a_deny_added_during_its_actual_setter`：最终 ACL 多出临时 owner READ ACE。
+  加强该原场景的原生成功回执观测后，再次先失败：失效 guard 下仍有 **1 次已提交写入**；日志保留。
+- `_Windows.set_acl` 新增内部 `before_write` 回调，在描述符/控制位准备后、实际原生写入前重查
+  guard；`edit` 传入当前 `unchanged`。已经失效则拒绝本次写入并按原重试规则重读。
+  保留原生成功点的 `on_write` 和 `added.clear`，没有改成后置检查成功后才记账/消费。
+  原 ACE、deny 扣除、owner、控制位、受限 token、capability、只读与别名拒绝规则均保留。
+- 保留原测试完整 ACL 等式、外部 deny、线程结束及租约重获断言，另要求失效 guard 下的成功回执为零。
+  fake setter 同样执行新增写前检查；因此后置故障注入从第 2 次检查移至第 **3** 次，第 2 次是新写前检查。
+  原生清理用例还核对写前/写后实际同字节 deny 数为 **2/1**，确保后置反例仍发生于真实写入之后。
+  没有移动业务断言来避开失败。修复后四个 ACL 模块 **77 passed、0 skipped，8.01 秒**。
+- 相关 11 模块重跑 **184 passed、3 skipped、0 failed，331.02 秒，退出 0**。
+  前后 **187 个用例身份完全一致**，三个 skip 身份一致；修改测试的函数与 skip/xfail 表达式未改变。
+  Claude 两轮走真实命令构建和真实 fixture 子进程，保持 session/目录并更新技能；普通目录 sentinel 保留。
+  该检查不冒充真实 Claude 厂商服务或模型调用。
+
+### 本轮环境和最终结果
+
+原生 Windows 11 Pro 25H2 **26200.9711 / AMD64**，复用未打包 Python.org **3.12.10**、
+Node **24.22.1**、npm **11.19.1**、FFmpeg/ffprobe **9.0.2**、Chrome **156.0.8078.80**、
+Playwright **1.62.1**。Python/Node/FFmpeg/ffprobe/Chrome 的 AMD64 PE 均实际核对。
+Pydantic **2.14.3**、Pillow **13.0.0**、fontTools **4.68.0**、pytest **9.2.0**；dsh **0.2.2-rc.1**。
+WorkSwarm **0.2.8** / openjiuwen **0.1.20** 由既有安装 metadata 核对。没有重装运行时或重复安装源码环境，
+只按要求构建新 wheel 并装进新的 venv。模型响应为本地协议夹具，原生引擎、文件、ACL、字体、
+FFmpeg 和浏览器真实执行；未调用付费模型、用户工程或修改系统安全策略。
+
+| 检查 | 实际最终结果，均退出 0 |
+| --- | --- |
+| 完整 Python，无用例过滤 | **1,378 passed、17 skipped、0 failed，998.04 秒** |
+| 完整 Node | **721 passed、0 failed、0 skipped，16.79 秒** |
+| contracts / i18n | `--check` 一致；**2,934 keys、0 problems** |
+| 浏览器规范 / 架构 / build | locale **64 pages、0 problems**；manifest **67 entries**；import-linter **4 kept、0 broken**；TypeScript/Vite 构建通过 |
+| 新 wheel 中受影响的 13 模块 | **195 passed、3 skipped、0 failed，331.04 秒**，包含新增 WinAPI 和真实 dsh/SDK |
+| 新 wheel 安装与启动 | pip install / pip check、原生 PE `--help`、实际 serve/health/web/内置 OpenCode **1.19.5**/技能/持久化工程均通过 |
+| `timeline_text_editing.mjs` | 按住指针时移动、左右裁剪实时预览；Escape、单次撤销、IME、UI/Agent、版本/锁、保存/重启、中英文均通过 |
+| `timeline_text_render.mjs` | 真实中文字体、预览/解码帧、层次/位置、起止帧、混音、纯文字及无文字 MP4 子回归通过 |
+| `timeline_text_installed.mjs` | 全新 wheel 的实际服务，无源码导入/无后台 Node PATH；文字预览、缺字、草稿恢复、保存/重启/重开通过 |
+
+完整 Python 和 wheel 各有一条既有 Starlette/httpx testclient 弃用 warning；构建保留既有大 chunk 提示。
+三个真实 CLI 门禁 `OPENDIRECTOR_REAL_CLI`、`DEEPSEEK_ENGINE_TEST`、`JIUWENSWARM_ENGINE_TEST` 均设为 1。
+本轮源码/测试冻结 **866 个文件**，清单 SHA-256：
+`cfc3ed29c04e3529d1b3c1b7b5bc7d991238636c679459c4035f34461410107a`。
+运行中逐文件字节未变；检查结束后仅追加本节证据。没有删除测试或扩大 skip/xfail。
+
+### 命令与独立 wheel
+
+以下变量描述本轮实际路径；每次 argv、环境门禁、起止、退出码和 scoped 防空闲休眠恢复结果另存
+`*-command.json` / `*-status.json`。运行时从上轮现有 Python.org venv 复用；不同机器使用其实际已安装位置。
+
+```powershell
+Set-Location -LiteralPath 'C:\Users\Qing Peng\OpenDirector'
+$e = 'test-results/issue87/supplement-d5c6-20261108'
+$py = (Resolve-Path 'test-results/issue87/handoff-91c2/svenv/Scripts/python.exe').Path
+$env:PYTHON = $py; $env:PYTHONUTF8 = '1'; $env:PYTHONNOUSERSITE = '1'
+$env:TEMP = "$env:USERPROFILE/od-tmp"; $env:TMP = $env:TEMP
+$env:OPENDIRECTOR_REAL_CLI = '1'
+$env:DEEPSEEK_ENGINE_TEST = '1'; $env:JIUWENSWARM_ENGINE_TEST = '1'
+$env:NO_PROXY = '127.0.0.1,localhost'
+$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
+$env:Path = (Join-Path (Get-Location) 'test-results/issue87/resume-20261107/cli-bin') + ';' + (Split-Path $py) + ';' + $env:Path
+$related = @('owner_rights','owner_rights_journal','owner_rights_lifecycle','owner_rights_resume',
+  'native_runtime','native_sessions','directory_links','skill_snapshot','execution_files',
+  'posix_execution_files','timeline_packages') | ForEach-Object { "tests/test_$_.py" }
+& $py -m pytest @related --basetemp="$env:TEMP/ds5relatedfinal" -q -ra --tb=long `
+  -o faulthandler_timeout=180 "--junitxml=$e/related-final.xml"
+$node = (Get-Command node).Source
+$npm = Join-Path (Split-Path $node) 'node_modules/npm/bin/npm-cli.js'
+& $node --test tests/browserHost.test.ts
+& $py -m pytest tests --basetemp="$env:TEMP/ds5full" -q -ra --tb=long `
+  -o faulthandler_timeout=180 -o tmp_path_retention_count=10 "--junitxml=$e/python-full.xml"
+& $node $npm test
+& $py scripts/generate_contracts.py --check
+& $node $npm run check:i18n
+& $node $npm run check:browser-locale
+& $node $npm run check:browser-manifest
+& (Join-Path (Split-Path $py) 'lint-imports.exe')
+& $node $npm run build
+& $py -m pip check
+& $py -m pip wheel --no-deps "./$e/wsrc" --wheel-dir "./$e/wheel"
+& 'C:\Users\Qing Peng\.opendirector-tools\python31210\python.exe' -m venv "$e/wvenv"
+$wp = (Resolve-Path "$e/wvenv/Scripts/python.exe").Path
+& $wp -m pip install "$e/wheel/opendirector-0.1.1-py3-none-win_amd64.whl[test]"
+& $wp -m pip check
+& $wp scripts/verify_install.py --python $wp
+$sourcePath = $env:Path
+$ffmpegDir = Split-Path (Get-Command ffmpeg).Source
+$gitDir = Split-Path (Get-Command git).Source
+$env:Path = @((Join-Path (Get-Location) 'test-results/issue87/resume-20261107/cli-bin'),
+  "$env:USERPROFILE/.opendirector-tools/bin", (Split-Path $wp), $ffmpegDir, $gitDir,
+  "$env:SystemRoot/System32", "$env:SystemRoot/System32/WindowsPowerShell/v1.0", $env:SystemRoot) -join ';'
+Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+Remove-Item Env:PYTHONHOME -ErrorAction SilentlyContinue
+$env:PYTHON = $wp
+& $wp -c "import shutil; from opendirector import installation; assert installation.SOURCE_ROOT is None; assert shutil.which('node') is None"
+$wheelRelated = @($related) + @('tests/test_deepseek_engine.py','tests/test_deepseek_runtime.py')
+& $wp -m pytest @wheelRelated --basetemp="$env:TEMP/ds5wheel" -q -ra --tb=long `
+  -o faulthandler_timeout=180 "--junitxml=$e/wheel-related.xml"
+```
+
+`wsrc` 是独立复制的最终 866 文件源码快照，不带旧 `_bundled`、node_modules 或产物；构建 hook
+实际执行 npm ci 和 production build。新文件 `opendirector-0.1.1-py3-none-win_amd64.whl`
+为 **97,586,988 字节**，SHA-256：
+`4a0e30dc1c8b9645ff78607a2c9b2fafa71c022057ca87fe787d2e528ee5bf75`。
+归档/实际 site-packages 的 **130 个 Python 模块、31 个打包资源（23 个 web 文件）**与最终源码/
+构建快照逐字节一致，23 个前端文件另与当前 dist 核对。验证
+`installation.SOURCE_ROOT is None` 和 `shutil.which('node') is None`。
+
+wheel Python 测试移除 PYTHONPATH/PYTHONHOME，设置 PYTHONNOUSERSITE=1；PATH 仅含测试 CLI bin、
+外部 Agent bin、wheel Scripts、FFmpeg、Git cmd、System32、WindowsPowerShell/v1.0 及 Windows 根。
+因本轮写前 guard 修复影响 dsh 原生路径，在交接指定 11 模块外增加真实 dsh/SDK 和 ACP 两模块的 wheel 验证。
+外部 dsh 使用可信 launcher 的绝对 Node 路径，不声称该外部 CLI 不依赖 Node。
+浏览器控制端恢复原工具 PATH，后台由 tracked helper 单独隔离；实际命令为：
+
+```powershell
+$env:Path = $sourcePath; $env:PYTHON = $py
+$env:PLAYWRIGHT_MODULE = 'file:///C:/Users/Qing%20Peng/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright-core/index.mjs'
+$env:CHROMIUM_PATH = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
+$env:OPENDIRECTOR_INSTALLED_PYTHON = $wp
+foreach ($suite in @('timeline_text_editing','timeline_text_render','timeline_text_installed')) {
+  $env:TIMELINE_TEXT_EVIDENCE = "$e/browser/$suite"
+  & $node "tests/browser/$suite.mjs"
+}
+```
+
+### 真实媒体与限制
+
+本轮 `text.mp4`：H.264 **640×360、99 帧、4.160 秒**，AAC **48 kHz/双声道**，RMS **3,516.07**。
+帧 **23/24、47/48、71/72、95/96** 的边界、层次与文字位置断言通过，ROI MAE **0–2.716**；
+纯文字 MP4 为 **96 帧/4 秒**。两份文件 SHA-256 分别为
+`35e1378dfe69a81d704636ce0bb2de59e076280364d605a16fd8dcf8fd102ffb` /
+`3f17b89f6d8b794b025616e6e696586a4d1173aa3f974afb9d51d30b338984b1`。
+实际查看本轮解码中文图与 UI 截图；**23 个 PNG/MP4** 证据逐项记录字节及哈希，三个隔离后台/前端监听均确认关闭。
+
+完整源码 **17 项 skip**：16 项为 POSIX 条件（原有 gateway/storage/readiness 14 项，加输入提交新增的
+两项真实 open-file rename 用例），一项为最终文件符号链接。相关及 wheel 子集均为 **3 项**：
+两项 POSIX rename 加一项 symlink。文件符号链接在本机独立创建重试仍为 **WinError 1314**。
+本轮没有新增或扩大门禁；两项 rename 按交接要求在 Windows 明确跳过，不冒充原生 POSIX 执行。
+Windows junction、硬链接、目录重定向、普通目录拒绝及句柄清理场景实际执行通过，不能替代该文件 symlink 用例。
+
+本轮没有重新测量 `733001a2` 的横竖 1080p 或 2,000 cue 桌面性能，也没有把旧七组验收改标为新提交结果。
+原生 ACL 范围仍是当前调用者拥有的普通本地 NTFS、受支持简单 ACL 和可用 oplock；不支持条件继续拒绝。
+不承诺任意复杂 ACL/UNC、持续外部 ACL 改写、系统拒绝恢复或进程崩溃/任意二次取消下仍能物理清理。
+Microsoft Store Python 的测试宿主限制不变，本轮使用 Python.org，未修改系统安全或电源策略。
+未验收费模型、远控、额外交换格式或关闭浏览器后的后台自主渲染。
+
+失败过程、最终 JUnit、输入清单/逐文件与用例身份审计、完整命令回执、wheel 字节审计和真实媒体保留在
+ignored `test-results/issue87/supplement-d5c6-20261108`；理解本次结论所需条件已直接写在本节。
+按本轮授权提交必要修复与证据，先同步既有 upstream 再正常推送同一 PR 分支；保持 Draft，不强推或合并。

@@ -163,7 +163,7 @@ class _Windows:
         finally:
             self.kernel.LocalFree(descriptor)
 
-    def set_acl(self, handle, acl, *, on_write=None):
+    def set_acl(self, handle, acl, *, before_write=None, on_write=None):
         # Use this exact FILE_OBJECT, without SetSecurityInfo's user-mode
         # directory reopens/recursive inheritance (which break our own oplock).
         # Only DACL_SECURITY_INFORMATION is changed, never owner/group/SACL.
@@ -186,6 +186,10 @@ class _Windows:
         if any(item[1] & 16 for item in _entries(acl)): flags |= 0x400
         if not self.api.SetSecurityDescriptorControl(self.c.byref(descriptor), 0x1500, flags):
             raise self.c.WinError(self.c.get_last_error())
+        # Descriptor preparation and caller instrumentation can outlive the
+        # edit loop's first guard check. Refuse an already broken oplock at
+        # the actual write boundary; no removal delta is consumed on refusal.
+        if before_write is not None: before_write()
         result = self.files.native.NtSetSecurityObject(handle, 4, self.c.byref(descriptor))
         if result < 0: raise self.c.WinError(self.files.native.RtlNtStatusToDosError(result))
         # Record the native commit before any caller-side post-write checks or
@@ -375,7 +379,7 @@ class _Projection:
                     updated = transform(owner, acl)
                     unchanged()
                     if updated is not None and updated != acl:
-                        self.api.set_acl(changed, updated, on_write=on_write)
+                        self.api.set_acl(changed, updated, before_write=unchanged, on_write=on_write)
                         # A post-write break can retry, but the native setter
                         # has already recorded the entries requiring cleanup.
                         unchanged()

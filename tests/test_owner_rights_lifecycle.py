@@ -231,7 +231,7 @@ def test_cleanup_retry_preserves_a_deny_added_during_its_actual_setter(tmp_path,
     work = tmp_path / 'work'; work.mkdir(mode=0o700)
     before = security(tmp_path)
     actual_guard, actual_set = guard.descriptor_guard, rights._Windows.set_acl
-    checks, failures = [], []
+    checks, failures, broken_commits = [], [], []
     denial = rights._ace(1, 0, 2, WORLD)
     @contextmanager
     def observed(api, target):
@@ -267,12 +267,18 @@ def test_cleanup_retry_preserves_a_deny_added_during_its_actual_setter(tmp_path,
                             assert time.monotonic() < deadline
                             time.sleep(.005)
                         assert not done.is_set()
+                        committed = options.get('on_write')
+                        def record_broken_commit():
+                            broken_commits.append(True)
+                            if committed is not None: committed()
+                        options['on_write'] = record_broken_commit
                     return actual_set(self, handle, value, **options)
                 monkeypatch.setattr(guard, 'descriptor_guard', observed)
                 monkeypatch.setattr(rights._Windows, 'set_acl', setter)
             finally: state.close()
         worker.join(timeout=3)
         assert raced and done.is_set() and not worker.is_alive() and failures == []
+        assert broken_commits == [], 'A broken guard must be rechecked at the native write boundary'
         owner, current = security(tmp_path)
         assert owner == before[0]
         assert rights._entries(current) == [denial] + rights._entries(before[1])
@@ -363,7 +369,7 @@ def test_real_lease_journal_preserves_an_external_identical_owner_deny(tmp_path,
                 nonlocal checks
                 checks += 1
                 if (self.identity(target) == root_identity and not races
-                        and checks == (1 if stage == 'before_write' else 2)):
+                        and checks == (1 if stage == 'before_write' else 3)):
                     recorded = [entry for handle, writable, added in states[0].changes
                                 if self.identity(handle) == root_identity for entry in added]
                     checkpoints.append(recorded.count(external_deny))
@@ -454,7 +460,10 @@ def test_real_cleanup_retry_keeps_an_external_identical_deny(tmp_path, monkeypat
                 nonlocal checks, raced
                 checks += 1
                 if (cleanup and self.identity(target) == identity and not raced
-                        and checks == (1 if stage == 'before_write' else 2)):
+                        and checks == (1 if stage == 'before_write' else 3)):
+                    # Check 2 is now the setter's final pre-write validation;
+                    # check 3 must observe the actual committed removal.
+                    assert rights._entries(self.security(target)[1]).count(external) == (2 if stage == 'before_write' else 1)
                     raced = True; worker.start()
                     deadline = time.monotonic() + 3
                     while True:
