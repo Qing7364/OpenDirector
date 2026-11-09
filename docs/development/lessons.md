@@ -17,6 +17,7 @@ When work exposes a consequential risk or a recurring problem, add a lesson or u
 - **Trigger:** Importing a project, referencing assets across conversation turns, or switching projects during a run.
 - **Lesson:** Commit `e8c29c9b` fixed provenance and creation-order problems in a canvas archive round trip; `44857448` fixed asset context across turns; `00d8899c` fixed Agent runs stopping when switching projects. These are different defects, but each shows that the current display alone cannot establish state and context.
 - **Check:** As relevant to the change, inspect persisted object identities, references, and execution inputs after conversion or recovery. Reopen the project or reconnect to the run when needed, and verify the actual result.
+- **Async projection follow-up:** PR #193's structured-editor CI failure prompted a real-browser delayed-read regression. An older background projection could finish after an acknowledged editor save and restore an obsolete CAS basis, making the next save/publication fail. Recheck the editor transaction and captured snapshot at completion before installing either changed or apparently identical content. Keep publication versions fixed, test the actual save/retry/provenance path with a deterministic interleaving, and retain the original CI failure rather than treating a longer timeout or a rerun as its explanation.
 
 ## Baseline failures still need tracking
 

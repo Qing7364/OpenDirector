@@ -174,6 +174,34 @@ try {
   }
   if (process.argv.includes("--publish")) {
     await open(f.stage);
+    // Hold a real background projection at the pre-render version. Release
+    // it immediately after the acknowledged render projection resolves, while
+    // React has not yet installed the new history reference. It must not roll
+    // the saved business basis back and cause the next save/publish to conflict.
+    await page.evaluate(async (id) => {
+      const { workspaceProjection } = await import("/src/backend/workspace.ts");
+      const projection = workspaceProjection(id), client = projection.client;
+      const read = projection.read;
+      let release, armed = true;
+      window.__heldStageProjection = false;
+      projection.read = async (snapshot) => {
+        const next = await read.call(projection, snapshot);
+        const director = snapshot.editorDocuments.find((doc) => doc.kind === "director");
+        if (armed && director.data.duration === 6) {
+          armed = false;
+          window.__heldStageProjection = true;
+          await new Promise((resolve) => { release = resolve; });
+        } else if (release && director.data.duration === 0.5) {
+          projection.read = read;
+          const resume = release;
+          release = null;
+          queueMicrotask(resume);
+        }
+        return next;
+      };
+      client.install({ ...client.snapshot });
+    }, f.id);
+    await page.waitForFunction(() => window.__heldStageProjection === true);
     await page.getByLabel("Stage duration", { exact: true }).fill("0.5");
     await page
       .getByRole("button", { name: "Render preview MP4", exact: true })
@@ -198,7 +226,7 @@ try {
     await page
       .getByRole("button", { name: "Add preview video to canvas", exact: true })
       .click();
-    await page.getByRole("alert").waitFor();
+    await page.getByRole("alert").filter({ hasText: "fixture: stage publication refused" }).waitFor();
     assert.equal((await state()).canvasItems.length, before.canvasItems.length);
     reject = false;
     await page

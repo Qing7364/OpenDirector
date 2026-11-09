@@ -535,9 +535,14 @@ export function useWorkspaceDocument(rt: WorkspaceRuntime) {
             update();
             return;
           }
+          // Editor commits and newer notifications may finish while read()
+          // hydrates resources. A late read must not roll their CAS basis back,
+          // including when its visible content happens to be unchanged.
           if (
             !active ||
             ticket !== token ||
+            editorSaving.current ||
+            client.snapshot !== snapshot ||
             historyRef.current.present !== current
           )
             return;
