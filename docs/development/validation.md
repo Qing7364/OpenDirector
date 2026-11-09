@@ -115,7 +115,7 @@ L1–L4 的自动检查不调用付费模型、不依赖真实服务；真实凭
 
 - Gate parity 绿色是候选 `v0.1.x` 的发布门槛；nightly 不自动打 tag，也不以任何结果自动触发发布动作。
 - Extended、production、perf 与 daily benchmark lane 当前为建议性（advisory）：失败需登记跟进，但不单独阻断发布。某条 lane 连续两周稳定绿色后，由发布协调人决定是否升级为阻断项。
-- 每次运行产出 `nightly-summary`（各 lane 结果 + SHA + 基准一行摘要）与 `nightly-perf`（渲染探针与拖拽采样）artifact；发布看板与失败通知按 summary artifact 对接，通知通道由发布协调人约定。`lanes.dailyBenchmark.notify` 只在超阈回归或基准套件本身失败时为 true，改善和阈值内波动不通知。
+- 每次运行产出 `nightly-summary`（各 lane 结果 + SHA + 基准一行摘要）与 `nightly-perf`（渲染探针与拖拽采样）artifact；发布看板与失败通知按 summary artifact 对接，通知通道由发布协调人约定。`lanes.dailyBenchmark.notify` 只在超阈回归、基准套件本身失败或必填测量缺失（样本解析成功但缺少 `--ui-required` 时应有的帧采样，或 storage 样本缺少必填字段）时为 true，改善和阈值内波动不通知。
 - `flaky-watchlist.txt` 一行一个 pytest node id，`#` 为注释；用例稳定后应删除条目，而不是长期静默重试。triage 结论写入 `flake-report` artifact 与 Actions summary。
 
 ### 脚本登记与 lane 归属
@@ -235,7 +235,24 @@ MOSS 图像与语音接入使用以下检查。浏览器命令连接本文前述
 ```sh
 .venv/bin/python -m pytest tests/test_moss.py tests/test_generation_errors.py -q
 CREATION_API_URL=http://127.0.0.1:8019 CREATION_WEB_URL=http://127.0.0.1:5179 node tests/browser/moss_provider.mjs
-CREATION_API_URL=http://127.0.0.1:8019 CREATION_WEB_URL=http://127.0.0.1:5179 node tests/browser/moss_speech.mjs
 ```
 
 Python 用例使用模拟 HTTP 服务及真实 PNG、MP3，检查请求字段、音色、执行快照、文件探测、工程重开和下载恢复不重复生成。通用错误分类和安全提示由现有错误测试负责。浏览器用例检查两种语言下的提供商及型号列表、获取模型失败的具体原因、音色必填、保存重开和实际音频播放；播放器使用隔离服务的 WAV 替身，不代表 MOSS 已生成语音。真实验收另需有效 MOSS 凭证和音色 ID，并保留实际音频、模型标识及播放器截图。
+
+
+### Voice library / 音色库
+
+The voice browser workflow uses a separate isolated fixture. It runs the real shared voice service, media probing, project storage and generation acceptance with mocked provider HTTP; it does not contact MOSS or a GPU service.
+
+```sh
+.venv/bin/python -m pytest tests/test_voice_library.py -q
+node --test tests/voiceLibrary.test.ts tests/creationParameters.test.ts
+# Terminal 1
+.venv/bin/python tests/browser/voice_library_server.py --port 8030
+# Terminal 2
+OPENDIRECTOR_API_URL=http://127.0.0.1:8030 npm run dev -- --port 5190
+# Terminal 3 (Playwright installed as for the other browser checks)
+CREATION_API_URL=http://127.0.0.1:8030 CREATION_WEB_URL=http://127.0.0.1:5190 node tests/browser/voice_library.mjs
+```
+
+The bilingual browser workflow covers opening/outside click/Escape, keyboard tabs, four-column and narrow layouts, real previews and unavailable previews, metadata filters, scoped favorites, loading/error/retry, invalid and valid local audio, creation, selection, Drama3 transcript and Nano reference requirements, supported deletion and failure feedback, model/service switching, project reopening and persisted job input. `moss_speech.mjs` is retained as an alias for this integrated workflow. The pagination regression includes a 15,001-voice catalog. With a configured MOSS account, open the library, go to the next page, and return to the first. Verify the page counts and that returning to the first page restores its entries using read-only requests. Python tests verify provider fields, pagination, credentials, account boundaries, actual audio/container/duration validation, and equivalent Agent operations. Actual provider synthesis still requires a configured service, account permission and a recording authorized for use.

@@ -12,13 +12,16 @@ from opendirector.application.creation_assets import CreationAssets
 from opendirector.application.creation_timeline_packages import CreationTimelinePackages
 from opendirector.domain.creation.timeline_packages import TimelinePackageExportFile, TimelinePackageImportFile
 from opendirector.application.creation_canvas import CreationCanvas
+from opendirector.application.voice_library import VoiceLibrary
 from opendirector.domain.creation.assets import AssetProvenance
 from opendirector.domain.creation.base import ObjectVersion
 from opendirector.domain.creation.commands import Query, COMMAND_MODELS, parse_command
 from opendirector.domain.creation.models import ModelSnapshot
 from opendirector.domain.projects import ProjectError
+from opendirector.domain.voices import VOICE_CREATE_TEXT_LIMITS
 from opendirector.infrastructure.creation_projects import directory
 from opendirector.infrastructure.local_projects import child
+from opendirector.infrastructure.execution_files import execution_file
 
 from opendirector.installation import SOURCE_ROOT, BUNDLED
 
@@ -252,6 +255,24 @@ def tools() -> list[dict]:
                                'required': ['type', 'payload'], 'additionalProperties': False}))
     result.append(tool_schema('timeline_package_export', 'Export an exact saved timeline revision to a new .timeline.zip file in the active execution directory. No editing session or open editor UI is required.', TimelinePackageExportFile.model_json_schema()))
     result.append(tool_schema('timeline_package_import', 'Import a .timeline.zip file from this execution directory. Reuse operationId and archiveFingerprint on retry. Omit replacement fields to create a new editable timeline.', TimelinePackageImportFile.model_json_schema()))
+
+    for name, description, properties, required in [
+        ('voice_list', 'Read the selected model voice library and compatibility requirements. For large MOSS libraries use pageSize 150. '
+         'Continue with nextCursor as after and the returned connectionId until nextCursor is null.',
+         {'modelConfigId': {'type': 'string', 'format': 'uuid'},
+          'pageSize': {'type': 'integer', 'minimum': 1, 'maximum': 150, 'description': 'MOSS voices per page. Omit to read the full library.'},
+          'after': {'type': 'string', 'minLength': 1, 'maxLength': 2048, 'description': 'Opaque nextCursor from the previous page. Supply pageSize and connectionId.'},
+          'connectionId': {'type': 'string', 'minLength': 1, 'maxLength': 200, 'description': 'Connection identity from the previous page.'}}, ['modelConfigId']),
+        ('voice_create', 'Register an authorized local recording as a reusable provider voice. For vLLM-Omni, supply the consent recording ID. Check voice_list for adapter requirements.',
+         {'modelConfigId': {'type': 'string', 'format': 'uuid'}, 'connectionId': {'type': 'string'},
+          'path': {'type': 'string'}, 'name': {'type': 'string'}, 'consent': {'type': 'string', 'minLength': 1, 'description': 'Consent recording ID for vLLM-Omni.'},
+          **{field: {'type': 'string', 'maxLength': limit} for field, (limit, _) in VOICE_CREATE_TEXT_LIMITS.items()}},
+         ['modelConfigId', 'connectionId', 'path', 'name']),
+        ('voice_delete', 'Call only after the user explicitly authorizes deletion of this uploaded voice. The tool sends the deletion request to the provider immediately.',
+         {'modelConfigId': {'type': 'string', 'format': 'uuid'}, 'connectionId': {'type': 'string'}, 'voiceId': {'type': 'string'}},
+         ['modelConfigId', 'connectionId', 'voiceId']),
+    ]:
+        result.append(tool_schema(name, description, {'type': 'object', 'properties': properties, 'required': required, 'additionalProperties': False}))
     return result
 
 
@@ -261,6 +282,7 @@ class AgentTools:
         self.generation = generation
         self.configs = configs
         self.assets = CreationAssets(projects)
+        self.voices = getattr(generation, 'voices', None) or VoiceLibrary(configs)
 
     async def execute(self, project_id: UUID, turn_id: UUID, session: str, call_id: str,
                       name: str, arguments: dict, roots: list[Path], config: dict | None, native_runtime: str | None = None,
@@ -276,6 +298,26 @@ class AgentTools:
             request = TimelinePackageImportFile.model_validate(arguments)
             receipt = await asyncio.to_thread(packages.import_execution_file, project_id, request, execution_directory=work, session=session)
             return receipt.model_dump(mode='json')
+
+        if name in {'voice_list', 'voice_create', 'voice_delete'}:
+            model_id = str(UUID(arguments['modelConfigId']))
+            if name == 'voice_list':
+                return await asyncio.to_thread(self.voices.list, model_id, page_size=arguments.get('pageSize'),
+                                               after=arguments.get('after'), connection_id=arguments.get('connectionId'))
+            if name == 'voice_delete':
+                await asyncio.to_thread(self.voices.delete, model_id, arguments['voiceId'], arguments['connectionId'])
+                return {'deleted': True, 'voiceId': arguments['voiceId'], 'connectionId': arguments['connectionId']}
+            target = Path(arguments['path'])
+            if execution_directory is None:
+                raise ProjectError('只能上传本轮执行目录内的录音。', 403)
+            _, capabilities = self.voices._config(model_id)
+            def recording():
+                with execution_file(execution_directory, str(target)) as stream:
+                    return stream.read(capabilities['maxBytes'] + 1)
+            data = await asyncio.to_thread(recording)
+            return await asyncio.to_thread(self.voices.create, model_id, data, filename=target.name,
+                name=arguments['name'], consent=arguments.get('consent'), connection_id=arguments['connectionId'],
+                ref_text=arguments.get('refText'), speaker_description=arguments.get('speakerDescription'))
         if name == 'read_project':
             snapshot = await asyncio.to_thread(self.projects.snapshot, project_id)
             return {'project': snapshot.model_dump(mode='json'), 'models': self.configs.list(), 'commands': list(COMMANDS),

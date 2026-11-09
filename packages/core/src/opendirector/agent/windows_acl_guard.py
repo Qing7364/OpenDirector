@@ -21,7 +21,7 @@ class Overlapped(c.Structure):
 @contextmanager
 def descriptor_guard(api, handle):
     """Own and close an asynchronous handle, including on request failure."""
-    kernel, event, requested = api.kernel, None, False
+    kernel, event, requested, body_returned = api.kernel, None, False, False
     kernel.CreateEventW.argtypes = [c.c_void_p, w.BOOL, w.BOOL, w.LPCWSTR]
     kernel.CreateEventW.restype = w.HANDLE
     kernel.DeviceIoControl.argtypes = [w.HANDLE, w.DWORD, c.c_void_p, w.DWORD,
@@ -47,6 +47,7 @@ def descriptor_guard(api, handle):
                 raise c.WinError(c.get_last_error() if status == 0xFFFFFFFF else 995)
         unchanged()
         yield unchanged
+        body_returned = True
     finally:
         try:
             if requested:
@@ -56,6 +57,13 @@ def descriptor_guard(api, handle):
                 if not kernel.GetOverlappedResult(handle, c.byref(operation), c.byref(size), True):
                     error = c.get_last_error()
                     if error != 995: raise c.WinError(error)
+                elif body_returned:
+                    # Successful completion means an independent writer broke
+                    # the original request, even if the final body check had
+                    # just returned. Our own cancellation completes with 995.
+                    # Release first, then let edit recompute/confirm against
+                    # that writer. Never replace an existing body exception.
+                    raise c.WinError(995)
         finally:
             kernel.CloseHandle(handle)
             if event: kernel.CloseHandle(event)

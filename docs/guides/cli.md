@@ -100,3 +100,27 @@ The commands above export an exact saved revision, import it as a new timeline, 
 An unsuccessful Agent export to its macOS/Linux execution directory can leave an incomplete file. Inspect the output and choose a fresh filename for retry. Existing files are never overwritten, and failure cleanup does not delete another writer's replacement. A failed receipt does not certify a complete package.
 
 In an Agent execution context, files must remain inside the authorized execution directory and commands remain scoped to that context. `timeline default-font` returns a read-only installation path; copy that font into the authorized execution directory before using `asset import`. The installation path does not bypass that boundary. Package commands do not require an open editor. MP4 rendering requires the browser. Editable JSON describes same-project structure; FCPXML and legacy XML media bundles refuse text overlays.
+
+
+## Voice library
+
+`opendirector voice list --model MODEL_CONFIG_UUID` reads the full library and returns the selected model's connection identity, voices and adapter requirements. For a large MOSS library, request up to 150 voices per page.
+
+```sh
+opendirector voice list --model MODEL_CONFIG_UUID --page-size 150
+opendirector voice list --model MODEL_CONFIG_UUID --page-size 150 --after "NEXT_CURSOR" --connection "CONNECTION_ID"
+```
+
+Use the previous response's `nextCursor` and `connectionId` for each following page. Stop when `nextCursor` is `null`. The Agent tool `voice_list` accepts `pageSize`, `after`, and `connectionId` for the same workflow.
+
+MOSS 音色较多时，首次查询加上 `--page-size 150`。下一页沿用该参数，把上一页返回的 `nextCursor` 和 `connectionId` 分别传给 `--after` 和 `--connection`。当 `nextCursor` 为 `null` 时，已经读到最后一页。
+
+To register an authorized recording, run the following command.
+
+```sh
+opendirector voice create recording.wav --model MODEL_CONFIG_UUID --connection CONNECTION_ID --name Narrator --consent CONSENT_RECORDING_ID --ref-text "Words spoken in the recording"
+```
+
+Use the returned `voiceId` as the speech parameter `voice`, and preserve the returned selection fields as `voiceSelection` when updating the audio generation specification. Use `opendirector generation-spec update --help-field payload.spec@audio.parameters.voiceSelection` to inspect the current typed fields. Do not copy voice identities across connections. `opendirector voice delete VOICE_ID --model MODEL_CONFIG_UUID --connection CONNECTION_ID` immediately deletes the uploaded voice if the provider supports deletion. Obtain authorization for that specific voice before invoking the CLI or Agent tool. The composer asks for confirmation in the UI. These commands use the same services as the UI and Agent tools.
+
+音色库命令同样适用于中文工作流：先用 `voice list` 读取当前模型的连接身份及要求，再用 `voice create` 上传已获授权的录音；Drama3 等适配器必须填写 `--ref-text`。保存生成配置时同时保留服务端 `voiceId` 和返回的音色选择信息。不同服务之间不能直接复用音色 ID。`voice delete` 仅删除服务支持的上传音色，CLI 和 Agent 会立即执行，请先取得针对该音色的明确授权。在界面中删除时会弹出确认框。

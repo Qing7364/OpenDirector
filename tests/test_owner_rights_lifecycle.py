@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 import asyncio
 import ctypes as c
 from ctypes import wintypes as w
+import gc
 import json
 import os
 from pathlib import Path
@@ -162,8 +163,21 @@ def test_concurrent_real_deny_is_preserved_across_descriptor_update(tmp_path, mo
 
 
 def test_oplock_request_failure_closes_each_edit_handle(tmp_path, monkeypatch):
+    # Other integration tests can leave finishing provider/event-loop threads
+    # whose handles disappear during this exact process-wide count. Retain the
+    # strict equality and all eight native failures in a fresh child process.
+    marker = 'OPENDIRECTOR_ACL_HANDLE_COUNT_WORKER'
+    if os.environ.get(marker) != 'oplock-request-failure':
+        result = subprocess.run([sys.executable, '-m', 'pytest',
+            str(Path(__file__)) + '::test_oplock_request_failure_closes_each_edit_handle',
+            '--basetemp=' + str(tmp_path / 'isolated'), '-q', '--tb=short'],
+            env={**os.environ, marker: 'oplock-request-failure'},
+            capture_output=True, text=True, timeout=30)
+        assert result.returncode == 0, result.stdout + result.stderr
+        return
     from opendirector.agent import windows_acl_guard as guard
     state = rights._Projection(tmp_path, tree=False)
+    gc.collect()
     before = handle_count(state.api)
     def rejected(*args):
         c.set_last_error(300)
@@ -175,6 +189,7 @@ def test_oplock_request_failure_closes_each_edit_handle(tmp_path, monkeypatch):
             with pytest.raises(OSError) as error:
                 state.edit(state.nodes[-1][0], lambda owner, acl: acl)
             assert error.value.winerror == 300
+        gc.collect()
         assert handle_count(state.api) == before
     finally: state.close()
 
@@ -501,3 +516,246 @@ def test_real_cleanup_retry_keeps_an_external_identical_deny(tmp_path, monkeypat
         else: api.kernel.CloseHandle(other)
         probe.edit(root, lambda current_owner, acl: original)
         probe.close()
+
+
+@pytest.mark.parametrize('replay_stale', [False, True])
+@pytest.mark.parametrize('outcome', ['complete', 'body_failure', 'cancel'])
+@pytest.mark.parametrize('stage', ['after_final_check', 'after_final_post_check'])
+def test_cleanup_after_final_check_reports_unconfirmed_native_removal(tmp_path, monkeypatch, replay_stale, outcome, stage):
+    """Break the real RH guard only AFTER its last successful check returns.
+
+    The interceptor calls the saved, original NtSetSecurityObject. The writer
+    has an independent FILE_OBJECT and must be waiting for oplock acknowledgment
+    before that call, rather than merely racing an earlier Python check.
+    """
+    from opendirector.agent import windows_acl_guard as guard
+    work = tmp_path / 'work'; work.mkdir(mode=0o700)
+    probe = rights._Projection(tmp_path, tree=False)
+    api, root = probe.api, probe.nodes[-1][0]
+    owner, original = api.security(root)
+    identity = api.identity(root)
+    policy = rights._acl(original, [rights._ace(1, 0, 2, rights.OWNER)] + rights._entries(original))
+    external = rights._ace(1, 0, 2, owner)
+    unrelated = rights._ace(1, 0, 4, WORLD)
+    probe.edit(root, lambda current_owner, acl: policy)
+    runner = asyncio.Runner()
+    runner.get_loop()  # Keep the Proactor's own handles on both sides of the count.
+    gc.collect()
+    baseline_handles = handle_count(api)
+    other = writer_handle(api, *probe.locations[root])
+    actual_guard, actual_set, actual_init = guard.descriptor_guard, rights._Windows.set_acl, rights._Projection.__init__
+    original_native = api.files.native.NtSetSecurityObject
+    original_cancel, original_result = api.kernel.CancelIoEx, api.kernel.GetOverlappedResult
+    cleanup, raced = False, False
+    states, active, errors, statuses, receipts, completions, before_cleanup = [], {}, [], [], [], [], []
+    snapshot, done = [], threading.Event()
+    main_thread = threading.get_ident()
+    def track(self, path, **options):
+        actual_init(self, path, **options)
+        if Path(path) == work and options.get('tree', True): states.append(self)
+    def competing_writer():
+        try:
+            actual_set(api, other, snapshot[0])
+        except BaseException as error: errors.append(repr(error))
+        finally: api.kernel.CloseHandle(other); done.set()
+    worker = threading.Thread(target=competing_writer)
+    @contextmanager
+    def observe(self, target):
+        try:
+            with actual_guard(self, target) as unchanged:
+                checks = []
+                def check():
+                    unchanged()
+                    checks.append('returned')
+                active[target] = (unchanged, checks)
+                yield check
+        finally: active.pop(target, None)
+    def start_writer(target):
+        nonlocal raced
+        unchanged, checks = active[target]
+        assert checks == ['returned'] * (2 if stage == 'after_final_check' else 3)
+        _, current = api.security(target)
+        assert rights._entries(current).count(external) == (2 if stage == 'after_final_check' else 1)
+        saved = before_cleanup[0] if replay_stale else current
+        entries = rights._entries(saved)
+        if not replay_stale and stage == 'after_final_check':
+            # Simulate an independent writer preserving the intended
+            # removal, while still introducing its unrelated deny.
+            _, additions = rights.owner_entries(policy, owner)
+            for item in additions: entries.remove(item)
+        snapshot.append(rights._acl(current, [unrelated] + entries))
+        raced = True; worker.start()
+        deadline = time.monotonic() + 3
+        while True:
+            try: unchanged()
+            except OSError as error:
+                assert error.winerror == 995
+                break
+            assert time.monotonic() < deadline, 'Writer did not break the actual RH oplock'
+            time.sleep(.005)
+        assert not done.is_set(), 'Writer must still await oplock acknowledgment'
+    def selected(target):
+        return threading.get_ident() == main_thread and cleanup and api.identity(target) == identity
+    def native(target, information, descriptor):
+        chosen = selected(target)
+        if chosen and not raced and stage == 'after_final_check': start_writer(target)
+        result = original_native(target, information, descriptor)
+        if chosen: statuses.append(result)
+        return result
+    def cancel(target, operation):
+        if selected(target) and not raced and stage == 'after_final_post_check': start_writer(target)
+        return original_cancel(target, operation)
+    def completed(target, operation, size, wait):
+        result = original_result(target, operation, size, wait)
+        if selected(target): completions.append(dict(result=bool(result), error=c.get_last_error()))
+        return result
+    def setter(self, target, acl, **options):
+        callback = options.get('on_write')
+        if cleanup and self.identity(target) == identity and callback is not None:
+            before_cleanup.append(self.security(target)[1])
+            def committed():
+                receipts.append('native-success')
+                callback()
+            options['on_write'] = committed
+        return actual_set(self, target, acl, **options)
+    async def exercise():
+        nonlocal cleanup
+        async with rights.native_owner_access(work):
+            _, current = api.security(root)
+            actual_set(api, other, rights._acl(current, [external] + rights._entries(current)))
+            cleanup = True
+            if outcome == 'body_failure': raise RuntimeError('body failed')
+            if outcome == 'cancel': raise asyncio.CancelledError('cancelled body')
+    caught = None
+    # Count the exact FILE_OBJECT/oplock/lease handles owned by this operation.
+    # The process-wide count also includes asyncio/pytest runtime handles.
+    owned, opened, closed = {other}, [], []
+    bookkeeping = threading.RLock()
+    actual_close = api.kernel.CloseHandle
+    actual_create = api.files.native.NtCreateFile
+    actual_file, actual_event = api.kernel.CreateFileW, api.kernel.CreateEventW
+    def register(value):
+        value = value.value if hasattr(value, 'value') else value
+        with bookkeeping:
+            if value not in (None, w.HANDLE(-1).value):
+                assert value not in owned
+                owned.add(value); opened.append(value)
+        return value
+    def close(value):
+        with bookkeeping:
+            result = actual_close(value)
+            value = value.value if hasattr(value, 'value') else value
+            if value in owned:
+                assert result, 'A native operation handle was not closed'
+                owned.remove(value); closed.append(value)
+        return result
+    def create(*arguments):
+        result = actual_create(*arguments)
+        if result >= 0: register(c.cast(arguments[0], c.POINTER(w.HANDLE))[0])
+        return result
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(api.kernel, 'CloseHandle', close)
+            patch.setattr(api.kernel, 'CreateFileW', lambda *args: register(actual_file(*args)))
+            patch.setattr(api.kernel, 'CreateEventW', lambda *args: register(actual_event(*args)))
+            patch.setattr(api.files.native, 'NtCreateFile', create)
+            patch.setattr(rights._Projection, '__init__', track)
+            patch.setattr(guard, 'descriptor_guard', observe)
+            patch.setattr(rights._Windows, 'set_acl', setter)
+            patch.setattr(api.files.native, 'NtSetSecurityObject', native)
+            patch.setattr(api.kernel, 'CancelIoEx', cancel)
+            patch.setattr(api.kernel, 'GetOverlappedResult', completed)
+            try: runner.run(exercise())
+            except BaseException as error: caught = error
+        assert worker.ident is not None, repr(caught)
+        worker.join(timeout=3)
+        current_owner, current = api.security(root)
+        gc.collect()
+        evidence = dict(stage=stage, replayStale=replay_stale, outcome=outcome,
+            nativeStatus=statuses, receipts=receipts, completions=completions, owner=current_owner.hex(),
+            originalOwner=owner.hex(), acl=current.hex(), aclEntries=[item.hex() for item in rights._entries(current)],
+            writerErrors=errors, writerDone=done.is_set(), writerAlive=worker.is_alive(),
+            error=repr(caught), nodesClosed=not states[0].nodes, journalClosed=not states[0].changes,
+            baselineHandles=baseline_handles, finalHandles=handle_count(api),
+            operationOpened=len(opened) + 1, operationClosed=len(closed), remainingHandles=list(owned))
+        if destination := os.environ.get('OPENDIRECTOR_ACL_EVIDENCE'):
+            with Path(destination).open('a', encoding='utf-8') as stream:
+                stream.write(json.dumps(evidence) + '\n')
+        assert raced and done.is_set() and not worker.is_alive() and errors == []
+        assert statuses == [0] and receipts == ['native-success']
+        assert completions[0]['result'], 'The native guard must report the independent writer break'
+        assert current_owner == owner and current == snapshot[0]
+        assert rights._entries(current).count(external) == (2 if replay_stale else 1)
+        assert unrelated in rights._entries(current)
+        assert not states[0].nodes and not states[0].changes
+        assert not owned and len(opened) + 1 == len(closed)
+        if replay_stale:
+            assert isinstance(caught, BaseExceptionGroup), 'Unconfirmed cleanup must not return success'
+            assert 'cannot be confirmed' in str(caught.exceptions[0])
+            if outcome != 'complete':
+                assert isinstance(caught.__context__, RuntimeError if outcome == 'body_failure' else asyncio.CancelledError)
+        elif outcome == 'complete': assert caught is None
+        else: assert isinstance(caught, RuntimeError if outcome == 'body_failure' else asyncio.CancelledError)
+        # Remove ONLY the test writer's replay under the fixture's own policy,
+        # then prove the failed close released its cross-process lease too.
+        probe.edit(root, lambda current_owner, acl: rights._acl(policy, [unrelated, external] + rights._entries(policy)))
+        async def acquire_again():
+            async with asyncio.timeout(5):
+                async with rights.native_owner_access(work): pass
+        runner.run(acquire_again())
+        assert rights._entries(api.security(root)[1]).count(external) == 1
+        if destination:
+            with Path(destination).open('a', encoding='utf-8') as stream:
+                stream.write(json.dumps(dict(stage=stage, outcome=outcome, replayStale=replay_stale,
+                    leaseReacquired=True)) + '\n')
+    finally:
+        if worker.ident is not None: worker.join(timeout=3)
+        else: api.kernel.CloseHandle(other)
+        probe.edit(root, lambda current_owner, acl: original)
+        probe.close()
+        runner.close()
+
+
+def test_guard_release_break_preserves_the_original_body_error(tmp_path, monkeypatch):
+    from opendirector.agent import windows_acl_guard as guard
+    state = rights._Projection(tmp_path, tree=False)
+    api, root = state.api, state.nodes[-1][0]
+    owner, original = api.security(root)
+    denial = rights._ace(1, 0, 4, WORLD)
+    other = writer_handle(api, *state.locations[root])
+    original_cancel = api.kernel.CancelIoEx
+    pending, done, errors, raced = [], threading.Event(), [], []
+    def writer():
+        try: api.set_acl(other, rights._acl(original, [denial] + rights._entries(original)))
+        except BaseException as error: errors.append(error)
+        finally: api.kernel.CloseHandle(other); done.set()
+    worker = threading.Thread(target=writer)
+    def cancel(target, operation):
+        if not raced:
+            raced.append(True); worker.start()
+            deadline = time.monotonic() + 3
+            while True:
+                try: pending[0]()
+                except OSError as error:
+                    assert error.winerror == 995
+                    break
+                assert time.monotonic() < deadline
+                time.sleep(.005)
+            assert not done.is_set()
+        return original_cancel(target, operation)
+    try:
+        target = api.open(*state.locations[root], maximum=True)
+        with monkeypatch.context() as patch:
+            patch.setattr(api.kernel, 'CancelIoEx', cancel)
+            with pytest.raises(RuntimeError, match='original body error'):
+                with guard.descriptor_guard(api, target) as unchanged:
+                    pending.append(unchanged)
+                    raise RuntimeError('original body error')
+        worker.join(timeout=3)
+        assert done.is_set() and not worker.is_alive() and errors == []
+        assert api.security(root) == (owner, rights._acl(original, [denial] + rights._entries(original)))
+    finally:
+        if worker.ident is None: api.kernel.CloseHandle(other)
+        else: worker.join(timeout=3)
+        state.edit(root, lambda current_owner, acl: original)
+        state.close()

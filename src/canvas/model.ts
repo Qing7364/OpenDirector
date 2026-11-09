@@ -1,4 +1,6 @@
 import type { AssetRef, TimelineTextOverlay } from "../contracts/generated.ts";
+
+import type { VoiceSelection } from "../backend/voices.ts";
 import { indexNodes, ancestors, isNodeLocked } from "./hierarchy.ts";
 import { mapCanvasToolTaskReferences } from "./toolCatalog.ts";
 import type { CanvasToolTask } from "./toolCatalog.ts";
@@ -64,6 +66,7 @@ export interface GenerationSettings {
   audioCreationType?: "audio" | "music";
   audioMode?: "unified" | "tts";
   voiceName?: string;
+  voiceSelection?: VoiceSelection;
   /** Music models: words to sing; empty asks for an instrumental piece. */
   lyrics?: string;
   /** Music with a reference recording: follow its melody, or its melody and chords. */

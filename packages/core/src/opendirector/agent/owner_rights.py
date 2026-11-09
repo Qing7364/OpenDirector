@@ -22,6 +22,10 @@ READ = 0x1200A9
 MODIFY = 0x1301BF  # no WRITE_DAC, WRITE_OWNER, or FILE_DELETE_CHILD
 
 
+class CleanupUnconfirmedError(OSError):
+    """A committed removal was followed by an indistinguishable ACL replay."""
+
+
 def _specific(mask):
     for generic, specific in ((0x80000000, 0x120089), (0x40000000, 0x120116),
                               (0x20000000, 0x1200A0), (0x10000000, 0x1F01FF)):
@@ -399,16 +403,34 @@ class _Projection:
             # a failed preparation rolls back every change before any spawn.
             if writable and self.applied: continue
             try:
+                committed_counts = None
+                proposed_counts = None
                 def remove(owner, acl):
+                    nonlocal proposed_counts
                     if owner != self.api.owner or acl is None: raise self.api.c.WinError(5)
                     entries = _entries(acl)
+                    if committed_counts is not None:
+                        # The native removal already succeeded. A writer may
+                        # then have replayed a snapshot containing our grant.
+                        # Do not spend the delta again: identical ACEs have no
+                        # owner identity. Confirm the committed postcondition
+                        # under this fresh guard, or explicitly fail cleanup.
+                        if any(entries.count(item) != count for item, count in committed_counts.items()):
+                            raise CleanupUnconfirmedError(
+                                'Owner access cleanup cannot be confirmed after a concurrent ACL update')
+                        return acl
                     for item in added:
                         if item in entries: entries.remove(item)
+                    proposed_counts = {item: entries.count(item) for item in added}
                     return _acl(acl, entries)
+                def removed():
+                    nonlocal committed_counts
+                    committed_counts = proposed_counts
+                    added.clear()
                 # Cleanup has the same commit boundary as installation. Once
                 # the setter succeeds, a post-write conflict must not remove a
                 # second, externally owned copy of an identical ACE on retry.
-                self.edit(handle, remove, on_write=added.clear)
+                self.edit(handle, remove, on_write=removed)
             except BaseException as error: failures.append(error)
         self.changes.clear()
         for handle, _ in reversed(self.nodes): self.api.kernel.CloseHandle(handle)

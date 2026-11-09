@@ -76,6 +76,59 @@ def test_journal_owns_only_installed_entries_across_a_retry_and_close(monkeypatc
     assert not state.changes and not state.nodes
 
 
+@pytest.mark.parametrize('replay_stale', [False, True])
+@pytest.mark.parametrize('completed', [False, True])
+def test_cleanup_after_final_check_cannot_silently_accept_a_replayed_grant(monkeypatch, replay_stale, completed):
+    state, acls, ancestor, work, external, _, closed = projection(monkeypatch, 'setter_failure')
+    unrelated = rights._ace(1, 0, 4, bytes.fromhex('010100000000000516000000'))
+    cleanup, raced, broken = False, False, False
+    queued, events, removals = [], [], []
+    def write(handle, acl, *, before_write=None, on_write=None):
+        nonlocal raced, broken
+        if before_write is not None: before_write()
+        if cleanup and handle % 100 == 1 and not raced:
+            events.append('after_final_check')
+            snapshot = acls[1] if replay_stale else acl
+            queued.append(rights._acl(snapshot, [unrelated] + rights._entries(snapshot)))
+            raced = broken = True
+        acls[handle % 100] = acl
+        if cleanup and handle % 100 == 1: removals.append(acl)
+        if on_write is not None: on_write()
+        if broken: events.append('native_success')
+    @contextmanager
+    def guard(api, handle):
+        nonlocal broken
+        def unchanged():
+            if broken: raise failure(995)
+        try: yield unchanged
+        finally:
+            closed.append(handle)
+            if broken:
+                # A real writer waits for acknowledgment, then writes its
+                # saved descriptor. Do not replay it before native removal.
+                acls[1] = queued.pop()
+                broken = False
+                events.append('writer_replayed')
+    state.api.set_acl = write
+    monkeypatch.setitem(sys.modules, 'opendirector.agent.windows_acl_guard', SimpleNamespace(descriptor_guard=guard))
+    state.apply()
+    acls[1] = rights._acl(acls[1], [external] + rights._entries(acls[1]))
+    before = acls[1]
+    state.applied, cleanup = completed, True
+    if replay_stale:
+        with pytest.raises(ExceptionGroup) as error: state.close()
+        assert len(error.value.exceptions) == 1
+        assert isinstance(error.value.exceptions[0], rights.CleanupUnconfirmedError)
+    else: state.close()
+    assert events == ['after_final_check', 'native_success', 'writer_replayed']
+    assert len(removals) == 1, 'A committed removal must not be spent twice'
+    expected = before if replay_stale else rights._acl(ancestor, [external] + rights._entries(ancestor))
+    assert acls[1] == rights._acl(expected, [unrelated] + rights._entries(expected))
+    assert (acls[2] != work) is completed
+    assert closed.count(1) == closed.count(2) == 1
+    assert not state.changes and not state.nodes
+
+
 def test_failed_setter_does_not_commit_a_proposed_change(monkeypatch):
     state, acls, ancestor, work, _, _, _ = projection(monkeypatch, 'setter_failure')
     try:

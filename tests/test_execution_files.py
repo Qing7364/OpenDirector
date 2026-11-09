@@ -8,6 +8,19 @@ from opendirector.domain.projects import ProjectError
 from opendirector.infrastructure.execution_files import execution_file
 
 
+def test_execution_file_rejects_a_hardlink_to_an_outside_file(tmp_path):
+    work = tmp_path / 'work'
+    work.mkdir()
+    outside = tmp_path / 'private'
+    outside.write_bytes(b'outside bytes')
+    os.link(outside, work / 'input')
+    with pytest.raises(ProjectError) as error:
+        with execution_file(work, 'input'):
+            pytest.fail('Hardlinked outside input was accepted')
+    assert error.value.status == 403 and error.value.code == 'execution_file_link'
+    assert outside.read_bytes() == b'outside bytes'
+
+
 def test_nested_unicode_file_roundtrip_and_exclusive_creation(tmp_path):
     work = tmp_path / 'work'; work.mkdir()
     (work / 'nested').mkdir()

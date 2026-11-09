@@ -76,6 +76,8 @@ def execution_file(execution_directory: Path, path: str, *, create=False):
         facts = os.fstat(stream.fileno())
         if not stat.S_ISREG(facts.st_mode) or (not create and facts.st_size == 0):
             raise ProjectError('发布产物必须是非空普通文件。')
+        if facts.st_nlink != 1:
+            raise ProjectError('执行文件不能包含硬链接。', 403, code='execution_file_link')
         yield stream
         if create:
             stream.flush()
