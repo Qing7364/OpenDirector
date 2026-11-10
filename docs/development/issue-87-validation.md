@@ -2021,3 +2021,70 @@ Windows本批七模块154项和wheel相关308项仍均零skip，实际OpenCode/d
 | requires native Windows ACL and file identity APIs | 8 |
 
 后续纯证据交付提交仅更新本记录、双语handoff与计划；其最终头CI/交付SHA在PR回执记录，886项运行输入继续核对，无新增Windows功能重跑。
+
+
+## 2026-11-09 PR review screenshots and commit identity normalization
+
+At the contributor's request, the 18 PR-only commits were recreated with both
+Author and Committer email set to `vera.xpq@gmail.com`. Author/committer names,
+timestamps, commit messages, every commit tree and the merge topology were
+preserved; upstream main commits were not rewritten. Signatures were regenerated
+with the existing local signing key. Its user ID remains the work-email identity;
+local cryptographic validity is distinct from GitHub's account verification.
+The original branch is retained in a local backup ref and verified Git bundle.
+
+Historical acceptance records above keep their original SHAs and results. The
+mapping below locates the equivalent source trees after the metadata rewrite;
+it does not relabel past runs as new runs. The final image/documentation commit
+adds no runtime, dependency, test or build change. Windows tests were not rerun.
+Final-head CI and Ready status are recorded in the PR delivery receipt.
+
+| Original commit | Equivalent rewritten commit |
+| --- | --- |
+| `28f30454ffba68907903c6d08db6bb8ba3b8bee2` | `5dfd7dfd4fdcc134662ef6521e942722c661fb42` |
+| `9834c1cc0d56abece57d815de53f78a501e698d0` | `76088035fcfed27cb0788a9713b50123671c5afe` |
+| `0934583c29173509b8a41d557165e073a15dc3a7` | `6073044ac4981d44931fd5fe8fd230b7fae3feba` |
+| `91c2f09f22bb717b9b181cef81b036f73480148e` | `712036bba30b1f1b242255daebecf4fe201136bf` |
+| `733001a2811399e668ccf46256034864ae8a9ed6` | `1cdf597403682e97628d9e0344a2f1518859385d` |
+| `d5c6b3a1d4aa249f034a8d7e79be67c99bc59b4c` | `689b209ad534802df938bc670e8f5cf1b4d9632e` |
+| `1799464f1d6ba5f721521c474c4dd96c3a254ed7` | `e25fdc4b3cfc5aecf7227edb979f06e99b5ffe08` |
+| `5fd0556128f98b5f3bf3b00417a1a2728425df54` | `3402a5eecb70918338d23c2884fbdfbfdf4168d4` |
+| `2ddb74ee99e53e44fb1696402b745002d4281be7` | `2fa9013463d868ccb565146bb943fbe920c17c4a` |
+| `97edaf4e0b932cb1085d6d5dcb8b7c59def98749` | `5880f2a2fab393193d62b135b0c0325f099a527d` |
+| `83b341e62fa1270ed5e774c8cb8629283863110d` | `8158883fcb25c3fba8b9cc4657ecaa142e9cbfcb` |
+| `3cb30b64d5f1c9ec1402de26a08a570be4a3bba9` | `da1fe5188a22111c3d9021da9ba5c12d25fc4b22` |
+| `d0d89993ce60eed5989292db4cef734dfb1b190d` | `95dbd307aff09d5bf0c6794a0c060b7c4055500a` |
+| `3b1bcc2142e0233d02e907275d653d05e38da154` | `346c3affbe4a092c035bd5aed07be9d63d2f00d8` |
+| `c19781ae22828c003d68457490591f9177aef3f0` | `b5d199f91502d51cf4730c9f29260033e4a7fcff` |
+| `5d5895fd18242f9a7d91591e8d8d9320b3e6f7b5` | `38b2ca4ad9eedb6d19ab6eaf74eab3cbeb52655b` |
+| `a71d3b1e179385ee6a50ee320fd02c8a0921816f` | `79eac341866e44542d84c57b375df9eb459580f3` |
+| `59fc9aac85325770666f2f47b0374b879a363266` | `0e94abb3b2a92c6d41ad8a1a1d8077469cd8a672` |
+
+### Existing screenshots / 既有截图
+
+These screenshots were captured during the November 9 macOS focused browser
+regression run and are reused byte-for-byte without recapture. The archive report
+identifies HeadlessChrome 145.0.7632.6 on macOS and synthetic fixture content; it
+does not embed a source Git revision. These are historical visual evidence, not
+a new verification of the rewritten PR tip or Windows behavior. No private user
+project, credentials or paid-provider response is included.
+
+Chinese UI: continued editing of a cross-project text timeline, text properties,
+editable text track, package controls and a completed MP4 publication. The
+stale-draft notice is visible in this captured scenario and has not been hidden.
+
+![Chinese timeline text editor and package controls](issue-87-evidence/timeline-text-zh.png)
+
+English UI: the same scenario, including the preserved Chinese fixture text.
+Changing the interface language does not translate project content. The small
+fixture MP4 rounds to 0.00 MB in the interface; it is not a missing output.
+
+![English timeline text editor and package controls](issue-87-evidence/timeline-text-en.png)
+
+| Image | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `timeline-text-zh.png` | 141853 | `b4287458f9f608159ac5b2f48355c0c975d419937aaf14f63674abff2658c805` |
+| `timeline-text-en.png` | 131236 | `ea65a38d4d4d6685a33670e266cc4815ba32b4657e872feee530196fce61baa3` |
+
+中文：复用既有 macOS 验收截图，不修改图片，不宣称本次重新验收 Windows。
+历史测试保留原提交号；上表仅提供邮箱统一后的等价源码定位，所有运行输入保持不变。
