@@ -3464,6 +3464,14 @@
               "role_restricted",
               "missing_object",
               "reference_invalid",
+              "kling_model",
+              "kling_mode",
+              "kling_image",
+              "kling_frames",
+              "kling_prompt",
+              "kling_aspect",
+              "kling_output",
+              "kling_cancel",
               "capability_unsupported",
               "preview_expired",
               "storage_unavailable",
@@ -8036,6 +8044,7 @@
             "enum": [
               "openai",
               "volcengine",
+              "kling_video",
               "minimax_video_v2",
               "vllm_omni",
               "vllm_omni_segmentation",
@@ -8191,6 +8200,7 @@
             "enum": [
               "openai",
               "volcengine",
+              "kling_video",
               "minimax_video_v2",
               "vllm_omni",
               "vllm_omni_segmentation",
@@ -8335,6 +8345,7 @@
             "enum": [
               "openai",
               "volcengine",
+              "kling_video",
               "minimax_video_v2",
               "vllm_omni",
               "vllm_omni_segmentation",
@@ -8460,6 +8471,7 @@
             "enum": [
               "openai",
               "volcengine",
+              "kling_video",
               "minimax_video_v2",
               "vllm_omni",
               "vllm_omni_segmentation",
@@ -18587,6 +18599,14 @@
               "role_restricted",
               "missing_object",
               "reference_invalid",
+              "kling_model",
+              "kling_mode",
+              "kling_image",
+              "kling_frames",
+              "kling_prompt",
+              "kling_aspect",
+              "kling_output",
+              "kling_cancel",
               "capability_unsupported",
               "preview_expired",
               "storage_unavailable",
@@ -23366,6 +23386,7 @@
             "enum": [
               "openai",
               "volcengine",
+              "kling_video",
               "minimax_video_v2",
               "vllm_omni",
               "vllm_omni_segmentation",
@@ -23511,6 +23532,7 @@
             "enum": [
               "openai",
               "volcengine",
+              "kling_video",
               "minimax_video_v2",
               "vllm_omni",
               "vllm_omni_segmentation",
@@ -23660,6 +23682,7 @@
             "enum": [
               "openai",
               "volcengine",
+              "kling_video",
               "minimax_video_v2",
               "vllm_omni",
               "vllm_omni_segmentation",
@@ -23789,6 +23812,7 @@
             "enum": [
               "openai",
               "volcengine",
+              "kling_video",
               "minimax_video_v2",
               "vllm_omni",
               "vllm_omni_segmentation",

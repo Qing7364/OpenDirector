@@ -1,4 +1,5 @@
 export const errors = {
+  "errors.generationFailure.policy": "The provider rejected the prompt or reference images under its content policy. Adjust the input before generating again.",
   "errors.archive.identityConflict":
     "One logical timeline resource refers to conflicting files or metadata.",
   "errors.archive.textResourceMissing":

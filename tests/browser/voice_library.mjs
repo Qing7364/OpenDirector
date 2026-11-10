@@ -226,6 +226,28 @@ try {
     await page.addInitScript((locale) => {
       localStorage.setItem("opendirector.modelSetup.v1", "dismissed");
       localStorage.setItem("opendirector.locale.v1", locale);
+      // Observe the actual fetch -> Blob -> player URL without importing a
+      // development-only application module; this also runs against previews.
+      const sources = new WeakMap();
+      const urls = new Map();
+      window.__voiceMediaSources = urls;
+      const fetchMedia = window.fetch.bind(window);
+      window.fetch = async (...args) => {
+        const response = await fetchMedia(...args);
+        const readBlob = response.blob.bind(response);
+        response.blob = async (...args) => {
+          const blob = await readBlob(...args);
+          sources.set(blob, response.url);
+          return blob;
+        };
+        return response;
+      };
+      const create = URL.createObjectURL.bind(URL);
+      URL.createObjectURL = (blob) => {
+        const url = create(blob);
+        if (sources.has(blob)) urls.set(url, sources.get(blob));
+        return url;
+      };
     }, locale);
     const open = () =>
       page.getByRole("button", { name: L.library, exact: true }).click();
@@ -820,8 +842,7 @@ try {
         const audio = document.querySelector(".cw-audio-preview audio");
         return audio?.currentSrc && audio.readyState > 0 && audio.error === null;
       });
-      const reopenedMedia = await player.evaluate(async (audio, projectId) => {
-        const { creationClient } = await import("/src/backend/creationClient.ts");
+      const reopenedMedia = await player.evaluate(async (audio) => {
         const response = await fetch(audio.currentSrc);
         const blob = await response.blob();
         const bytes = await blob.arrayBuffer();
@@ -829,11 +850,11 @@ try {
         const hex = Array.from(new Uint8Array(digest), (value) =>
           value.toString(16).padStart(2, "0")).join("");
         return {
-          assetId: creationClient(projectId).assetForSource(audio.currentSrc)?.id,
+          sourcePath: new URL(window.__voiceMediaSources.get(audio.currentSrc)).pathname,
           mimeType: blob.type, size: bytes.byteLength, fingerprint: `sha256:${hex}`,
         };
-      }, id);
-      assert.equal(reopenedMedia.assetId, asset.id);
+      });
+      assert.equal(reopenedMedia.sourcePath, assetPath);
       assert.match(reopenedMedia.mimeType, /^audio\//);
       assert.equal(reopenedMedia.size, asset.metadata.size);
       assert.equal(reopenedMedia.fingerprint, asset.fingerprint);
