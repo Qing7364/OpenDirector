@@ -2,6 +2,15 @@
 
 ## Focused native acceptance completed (2026-11-09)
 
+**Final-CI follow-up:** the first evidence delivery at `3b1bcc21` failed only the voice-library reopen response wait.
+A bounded navigation/media deadline split and stronger reopened-player identity, byte/fingerprint and playback checks
+passed normal and 17-second cold-document workflows, with an intentional media-outage negative control still failing.
+Browser-test freeze: `c19781ae22828c003d68457490591f9177aef3f0`. Product/Python/native tests/dependencies are unchanged; the native154/0/0 result stays at d0d89993.
+See [CI repair and source boundaries](issue-87-validation.md#2026-11-09-最终-ci-的音色重开等待修复).
+The same executor completes evidence delivery, normal push and final-head CI. Retain the failed run and historical evidence;
+do not repeat unrelated Windows acceptance or claim the controlled gate reconstructs the exact original CI schedule.
+
+
 Source `d0d89993ce60eed5989292db4cef734dfb1b190d` (main `63100975`): the seven modules passed **154/154, zero failures and skips**.
 All eleven installation windows, twelve cleanup windows and real bundled OpenCode fresh/resume/watchdog gates executed.
 Full writer ACL/owner, identical denies, handle/event/worker release and lease reacquisition passed.

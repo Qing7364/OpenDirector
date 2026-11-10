@@ -1757,3 +1757,80 @@ fixture 仅恢复其已知策略后，**23 次真实租约重新取得成功**�
 
 本批 Windows 原生技术阻塞已消除；纯证据提交的输入一致性、正常推送、最终 CI 和 PR 状态由交付回执关账。
 继续保持 Draft，既有 CHANGES_REQUESTED 留待维护者复审；不发送 reviewer/外部聊天消息，不合并 PR。
+
+
+## 2026-11-09 最终 CI 的音色重开等待修复
+
+前一节的原生证据已通过签名提交 `3b1bcc2142e0233d02e907275d653d05e38da154` 正常推送；
+其[首次交付 CI](https://github.com/ThinkFlowLab/OpenDirector/actions/runs/42678109793)必须保留为 **FAILURE**。
+完整 Python **1496 passed / 98 skipped**、Node **738 passed**、标准浏览器 **19/19**、build、
+Linux wheel 无 Node 安装验证、音色以外的助手与静态门禁均通过；唯一失败为
+`voice_library.mjs:776` 重开音频 `waitForResponse` 的 15 秒超时。
+原始 353633 字符日志保留于上一节 E2 的 `ci-attempt1-full.log`，未通过重跑覆盖失败。
+
+English: the first evidence-delivery CI failed only its voice-library media-response wait. A controlled cold
+navigation reproduced the premature response deadline. The browser test now separates bounded navigation,
+readiness and media deadlines and strengthens actual reopened-media checks. This demonstrates a fixture
+deadline issue, not the exact original CI schedule. No product, Python, native permission or dependency code changed.
+
+### 归因、实际变更与边界
+
+- 实际 CI checkout 为 `81d7e43c6f187c7953cee9395d004582bd9790c0`，包含当时 main
+  `f06e22fcd2c1f5767a6b6f0e89708e45ebe86b5c`（#242）的合成合并；相比交付分支仅多
+  `src/backend/rules.ts` 和 `tests/voiceLibrary.test.ts` 两处前端变更。
+  全部 242 个 Python 文件、依赖及 CI 配置 Git 内容相同。分支仍只整合固定 main `63100975`，未追赶后续 main。
+- 未改动原测试的正常流程在 Windows Chrome 156、以及 CI 同版本 Playwright **1.58.2 /
+  Chromium headless shell 145.0.7632.6** 都通过，媒体响应均为 200；不能据此断言原 CI 是304缓存或选中节点导致。
+  音频挂载/读取不依赖先选中节点，已由代码路径核对排除该假设。
+- 实际导航重定向到 `/?creation=unified`。在该真实导航请求上保留 **17 秒**文档门控，旧测试在释放前
+  明确报出同类 `waitForResponse Timeout 15000ms`（退出1）。首次门控路径未命中、另一次诊断 catch 遮盖原异常，
+  以及新版初次遗漏导航预算的 `page.reload Timeout 15000ms` 均保留；不把这些尝试冒充有效通过或清洁复现。
+- 仅修改 `tests/browser/voice_library.mjs`。提前监听实际媒体响应；**该次重开导航由15秒改为独立30秒**，
+  保存就绪与媒体读取期限仍分别为15秒。媒体期限在导航及保存就绪后开始；早到的成功响应仍被保留。
+  所有退出均撤销监听并清理 timer。没有改全局浏览器门禁超时或 skip，明确承认导航/阶段总预算增加。
+- 必须取得同一素材路径的真实成功 UI 响应和 audio MIME，原 jobs/results/voiceSelection/不重复生成/provider
+  调用数断言全部保留。新增重开后实际播放器 Blob 的素材映射、MIME、大小、SHA-256 和再次播放至 ended；
+  不用独立 API 请求代替 UI 读回，不容忍500或缺失媒体。
+- 精确 CI 耗时路径没有保留下可追溯 trace，本轮受控门控只证明期限耦合缺陷，不声称还原 CI 全部调度。
+  本机未安装 WSL，没有为复现修改系统设置；Linux 平台结论仍由后续最终头 CI 提供。
+
+### 定点验证及失败保留
+
+以下目录均位于 ignored `test-results/issue87/`，每次尝试独立保存 argv/cwd、环境、源码哈希、开始结束与原生退出码。
+沿用 Python.org 3.12.10 与独立 voice fixture，先后核对 API 及 Vite 代理的 `/api/voice-test-health`；
+受控服务/浏览器使用既有 owned process/job 清理，没有操作用户浏览器配置或非任务进程。
+
+| 目录 | 结果及实际意义 |
+| --- | --- |
+| `ci-voice-20261109` | 原流程 Chrome156 中英通过；另保存CI版本浏览器下载的TLS失败及使用系统CA后的成功，不关闭证书校验 |
+| `ci-voice145-20261109` | 原流程 Playwright1.58.2/Chromium145 中英通过，退出0 |
+| `ci-voice-cold-before-20261109` | 门控路径未命中，退出0；不算17秒反例 |
+| `ci-voice-cold-proof-before-20261109` | 门控命中，但诊断catch抛context destroyed遮盖原错，退出1；不据此断言原始错误 |
+| `ci-voice-cold-old-20261109` | 有效17秒门控，原15秒响应超时，退出1 |
+| `ci-voice-cold-fixed-20261109` | 新helper初次仍受15秒导航限制，退出1；独立只读复审发现后修正 |
+| `ci-voice-cold-final-20261109` | 最终17秒门控中英完整流程通过，退出0；页面就绪分别约19025/19063ms，真实媒体/身份/指纹/播放与所有原断言通过 |
+| `ci-voice-formal-final-20261109` | 最终正式源文件、无门控中英完整流程通过，退出0；就绪2128/2005ms |
+| `ci-voice-missing-negative-20261109` | 最终代码的预期负例：UI媒体接口返回500，实际记录 `[500,500]`，15秒媒体期限拒绝，退出1；不是新的未解决产品失败 |
+
+源码调用为 `node tests/browser/voice_library.mjs`，由既有 host 适配启动独立
+`voice_library_server.py --port <owned-port> --root <fresh-fixture-root>` 和 Vite，
+设置 `PLAYWRIGHT_MODULE` 指向本轮 ignored 的 `pw158/node_modules/playwright-core/index.mjs`、
+`PLAYWRIGHT_BROWSERS_PATH` 指向本轮浏览器目录，清除机器 Chrome override。
+冷启动和负例仅在 ignored 探针副本加入所述门控/500响应；正式源文件没有环境绕过开关。
+`node --check tests/browser/voice_library.mjs` 与 `git diff --check` 退出0。
+独立只读复审确认成功 UI 响应和全部原业务断言保留，资源清理完整。
+
+### 新冻结点与复用证明
+
+浏览器测试源码冻结：**`c19781ae22828c003d68457490591f9177aef3f0`**；其完整跟踪输入清单仍为 **878 项**，SHA-256
+`59faaf062c4bc44dc1fe1a1ccaf962bc545eea5fefd488f1f68ceb2697e6a33a`。
+正式浏览器测试文件 SHA-256：`c0e5cbe721bfdae64541567adfa76d0c3b539f089d711a7debb0444f38fe182a`，
+与冷启动、正式正常及媒体负例实际执行的工作树字节完全相同，提交前对完整暂存文件核对。
+
+相对原生测试源码 `d0d89993ce60eed5989292db4cef734dfb1b190d` 只有这一份浏览器测试变化：
+其余 **877/878 项逐字节一致**，包括全部 **242 个 Python 文件**、七模块测试、原生实现、锁、构建和CI配置。
+因此原生结果仍准确标为 **d0d89993 的154/0/0**，本批不重跑 Windows 七模块、完整 Python/Node、
+字幕/MP4/1080p/2000cue 或新 Windows wheel。单独的音色复验由实际CI失败触发，不扩成全套媒体验收。
+本节、双语 handoff 与当前计划的纯证据提交再对新的878项清单核对，不再次跑Windows。
+最终交付 SHA、推送、新头 CI checkout/结论及当前PR状态由提交后的PR交付回执记录。
+保持 Draft、保留 CHANGES_REQUESTED；不强推、不合并、不发送reviewer或外部聊天消息。
