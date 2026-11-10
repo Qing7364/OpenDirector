@@ -11,6 +11,7 @@ const headers = {
   "X-OpenDirector-Request": "1",
   "Content-Type": "application/json",
 };
+const readTimeout = 15000;
 async function call(path, body, origin = api) {
   const response = await fetch(origin + path, {
     headers,
@@ -26,6 +27,38 @@ async function until(check) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw Error("Expected persisted voice state was not observed");
+}
+async function reopenAudio(page, assetPath, savedLabel) {
+  const started = Date.now();
+  const statuses = [];
+  let receive, timer;
+  const received = new Promise((resolve) => { receive = resolve; });
+  const observe = (response) => {
+    if (new URL(response.url()).pathname !== assetPath) return;
+    statuses.push(response.status());
+    if (response.ok()) receive(response);
+  };
+  page.on("response", observe);
+  try {
+    // Observe early responses, but give navigation its own deadline. A cold
+    // document has not started the project's media read yet.
+    await page.reload({ timeout: 30000 });
+    await page.getByText(savedLabel, { exact: true }).waitFor();
+    console.log(JSON.stringify({
+      event: "voice-reopen-ready", assetPath, elapsedMs: Date.now() - started,
+    }));
+    return await Promise.race([
+      received,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(
+          `No successful reopened audio response; statuses=${JSON.stringify(statuses)}`,
+        )), readTimeout);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+    page.off("response", observe);
+  }
 }
 async function fixtureRoot(origin) {
   const [voices, generation] = await Promise.all([
@@ -171,7 +204,7 @@ try {
     const page = await browser.newPage({
       viewport: { width: 1500, height: 1000 },
     });
-    page.setDefaultTimeout(15000);
+    page.setDefaultTimeout(readTimeout);
     page.on("pageerror", (error) => errors.push(error.message));
     page.on("request", (request) => {
       if (
@@ -772,15 +805,8 @@ try {
       });
 
       const assetPath = `/api/creation/projects/${id}/assets/${asset.id}/content`;
-      const [reopenedAudio] = await Promise.all([
-        page.waitForResponse(
-          (response) =>
-            new URL(response.url()).pathname === assetPath && response.ok(),
-        ),
-        page.reload(),
-      ]);
+      const reopenedAudio = await reopenAudio(page, assetPath, L.saved);
       assert.match(reopenedAudio.headers()["content-type"], /^audio\//);
-      await page.getByText(L.saved, { exact: true }).waitFor();
       await page.locator(".react-flow__node").first().click();
       assert.ok(
         (
@@ -790,6 +816,33 @@ try {
         ).includes(createdName),
       );
       await player.waitFor();
+      await page.waitForFunction(() => {
+        const audio = document.querySelector(".cw-audio-preview audio");
+        return audio?.currentSrc && audio.readyState > 0 && audio.error === null;
+      });
+      const reopenedMedia = await player.evaluate(async (audio, projectId) => {
+        const { creationClient } = await import("/src/backend/creationClient.ts");
+        const response = await fetch(audio.currentSrc);
+        const blob = await response.blob();
+        const bytes = await blob.arrayBuffer();
+        const digest = await crypto.subtle.digest("SHA-256", bytes);
+        const hex = Array.from(new Uint8Array(digest), (value) =>
+          value.toString(16).padStart(2, "0")).join("");
+        return {
+          assetId: creationClient(projectId).assetForSource(audio.currentSrc)?.id,
+          mimeType: blob.type, size: bytes.byteLength, fingerprint: `sha256:${hex}`,
+        };
+      }, id);
+      assert.equal(reopenedMedia.assetId, asset.id);
+      assert.match(reopenedMedia.mimeType, /^audio\//);
+      assert.equal(reopenedMedia.size, asset.metadata.size);
+      assert.equal(reopenedMedia.fingerprint, asset.fingerprint);
+      await player.evaluate((audio) => audio.play());
+      await page.waitForFunction(
+        () => document.querySelector(".cw-audio-preview audio")?.ended,
+      );
+      assert.ok(await player.evaluate((audio) =>
+        audio.currentTime > 0 && audio.duration > 0 && audio.error === null));
       const reopened = await state();
       assert.deepEqual(
         reopened.jobs.map((j) => j.id).sort(),
