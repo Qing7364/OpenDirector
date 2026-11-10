@@ -1,5 +1,20 @@
 # PR #193 Windows 补验后审查与后续计划
 
+## 当前Windows验收已完成：阻断冲突整合与0.1.2补验（2026-11-09）
+
+源码冻结 `a71d3b1e179385ee6a50ee320fd02c8a0921816f`，固定 main `e0b411f151dfe48250c4651c0d820e05179f41ce`。
+源码七模块 **154 passed / 0 failed / 0 skipped**，422.54秒；最新0.1.2 wheel相关 **308 passed / 0 failed / 0 skipped**。
+11安装、12清理原生窗口和真实CLI均执行，权限/沙箱校验保留。源码CI [Release checks](https://github.com/ThinkFlowLab/OpenDirector/actions/runs/42735681008) **SUCCESS（1578 Python通过/98跳过，744 Node，19/19标准浏览器，wheel、音色与助手检查均通过）**。
+886项Windows运行输入SHA-256 `36ec56252d87ada89d1de6feac19830ac77cfd77e9e232906e44d67a74926fb0`；本次四份纯证据文档不属于运行输入，不因其提交再跑Windows。
+
+本批仅因5d5895fd实际不可合并而整合上述固定main；保留两侧字幕/音色、原生安全和merge历史。
+默认模型时序修复有中英正例/旧前端负例，音色生产预览及最新wheel中英通过；最终Node744、相关后端337、build/契约/双语/边界均通过。
+最新wheel SHA-256 `8ae498f7748edbcbdb46a9945fbaf14f7934e11d858d751e3fcfb6791736007c`。首次原生153/1/0、隔离通过与最终154/0/0均保留；不扩大60秒watchdog。
+文件symlink新探针仍1314，真实模型调用和历史媒体/性能结论不扩大。
+完整命令、输入、证据、skip及复审见[最新验收记录](issue-87-validation.md#2026-11-09-阻断冲突整合后的最终-windows-交付a71d3b1e)。
+正常签名/推送及最终头CI由同一执行者关账，交付SHA见PR回执；继续Draft，保留CHANGES_REQUESTED。
+以下d0/c197记录是历史阶段，不是重新打开的待办；其“仅文档变化”不适用于本节的实际阻断冲突整合。
+
 ## 2026-11-09 后续项完成状态
 
 **最终CI收尾补充：**`3b1bcc21`首次交付CI仅音色重开等待失败；已定点复现有界冷启动期限问题，

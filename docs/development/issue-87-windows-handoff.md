@@ -1,5 +1,21 @@
 # Issue #87 Windows completion handoff
 
+## Current Windows acceptance completed: blocking integration and 0.1.2 (2026-11-09)
+
+Source freeze `a71d3b1e179385ee6a50ee320fd02c8a0921816f`; fixed main `e0b411f151dfe48250c4651c0d820e05179f41ce`.
+The real conflict at 5d5895fd required this fixed snapshot; no ongoing main chase. Timeline, voice and ACL safeguards remain.
+Final native **154 passed / 0 failures / 0 skips**, all 11 installation/12 cleanup windows and real OpenCode gates executed.
+Fresh 0.1.2 wheel related checks: **308 passed / 0 failures / 0 skips**. Wheel SHA-256 `8ae498f7748edbcbdb46a9945fbaf14f7934e11d858d751e3fcfb6791736007c`.
+Node 744, affected backend 337, build/contracts/i18n/locale/manifest/import boundaries passed. Bilingual Kling default-loading
+positive and old-frontend negative controls passed their intended outcomes; voice preview and installed-wheel workflows passed.
+The initial 153/1 native watchdog failure and unchanged 60-second isolated/serial passes remain; exact resource scheduling is not proved.
+File-symlink privilege is still limited by Windows 1314. No new paid-provider/media-quality/performance claim.
+Source [Release checks](https://github.com/ThinkFlowLab/OpenDirector/actions/runs/42735681008): SUCCESS: 1578 Python passed / 98 skipped, Node 744, 19/19 standard browsers, installed wheel, voice and assistant checks passed. Final evidence-head CI is recorded separately in the PR receipt.
+886 runtime inputs, manifest SHA-256 `36ec56252d87ada89d1de6feac19830ac77cfd77e9e232906e44d67a74926fb0`, remain unchanged through evidence-only delivery.
+See the [final record](issue-87-validation.md#2026-11-09-阻断冲突整合后的最终-windows-交付a71d3b1e).
+The same executor completes normal signed push, final-head CI and PR receipt; keep Draft and CHANGES_REQUESTED.
+Earlier d0/c197 sections retain their historical revisions and do not reopen completed tasks or describe this later integration as document-only.
+
 ## Focused native acceptance completed (2026-11-09)
 
 **Final-CI follow-up:** the first evidence delivery at `3b1bcc21` failed only the voice-library reopen response wait.

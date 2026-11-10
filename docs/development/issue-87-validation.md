@@ -1834,3 +1834,190 @@ deadline issue, not the exact original CI schedule. No product, Python, native p
 本节、双语 handoff 与当前计划的纯证据提交再对新的878项清单核对，不再次跑Windows。
 最终交付 SHA、推送、新头 CI checkout/结论及当前PR状态由提交后的PR交付回执记录。
 保持 Draft、保留 CHANGES_REQUESTED；不强推、不合并、不发送reviewer或外部聊天消息。
+
+## 2026-11-09 阻断冲突整合后的最终 Windows 交付（a71d3b1e）
+
+本节替代此前“只需文档收尾”的当前状态，旧版本实测仍保留原SHA。用户最新指令允许处理实际阻断交付的main冲突。
+`5d5895fd18242f9a7d91591e8d8d9320b3e6f7b5`发布后GitHub确认CONFLICTING/DIRTY且没有新CI；
+merge-tree复现6处冲突，故仅整合固定main `e0b411f151dfe48250c4651c0d820e05179f41ce`，没有主动追赶后续main。
+
+源码冻结 `a71d3b1e179385ee6a50ee320fd02c8a0921816f`，固定 main `e0b411f151dfe48250c4651c0d820e05179f41ce`。
+源码七模块 **154 passed / 0 failed / 0 skipped**，422.54秒；最新0.1.2 wheel相关 **308 passed / 0 failed / 0 skipped**。
+11安装、12清理原生窗口和真实CLI均执行，权限/沙箱校验保留。源码CI [Release checks](https://github.com/ThinkFlowLab/OpenDirector/actions/runs/42735681008) **SUCCESS（1578 Python通过/98跳过，744 Node，19/19标准浏览器，wheel、音色与助手检查均通过）**。
+886项Windows运行输入SHA-256 `36ec56252d87ada89d1de6feac19830ac77cfd77e9e232906e44d67a74926fb0`；本次四份纯证据文档不属于运行输入，不因其提交再跑Windows。
+
+### 冲突、必要修复与独立复审
+
+- 六处冲突为API localization、native.py、creation commands、generated.ts、en/zh errors。
+  保留timeline/font/archive错误、音色库、验证过的会话目录和Codex缺失rollout全历史恢复；
+  native.py继续使用Windows安全目录链接封装，合并0.1.2版本信息，不退回symlink-only路径。
+- 同时保留main的Kling4.0/Flash、音色能力变更修复、0.1.2版本和review规范；契约重新生成并check。
+  共享下载仍校验公网DNS、固定IP及Host/SNI、禁止跨来源凭证/重定向并限制响应大小。
+  原生owner/journal/guard实现未为本次验收放宽。
+- 原Kling浏览器检查失败不是随机ID：助手缺失选择取API第一项，画布取按名/ID的确定性默认，
+  新工程的节点模型随助手加载时机改变。修复仅让image/video/audio缺失/失效选择复用既有resolver；
+  有效显式选择和agent默认不变。原“已有节点不变”和“显式选择用于新节点”断言保留。
+  新回归持住真实assistant GET，在加载前后分别创建节点并核对持久化spec和偏好；
+  前置条件确保API第一项不等于排序默认。中英文正例退出0，同一新回归运行旧冻结前端准确在加载后身份断言退出1。
+  旧跨项目/跨模型目录状态的initialSpec比较被上述更强的同目录时序证明替换；不把无偏好新项目等同于另一个项目的历史选择。
+- 音色测试先因新增的开发模块import违反既有previewSafe清单而失败，未修改清单标记或lane。
+  改为观察实际fetch→Blob→player URL，保留同一Response、请求参数、错误和实际字节；
+  继续断言成功UI响应、目标素材路径、MIME、大小、SHA-256及真实播放至ended。
+  合并候选生产预览中英通过，17秒冷启动通过，UI媒体500负例按原15秒媒体期限被拒绝；最终wheel中英再次通过。
+- 独立只读复审检查自动合并、共享下载安全、默认规则与测试真实性，未发现本轮剩余确认缺陷；
+  复审未代替原生实测。Python测试AST审计：既有9个下载安全测试函数完全未变，新增6函数；新增Kling19函数。
+  没有删除既有Python测试、修改skip/xfail或关闭Agent沙箱。
+
+### 环境、输入与实际命令
+
+沿用Windows11 Pro25H2/26200 AMD64、Python.org3.12.10/64bit、Node24.22.1/npm11.19.1、FFmpeg9.0.2、
+bundled OpenCode1.19.5。`$TaskPython = C:\Users\Qing Peng\OpenDirector\test-results\issue87\handoff-91c2\svenv\Scripts\python.exe`，
+实际源码导入为本checkout的packages/core/src及apps/api/src；没有选用Store Python。
+36项适用锁定依赖沿用，pip check退出0；仅项目editable元数据由0.1.1更新为0.1.2。
+最初no-build-isolation安装因现有环境无setuptools退出2，正常PEP517隔离构建安装成功，未随意增改运行时依赖。
+浏览器使用Playwright1.58.2/Chromium145.0.7632.6，沿用既有owned process/job清理与系统CA，未关闭TLS校验。
+
+`runtime-inputs.json`含886项生产、测试、锁、构建/CI、资源与技能；只排除7份issue87状态文档。
+manifest SHA-256 `36ec56252d87ada89d1de6feac19830ac77cfd77e9e232906e44d67a74926fb0`。冻结tree `17fade9828708b5747aa724981d77a565a7e9c8b`与提交源码tree一致。
+启动串行七模块时Git HEAD仍为5d5895fd（等待GPG），但暂存tree和全部运行输入已冻结；签名后a71d3b1e为同一tree。
+各命令原始head字段保留，不改写成启动时已经位于a71。
+`tools/fasth3/connect.ps1`按.gitattributes要求checkout为CRLF，与raw Git blob仅行尾不同；
+Git archive/Windows输入逐字节一致，此例外在index-line-endings.json记录，不能把raw blob说成完全相同。
+
+```powershell
+. test-results/issue87/blocking-main-e0b411f1-20261109/environment.ps1
+$EvidenceDir = Join-Path $PWD 'test-results/issue87/blocking-main-e0b411f1-20261109/native-final-20261109-1724'
+$env:OPENDIRECTOR_REAL_CLI = '1'
+$env:OPENDIRECTOR_ACL_EVIDENCE = Join-Path $EvidenceDir 'acl-native.jsonl'
+& $TaskPython -m pytest tests/test_owner_rights.py tests/test_owner_rights_journal.py tests/test_owner_rights_lifecycle.py tests/test_owner_rights_resume.py tests/test_native_runtime.py tests/test_native_sessions.py tests/test_directory_links.py -q -ra --tb=short "--junitxml=$EvidenceDir\native.xml"
+```
+
+实际调用通过本地run_command.py记录完整argv/cwd、环境、时间、电源和原生退出码，生成pytest.log、pytest-status.json、exit-code.txt。
+源码七模块计数33/28/49/8/28/6/2；全部skip原因：**无**。
+原生JSONL46行须与JUnit154例、控制台和退出0联合核对，审计结果为11安装+12清理+23租约重获，不只数行。
+每项原始NtSetSecurityObject status `[0]`、成功回执恰一次；完整writer ACL、owner及同字节deny保留。
+安装归属不明报告InstallationUnconfirmedError、不执行Agent体/重试安装/删除不明ACE；写入前重试、正常guard回滚保留。
+句柄、事件、worker及部分初始化/取消/目录复用/恢复检查通过。
+OpenCode真实fresh/resume/watchdog均执行，模型HTTP仍为本地协议夹具；Codex/Claude为子进程协议夹具，
+不是付费模型调用。Codex缺失rollout全历史恢复和验证目录保留继续通过。
+
+| 类型 | 最后窗口 | writer策略/结果 | stale replay | NtSet状态/成功回执/租约重获 |
+| --- | --- | --- | --- | --- |
+| 清理 | `after_final_check` | complete | False | 0 / 1 / 1，通过 |
+| 清理 | `after_final_check` | complete | True | 0 / 1 / 1，通过 |
+| 清理 | `after_final_check` | body_failure | False | 0 / 1 / 1，通过 |
+| 清理 | `after_final_check` | body_failure | True | 0 / 1 / 1，通过 |
+| 清理 | `after_final_check` | cancel | False | 0 / 1 / 1，通过 |
+| 清理 | `after_final_check` | cancel | True | 0 / 1 / 1，通过 |
+| 清理 | `after_final_post_check` | complete | False | 0 / 1 / 1，通过 |
+| 清理 | `after_final_post_check` | complete | True | 0 / 1 / 1，通过 |
+| 清理 | `after_final_post_check` | body_failure | False | 0 / 1 / 1，通过 |
+| 清理 | `after_final_post_check` | body_failure | True | 0 / 1 / 1，通过 |
+| 清理 | `after_final_post_check` | cancel | False | 0 / 1 / 1，通过 |
+| 清理 | `after_final_post_check` | cancel | True | 0 / 1 / 1，通过 |
+| 安装 | `after_final_check` | stale_without_read | — | 0 / 1 / 1，通过 |
+| 安装 | `after_final_check` | stale_equal_counts | — | 0 / 1 / 1，通过 |
+| 安装 | `after_native_ack` | stale_without_read | — | 0 / 1 / 1，通过 |
+| 安装 | `after_native_ack` | stale_equal_counts | — | 0 / 1 / 1，通过 |
+| 安装 | `after_native_ack` | additive | — | 0 / 1 / 1，通过 |
+| 安装 | `after_final_post_check` | stale_without_read | — | 0 / 1 / 1，通过 |
+| 安装 | `after_final_post_check` | stale_equal_counts | — | 0 / 1 / 1，通过 |
+| 安装 | `after_final_post_check` | additive | — | 0 / 1 / 1，通过 |
+| 安装 | `after_ack_exception` | stale_without_read | — | 0 / 1 / 1，通过 |
+| 安装 | `after_ack_exception` | stale_equal_counts | — | 0 / 1 / 1，通过 |
+| 安装 | `after_ack_exception` | additive | — | 0 / 1 / 1，通过 |
+
+
+### 检查结果与失败现场
+
+| 检查 | 真实结果/退出码 |
+| --- | --- |
+| 合并后相关后端12模块 | 337 passed / 0 skip，0 |
+| 最终Node | 744 passed / 0 skip，0 |
+| 最终tsc/Vite build | 0（保留既有大chunk提示） |
+| contracts生成/check、i18n、locale、manifest、4项import边界 | 均0；3002键/0问题，69浏览器项 |
+| 初次合并候选七模块 | 153 passed / 1 failed / 0 skipped，1 |
+| 失败OpenCode resume单独隔离 | 原60秒watchdog/断言不变，1 passed/61.42秒，0 |
+| 最终串行七模块 | 154 passed / 0 failed / 0 skipped，422.54秒，0 |
+| 最新wheel12个相关模块 | 308 passed / 0 failed / 0 skipped，0 |
+| 最终wheel pip check、verify_install.py --python、字节/隔离审计 | 均0 |
+| 最终wheel中英音色浏览器 | 0，无Vite、API/静态资源均来自已安装wheel，服务PATH无Node |
+
+首轮OpenCode失败为现有聚合60秒watchdog触发，原日志保存模型第4次请求及同一session的恢复文本已到达、
+step_finish尚未完成。保留两条turn JSONL和CLI日志于native-resume-failure-forensics/，未扩大超时。
+与构建/浏览器并行时失败，隔离和最终串行均通过；资源竞争是推测，不能声称精确调度根因已证实。
+最终原生证据不覆盖掉失败。最初广泛复制夹具在生成的node_modules长路径处报错，
+不把部分复制树称作完整备份；三份关键取证文件单独保存并哈希。
+另保留一次误用未安装tsx的测试命令失败，改用仓库Node原生TypeScript命令后35项定点通过，未安装额外依赖。
+首次媒体汇总脚本按扩展名查找失败（素材按无扩展名ID存储）；改读已提交head snapshot的素材登记，
+先核对路径、大小和fingerprint再复制/ffprobe，汇总退出0；未因此重复功能测试。source/wheel各有1项既有StarletteDeprecationWarning，未屏蔽。
+GPG提交超时128及正常签名重试也保留，无禁用签名或重写历史。
+
+### 最新Windows wheel与媒体证据
+
+wheel为`opendirector-0.1.2-py3-none-win_amd64.whl`，97623495字节，SHA-256
+`8ae498f7748edbcbdb46a9945fbaf14f7934e11d858d751e3fcfb6791736007c`，平台tag为py3-none-win_amd64、Root-Is-Purelib=false。
+从冻结输入独立snapshot执行`$TaskPython -m pip wheel . --no-deps --wheel-dir <wheel-final>`，退出0；
+全新wvenv-final安装锁定依赖及wheel(--no-deps)成功，清除PYTHONPATH/PYTHONHOME、PYTHONNOUSERSITE=1。
+`scripts/verify_install.py --python <wvenv-final/Scripts/python.exe>`退出0，实际CLI、OpenCode、skills、health、静态文件及重开持久化通过。
+SOURCE_ROOT=None、实际模块导入来自site-packages、后台PATH无Node；135个Python文件、31个bundled资源（包含23个web文件）
+在snapshot/wheel/site-packages逐字节核对。受影响installed模块为七原生模块、deepseek_engine/runtime、kling_video、result_download_security、cli。
+真实dsh仍验证OWNER RIGHTS目录内写入及目录外拒绝，不关闭原生沙箱。
+
+最终音色浏览器测试运行同一正式voice_library.mjs，服务使用新wheel的Python/API/静态资源，无Vite和源码导入；
+供应商HTTP模拟，上传探测、WAV内容/存储/播放及重开真实。Kling四模式生成/采用使用真实夹具MP4，非真实付费Kling调用。
+`media-evidence-final.json`记录本次PNG/WAV/MP4原路径、大小、哈希和ffprobe事实，不把静默音频/色块视频说成模型质量验证。
+实际汇总12个素材文件：8个H.264 MP4（96×64、1秒），4个PCM16 WAV（8kHz单声道、0.3秒）；另保存68张分次浏览器截图。
+这些夹具输出不证明供应商的1080p/原生音频质量；已人工查看最新wheel中文播放和英文Kling配置代表截图。
+历史字幕/中文MP4、1080p/2000cue、可编辑包和0.1.1旧wheel证据继续保留原SHA，不改标为本次新实测。
+
+### 证据目录、交付与限制
+
+本批本机根目录为`test-results/issue87/blocking-main-e0b411f1-20261109/`（ignored，不提交环境/凭证/庞大日志）：
+- `native.xml`、`native-012.log`为153/1/0失败；`native-resume-failure-forensics/`保留关键CLI取证。
+- `opencode-resume-isolated.xml`、`opencode-resume-isolated.log`为隔离门禁；`native-final-20261109-1724/`含最终native.xml、pytest.log、exit-code.txt、acl-native.jsonl及evidence-audit.json。
+- `browser/kling/`失败；`browser/kling-fixed/`中英正例；`browser/kling-negative/`旧前端负例；
+  `browser/voice-preview|voice-cold|voice-negative/`及`browser/wheel-voice-final/`保留逐次现场。
+- `wheel-affected-final.xml`、`wheel-affected-final.log`、`wheel-byte-audit-final.json`、`wheel-environment-final.json`及完整*-command/status.json记录安装验收。
+- `runtime-inputs.json`、`freeze.json`、`test-preservation-audit.json`、`index-line-endings.json`和CI完整日志/输入审计记录版本边界。
+
+文件符号链接新探针仍报Windows1314，未开启开发者模式/提升系统权限；七模块及本批wheel相关集合无skip，
+不能据此声称全部历史file-symlink测试已在Windows执行。原生支持限于当前owner的受支持本地NTFS描述符/oplock；
+归属不明时显式失败而非强行回滚，独立WRITE_DAC主体仍可在guard释放后改变策略。
+本批没有重跑完整Windows Python、字幕/MP4/1080p/2000cue或全套浏览器；0.1.2打包和共享契约变化才触发上述受影响扩验。
+冻结源码CI结果见上链接，之后纯证据提交的正常推送、最终头CI与精确交付SHA由PR描述和交付回执记录；
+最终交付继续核对同一886项输入，不因文档更新再次跑Windows。保持Draft及CHANGES_REQUESTED，不替维护者批准或撤销审查。
+
+English: the fixed blocking-main integration preserves timeline/voice and ACL boundaries. The generation default race
+is repaired through the shared resolver, with a passing controlled browser scenario and failing old-frontend control.
+Native154/0/0 and the fresh0.1.2 wheel are revision/input-bound; the first CLI watchdog failure remains recorded.
+No test/skip relaxation or sandbox bypass. Native scheduling, fixture media and real-provider calls are distinguished.
+
+### 冻结源码Linux CI最终结果
+
+[Release checks #177](https://github.com/ThinkFlowLab/OpenDirector/actions/runs/42735681008)已完成 **SUCCESS**。
+Python **1578 passed / 98 skipped / 1 warning**，291.73秒；Node **744 passed / 0 skipped**；标准浏览器 **19/19**，226.8秒。
+构建、contracts、i18n、locale/manifest、4项边界、Linux installed wheel/no Node、音色中英和助手中英检查全部通过。
+日志实际checkout为`d9d27404747a3477ea11b826bc1054c66606b43e`，已fetch核对其完整tree与源码冻结a71d3b1e同为
+`17fade9828708b5747aa724981d77a565a7e9c8b`，不是只凭head SHA推定输入相同。完整日志为ci-source-job-full.log，
+终态及输入审计为ci-source-final.json/ci-source-inputs.json。
+
+Linux98项跳过为92个Windows专属用例及6个未启用的CLI门禁；全部原始原因如下，不统称为平台跳过。
+Windows本批七模块154项和wheel相关308项仍均零skip，实际OpenCode/dsh证据不由Linux的opt-in跳过代替。
+
+| pytest -ra原始原因 | 数量 |
+| --- | --- |
+| requires installed dsh CLI | 1 |
+| requires the native Windows ACL SDK | 1 |
+| Windows file namespace | 12 |
+| Windows junctions need no symlink privilege | 1 |
+| Windows handle sharing | 2 |
+| requires installed JiuwenSwarm Process CLI | 1 |
+| requires installed JiuwenSwarm and FFmpeg | 1 |
+| Set OPENDIRECTOR_REAL_CLI=1 to run the bundled CLI integration | 3 |
+| requires Windows security descriptors | 18 |
+| requires native Windows ACL inheritance | 1 |
+| requires native Windows ACL and oplock APIs | 49 |
+| requires native Windows ACL and file identity APIs | 8 |
+
+后续纯证据交付提交仅更新本记录、双语handoff与计划；其最终头CI/交付SHA在PR回执记录，886项运行输入继续核对，无新增Windows功能重跑。
