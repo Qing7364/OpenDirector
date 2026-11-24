@@ -333,6 +333,23 @@ def test_timeline_consumers_are_reported_without_mutation(source_role):
     assert state.model_dump_json() == before
 
 
+def test_timeline_candidate_usage_preserves_the_adopted_reuse_baseline():
+    state = new_result(graph(), 1, adopt=False)
+    data = state.model_dump()
+    data['editorDocuments'] = [entity(800, kind='timeline', data=dict(
+        fps=24, width=128, height=128, tracks=[dict(id='v', kind='visual', title='Shots', clips=[dict(
+            id='candidate', resource=dict(asset=asset_ref(state.assets[-1]), title='Candidate'),
+            inPoint=0, outPoint=1)])]))]
+    state = ProjectSnapshot.model_validate(data)
+    before = state.model_dump_json()
+    value = report(state)
+    consumer, = value.timelineConsumers
+    assert (consumer.assetId, consumer.specIds, consumer.association) == (uid(1000), (uid(101),), 'asset')
+    assert (value.items[1].currentResultId, value.items[1].baselineJobId) == (uid(501), uid(401))
+    assert all(item.reuseState == 'reusable' for item in value.items)
+    assert state.model_dump_json() == before
+
+
 def test_snapshot_normalization_matches_generation_acceptance(tmp_path):
     from generation_helpers import new_project, command
     from test_creation_generation_service import Provider

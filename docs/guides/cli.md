@@ -80,6 +80,14 @@ For A→B→C and independent D, editing only B's prompt makes B `stale`, C `pen
 
 The report includes `projectVersion`, `eventCursor`, spec revisions, `baselineJobId`, `activeJobIds`, stable reason codes and controlled field paths. `activeJobIds` includes recoverable failures and unresolved remote cancellations. Timeline consumers cover media clips (`kind=clip`, `clipId`) and text sources (`kind=text_overlay`, `overlayId`) for the requested roots and their downstream configurations, distinguishing fixed assets from source associations; they do not authorize replacement. State may change after a query. Re-read affected objects and check current versions and locks before any modification. Inspect the original Job for active or uncertain submissions instead of creating another attempt from this report.
 
+`projectVersion` 和 `eventCursor` 仅标识工程快照。模型配置与能力观测独立读取，不与工程组成同一时点的原子快照；它们在查询期间变化时，比较依据可能变化而工程版本不变。报告不预留执行输入，正式提交生成仍会重新解析并校验实际输入。
+
+`projectVersion` and `eventCursor` identify only the project snapshot. Model configuration and capability observations are read independently, without an atomic snapshot across all three. Changes during the query can affect the comparison without changing the project version. The report does not reserve execution inputs; generation submission still resolves and validates its actual inputs.
+
+时间线实际使用的历史结果和未采用候选也会列入使用点。`association` 表示素材或来源的关联依据，不表示采用状态；复用判断仍以 `currentResultId` 对应的成功 Job 为基线。列出候选素材使用点不会采用该候选，也不会新增生成依赖。
+
+Timeline usages also include historical results and unadopted candidates when those assets are actually retained. `association` identifies the asset/source relationship, not adoption status. Reuse is still compared against the successful Job behind `currentResultId`; listing a candidate usage does not adopt it or create a generation dependency.
+
 每次最多 100 个不同根；检查工程全部生成配置，`maxNodes` 默认 2,000、最大 10,000，活动参考及展开依赖边最多 20,000；时间线使用点与原任务身份合计最多 20,000 条。超限返回 `impact_scope_exceeded`，不返回截断后看似完整的报告。缺少可重建的 guide、窗口或扩展 adapter 依据时保持未知。复用只针对已有素材，不保证重新生成确定性、创作质量、服务商健康或远端 latent/cache 命中。外部 ComfyUI 未登记的 graph/history/cache 仍需单独核对。
 
 Queries accept up to 100 distinct roots and inspect all generation configurations in the project. `maxNodes` defaults to 2,000 with a maximum of 10,000; active references and expanded edges are limited to 20,000. Timeline consumers and retained Job IDs share a separate combined limit of 20,000 entries. Overflow returns `impact_scope_exceeded`, not a truncated report. Missing reconstructable guide, window or adapter-extension evidence remains unknown. Reuse concerns existing assets, not deterministic regeneration, creative quality, provider health or remote latent/cache hits. Unregistered external ComfyUI graphs, history and caches require separate checks.

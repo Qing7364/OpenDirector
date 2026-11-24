@@ -10,6 +10,7 @@ from opendirector.domain.creation.impact import (
     GenerationImpactItem, GenerationImpactReport, ImpactDependency, ImpactReason,
     TimelineClipImpactConsumer, TimelineTextImpactConsumer,
 )
+from opendirector.domain.creation.impact_messages import IMPACT_ERROR_ZH
 from opendirector.domain.creation.models import ModelSnapshot
 from opendirector.domain.creation.project import ProjectSnapshot
 from opendirector.domain.creation.validation import ContractError
@@ -33,8 +34,9 @@ class CreationImpact:
         configs = gateway().models(self.projects.local.repository)
         availability = self.availability or ModelAvailability(configs)
         models = {}
-        # One locked catalog read. Effective rules use only cached/local facts;
-        # never prepare/refresh a capability probe for an impact query.
+        # The project, catalog and capability observations have independent read
+        # boundaries. Report versions identify only the project snapshot; this
+        # query neither reserves model rules nor refreshes capability probes.
         needed = {spec.modelConfigId for spec in snapshot.generationSpecs}
         for public, private in configs.catalog_snapshot():
             identity = UUID(public['id'])
@@ -85,7 +87,7 @@ def build_generation_dependencies(
                 documentId=value.documentVersion.id if value and value.documentVersion else None,
                 inputConfirmed=value is not None))
             if len(edges) > MAX_IMPACT_EDGES:
-                raise ContractError('impact_scope_exceeded', '依赖分析超出节点或参考数量上限。')
+                raise ContractError('impact_scope_exceeded', IMPACT_ERROR_ZH['impact_scope_exceeded'])
     return tuple(edges)
 
 
@@ -116,7 +118,7 @@ class _SnapshotIndex:
                     or job.resumeAllowed or job.remoteCancellation in {'requested', 'unknown'}):
                 self.active_job_count += 1
                 if self.active_job_count > GENERATION_IMPACT_EVIDENCE_LIMIT:
-                    raise ContractError('impact_scope_exceeded', '依赖分析超出节点、参考或证据数量上限。')
+                    raise ContractError('impact_scope_exceeded', IMPACT_ERROR_ZH['impact_scope_exceeded'])
                 self.active_jobs.setdefault(job.inputSnapshot.spec.id, []).append(job.id)
 
     def resolution_view(self, spec):
@@ -258,7 +260,7 @@ def _timeline_consumers(index, related):
 
     def append(consumer):
         if len(consumers) + index.active_job_count >= GENERATION_IMPACT_EVIDENCE_LIMIT:
-            raise ContractError('impact_scope_exceeded', '依赖分析超出节点、参考或证据数量上限。')
+            raise ContractError('impact_scope_exceeded', IMPACT_ERROR_ZH['impact_scope_exceeded'])
         consumers.append(consumer)
 
     for document in index.snapshot.editorDocuments:
@@ -300,12 +302,12 @@ def analyze_generation_impact(snapshot: ProjectSnapshot, *, root_spec_ids: tuple
     if (type(max_nodes) is not int or not 1 <= max_nodes <= 10000
             or len(snapshot.generationSpecs) > max_nodes
             or sum(ref.active for ref in snapshot.references) > MAX_IMPACT_EDGES):
-        raise ContractError('impact_scope_exceeded', '依赖分析超出节点或参考数量上限。')
+        raise ContractError('impact_scope_exceeded', IMPACT_ERROR_ZH['impact_scope_exceeded'])
     index = _SnapshotIndex(snapshot)
     if not root_spec_ids or len(root_spec_ids) > 100 or len(set(root_spec_ids)) != len(root_spec_ids):
-        raise ContractError('invalid_input', '请提供 1 至 100 个不同的生成配置。')
+        raise ContractError('invalid_input', IMPACT_ERROR_ZH['invalid_input'])
     if any(key not in index.specs for key in root_spec_ids):
-        raise ContractError('missing_object', '生成配置不在当前工程中。')
+        raise ContractError('missing_object', IMPACT_ERROR_ZH['missing_object'])
     availability = {}
 
     def available(key):

@@ -172,6 +172,9 @@ def test_impact_errors_and_codes_are_locale_safe(saved, locale):
     for roots in ([uuid4()], [pid]):  # foreign and wrong-kind identity
         response = api.post(f'/api/creation/projects/{pid}/queries', json=impact_query(pid, roots).model_dump(mode='json'))
         assert response.status_code == 404 and response.json()['code'] == 'missing_object'
+        message = response.json()['detail']
+        assert ('当前工程' in message) if locale == 'zh-CN' else (
+            'no longer exists' in message and not any('\u4e00' <= c <= '\u9fff' for c in message))
     valid = impact_query(pid, [specs[1]]).model_dump(mode='json')
     english = api.post(f'/api/creation/projects/{pid}/queries', json=valid, headers={'Accept-Language': 'en-US'}).json()
     chinese = api.post(f'/api/creation/projects/{pid}/queries', json=valid, headers={'Accept-Language': 'zh-CN'}).json()

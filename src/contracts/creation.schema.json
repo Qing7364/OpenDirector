@@ -5706,7 +5706,7 @@
               }
             ],
             "default": null,
-            "description": "Reconstructed current input fingerprint using the acceptance rules.",
+            "description": "Reconstructed inputs from the project snapshot and independently read model rules/capability observations; not an atomic project-and-model snapshot or an execution reservation.",
             "title": "Currentinputfingerprint"
           },
           "inputState": {
@@ -5846,10 +5846,10 @@
           },
           "projectVersion": {
             "$ref": "#/$defs/ObjectVersion",
-            "description": "Single authoritative project snapshot version used for this read, not authorization for later writes."
+            "description": "Version of the authoritative project snapshot only. Model configuration and capability observations are read independently; this report does not authorize later writes or reserve execution inputs."
           },
           "eventCursor": {
-            "description": "Event cursor from the same project snapshot.",
+            "description": "Event cursor from the same project snapshot as projectVersion; excludes model configuration and capability observation changes.",
             "minimum": 0,
             "title": "Eventcursor",
             "type": "integer"
@@ -13620,7 +13620,7 @@
             "type": "integer"
           },
           "assetId": {
-            "description": "Asset currently retained in this timeline usage; the query never replaces it.",
+            "description": "Asset currently retained in this timeline usage, including historical results and unadopted candidates; the query never replaces it.",
             "format": "uuid",
             "title": "Assetid",
             "type": "string"
@@ -13635,7 +13635,7 @@
             "type": "array"
           },
           "association": {
-            "description": "Exact retained result asset, explicit input connection, or both; none implies automatic replacement.",
+            "description": "Basis of association with related specs: exact retained result asset, explicit generation-source connection, or both. Not adoption status or permission to replace content.",
             "enum": [
               "asset",
               "source",
@@ -13858,7 +13858,7 @@
             "type": "integer"
           },
           "assetId": {
-            "description": "Asset currently retained in this timeline usage; the query never replaces it.",
+            "description": "Asset currently retained in this timeline usage, including historical results and unadopted candidates; the query never replaces it.",
             "format": "uuid",
             "title": "Assetid",
             "type": "string"
@@ -13873,7 +13873,7 @@
             "type": "array"
           },
           "association": {
-            "description": "Exact retained result asset, explicit input connection, or both; none implies automatic replacement.",
+            "description": "Basis of association with related specs: exact retained result asset, explicit generation-source connection, or both. Not adoption status or permission to replace content.",
             "enum": [
               "asset",
               "source",
@@ -14435,7 +14435,7 @@
             "type": "integer"
           },
           "assetId": {
-            "description": "Asset currently retained in this timeline usage; the query never replaces it.",
+            "description": "Asset currently retained in this timeline usage, including historical results and unadopted candidates; the query never replaces it.",
             "format": "uuid",
             "title": "Assetid",
             "type": "string"
@@ -14451,7 +14451,7 @@
           },
           "association": {
             "const": "asset",
-            "description": "Exact frozen source text asset; subsequent source edits do not replace overlay text.",
+            "description": "Exact frozen source text asset, including historical results and unadopted candidates; not adoption status. Subsequent source edits do not replace overlay text.",
             "title": "Association",
             "type": "string"
           },
@@ -22530,7 +22530,7 @@
               }
             ],
             "default": null,
-            "description": "Reconstructed current input fingerprint using the acceptance rules.",
+            "description": "Reconstructed inputs from the project snapshot and independently read model rules/capability observations; not an atomic project-and-model snapshot or an execution reservation.",
             "title": "Currentinputfingerprint"
           },
           "inputState": {
@@ -22678,10 +22678,10 @@
           },
           "projectVersion": {
             "$ref": "#/$defs/ObjectVersion",
-            "description": "Single authoritative project snapshot version used for this read, not authorization for later writes."
+            "description": "Version of the authoritative project snapshot only. Model configuration and capability observations are read independently; this report does not authorize later writes or reserve execution inputs."
           },
           "eventCursor": {
-            "description": "Event cursor from the same project snapshot.",
+            "description": "Event cursor from the same project snapshot as projectVersion; excludes model configuration and capability observation changes.",
             "minimum": 0,
             "title": "Eventcursor",
             "type": "integer"
@@ -30762,7 +30762,7 @@
             "type": "integer"
           },
           "assetId": {
-            "description": "Asset currently retained in this timeline usage; the query never replaces it.",
+            "description": "Asset currently retained in this timeline usage, including historical results and unadopted candidates; the query never replaces it.",
             "format": "uuid",
             "title": "Assetid",
             "type": "string"
@@ -30777,7 +30777,7 @@
             "type": "array"
           },
           "association": {
-            "description": "Exact retained result asset, explicit input connection, or both; none implies automatic replacement.",
+            "description": "Basis of association with related specs: exact retained result asset, explicit generation-source connection, or both. Not adoption status or permission to replace content.",
             "enum": [
               "asset",
               "source",
@@ -31006,7 +31006,7 @@
             "type": "integer"
           },
           "assetId": {
-            "description": "Asset currently retained in this timeline usage; the query never replaces it.",
+            "description": "Asset currently retained in this timeline usage, including historical results and unadopted candidates; the query never replaces it.",
             "format": "uuid",
             "title": "Assetid",
             "type": "string"
@@ -31021,7 +31021,7 @@
             "type": "array"
           },
           "association": {
-            "description": "Exact retained result asset, explicit input connection, or both; none implies automatic replacement.",
+            "description": "Basis of association with related specs: exact retained result asset, explicit generation-source connection, or both. Not adoption status or permission to replace content.",
             "enum": [
               "asset",
               "source",
@@ -31599,7 +31599,7 @@
             "type": "integer"
           },
           "assetId": {
-            "description": "Asset currently retained in this timeline usage; the query never replaces it.",
+            "description": "Asset currently retained in this timeline usage, including historical results and unadopted candidates; the query never replaces it.",
             "format": "uuid",
             "title": "Assetid",
             "type": "string"
@@ -31615,7 +31615,7 @@
           },
           "association": {
             "const": "asset",
-            "description": "Exact frozen source text asset; subsequent source edits do not replace overlay text.",
+            "description": "Exact frozen source text asset, including historical results and unadopted candidates; not adoption status. Subsequent source edits do not replace overlay text.",
             "title": "Association",
             "type": "string"
           },
