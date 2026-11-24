@@ -66,3 +66,31 @@ npm run build
 The Python scenario uses real small PNG files, real command acceptance, immutable Job inputs, candidate generation, result adoption, pinning, timeline creation and a fresh project service after reopen. Only model execution is doubled. It verifies query equality across HTTP/Agent/CLI, file and project immutability, one project/catalog read, unavailable output files, foreign-project roots, limits, cycles and a 1,200-node graph. Frontend tests switch the active locale through English and Chinese for all declared report codes and verify typed read behavior while a newer project snapshot arrives.
 
 No live GPU/commercial provider was called. The workbench UI, native visual Harness matrix, browser export and remote continuation caches are separate acceptance scopes; they are not proven by these fixtures.
+
+### Recorded final checks, 2026-11-23
+
+Code under test: `b00b780e9a6260b2169ec27206c3985519e4740d`, on macOS with Python 3.12.10, pytest 9.2.0 and Node 24.22.1. The full run started while that commit finalized, so its profile header records parent `81b9643f`. The reviewed staged diff and the final commit delta have the same SHA-256, `569705ca00960a4fb8c82fb5b823a723d2cc2db4f658ca7b30aa1f1b45fcaa6d`; source files did not change during this run.
+
+| Check | Observed result |
+| --- | --- |
+| Complete CPU suite with `OPENDIRECTOR_REAL_CLI=1` | 2,960 passed, 111 skipped, 1 dependency deprecation warning; 497.79 seconds |
+| Complete layer inventory audit | 3,071 collected, 152/152 required representatives passed, 18 capabilities |
+| Impact domain and query cases within that run | 61 passed |
+| Actual bundled OpenCode binary with a test model gateway, within that run | 7 passed, 2 Windows-specific cases skipped |
+| Complete frontend suite | 962 passed |
+| Locale check | 3,352 keys, 0 problems |
+| Type checking and production build | Passed; existing large-chunk advisory remains |
+| Contract generation, import boundaries and branch static hooks | Passed; 4 import contracts kept |
+| Browser locale and manifest inventories | Passed; these checks do not execute browser journeys |
+
+The 111 skips cover unavailable/opt-in native Harness executions and Windows-specific behavior on macOS. The first full run, before review fixes, had one failure: `test_rejects_removed_runtime_and_invalid_selection_before_acceptance` returned 503 during the default runtime check instead of 409. Its isolated repeat passed, and the final complete run passed it in 7.94 seconds. Runtime code was not changed to hide this observation. An intermediate run was interrupted to finish a generated TypeScript input-type correction and is not counted as successful validation.
+
+To repeat the full execution and its inventory check after environment setup:
+
+```bash
+OPENDIRECTOR_REAL_CLI=1 PYTHONPATH=packages/core/src:apps/api/src:tests .venv/bin/python -m pytest tests -q -ra -m cpu --ci-profile=test-results/impact-python.json
+.venv/bin/python scripts/ci/check_test_layers.py --profile test-results/impact-python.json --require-executed
+npm test
+```
+
+One independent review identified seven important gaps: shared capability observations, text overlay consumers, recoverable Job identities, the browser node budget, structured Agent errors, a retained-evidence budget, and safe verification-cache reuse. Each was covered by a failing regression before its correction; the final suite above includes the corrected cases. Review and the first full test run ran concurrently; the complete suite was rerun after fixes. No second review was used as a substitute for regression tests. The material-node source display detail described above remains deferred.
