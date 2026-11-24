@@ -3789,6 +3789,7 @@
               "missing_object",
               "reference_invalid",
               "image_quality_unsupported",
+              "impact_scope_exceeded",
               "bigmodel_video_model",
               "bigmodel_video_output",
               "bigmodel_video_image",
@@ -4233,6 +4234,7 @@
                 "asset.usage": "#/$defs/AssetUsageQuery",
                 "canvas.status": "#/$defs/CanvasStatusQuery",
                 "canvas.versions": "#/$defs/VersionsQuery",
+                "generation.impact": "#/$defs/GenerationImpactQuery",
                 "generationSpec.versions": "#/$defs/VersionsQuery",
                 "job.get": "#/$defs/ObjectQuery",
                 "object.get": "#/$defs/ObjectQuery",
@@ -4261,9 +4263,16 @@
               },
               {
                 "$ref": "#/$defs/AssetPreviewQuery"
+              },
+              {
+                "$ref": "#/$defs/GenerationImpactQuery"
               }
             ],
             "title": "Query"
+          },
+          "generationImpact": {
+            "$ref": "#/$defs/GenerationImpactReport",
+            "description": "Read-only generation dependency and result reuse report."
           },
           "event": {
             "$ref": "#/$defs/ProjectEvent",
@@ -4369,6 +4378,7 @@
           "command",
           "receipt",
           "query",
+          "generationImpact",
           "event",
           "job",
           "result",
@@ -5626,6 +5636,270 @@
           "suggestion"
         ],
         "title": "GenerationFailure",
+        "type": "object"
+      },
+      "GenerationImpactItem": {
+        "additionalProperties": false,
+        "properties": {
+          "specId": {
+            "description": "Generation configuration identity.",
+            "format": "uuid",
+            "title": "Specid",
+            "type": "string"
+          },
+          "specRevision": {
+            "description": "Configuration revision read by this report.",
+            "minimum": 1,
+            "title": "Specrevision",
+            "type": "integer"
+          },
+          "currentResultId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Currently adopted result, never an unadopted candidate.",
+            "title": "Currentresultid"
+          },
+          "baselineJobId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Successful job owning the adopted result.",
+            "title": "Baselinejobid"
+          },
+          "baselineInputFingerprint": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Verified adopted job input fingerprint.",
+            "title": "Baselineinputfingerprint"
+          },
+          "currentInputFingerprint": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reconstructed current input fingerprint using the acceptance rules.",
+            "title": "Currentinputfingerprint"
+          },
+          "inputState": {
+            "description": "Current effective inputs compared with the adopted job.",
+            "enum": [
+              "equal",
+              "changed",
+              "unresolved",
+              "no_baseline"
+            ],
+            "title": "Inputstate",
+            "type": "string"
+          },
+          "reuseState": {
+            "description": "Result reuse evidence, independent of creative approval and remote cache availability.",
+            "enum": [
+              "reusable",
+              "stale",
+              "pending_upstream",
+              "unavailable",
+              "unknown",
+              "no_result"
+            ],
+            "title": "Reusestate",
+            "type": "string"
+          },
+          "relation": {
+            "description": "Relationship to requested roots, not an invalidation decision.",
+            "enum": [
+              "root",
+              "downstream",
+              "independent"
+            ],
+            "title": "Relation",
+            "type": "string"
+          },
+          "upstreamSpecIds": {
+            "default": [],
+            "description": "Direct current generation dependencies only; no enumeration of all paths.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Upstreamspecids",
+            "type": "array"
+          },
+          "activeJobIds": {
+            "default": [],
+            "description": "Active or unresolved job identities; inspect the original jobs before deciding any action.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Activejobids",
+            "type": "array"
+          },
+          "reasons": {
+            "default": [],
+            "description": "Bounded direct evidence for this decision.",
+            "items": {
+              "$ref": "#/$defs/ImpactReason"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "specId",
+          "specRevision",
+          "inputState",
+          "reuseState",
+          "relation"
+        ],
+        "title": "GenerationImpactItem",
+        "type": "object"
+      },
+      "GenerationImpactQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "queryId": {
+            "description": "Caller-supplied query ID.",
+            "format": "uuid",
+            "title": "Queryid",
+            "type": "string"
+          },
+          "projectId": {
+            "description": "Owning project ID.",
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "const": "generation.impact",
+            "description": "Read adopted-result reuse and dependency impact; never submits, adopts or edits. Limited to 20000 reference edges.",
+            "title": "Type",
+            "type": "string"
+          },
+          "rootSpecIds": {
+            "description": "Unique generation configuration roots belonging to this project.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Rootspecids",
+            "type": "array"
+          },
+          "maxNodes": {
+            "default": 2000,
+            "description": "Maximum project generation configurations to analyze; overflow fails without a partial report.",
+            "maximum": 10000,
+            "minimum": 1,
+            "title": "Maxnodes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "queryId",
+          "projectId",
+          "type",
+          "rootSpecIds"
+        ],
+        "title": "GenerationImpactQuery",
+        "type": "object"
+      },
+      "GenerationImpactReport": {
+        "additionalProperties": false,
+        "properties": {
+          "analysisVersion": {
+            "const": 1,
+            "default": 1,
+            "description": "Impact interpretation version.",
+            "title": "Analysisversion",
+            "type": "integer"
+          },
+          "projectVersion": {
+            "$ref": "#/$defs/ObjectVersion",
+            "description": "Single authoritative project snapshot version used for this read, not authorization for later writes."
+          },
+          "eventCursor": {
+            "description": "Event cursor from the same project snapshot.",
+            "minimum": 0,
+            "title": "Eventcursor",
+            "type": "integer"
+          },
+          "rootSpecIds": {
+            "description": "Unique requested roots in this project.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Rootspecids",
+            "type": "array"
+          },
+          "items": {
+            "description": "All project generation configurations, including independent branches.",
+            "items": {
+              "$ref": "#/$defs/GenerationImpactItem"
+            },
+            "maxItems": 10000,
+            "title": "Items",
+            "type": "array"
+          },
+          "dependencies": {
+            "description": "Current effective follow bindings; scope overflow fails instead of truncating.",
+            "items": {
+              "$ref": "#/$defs/ImpactDependency"
+            },
+            "maxItems": 20000,
+            "title": "Dependencies",
+            "type": "array"
+          },
+          "timelineConsumers": {
+            "description": "Current timeline usages requiring review, never automatic replacement instructions.",
+            "items": {
+              "$ref": "#/$defs/TimelineImpactConsumer"
+            },
+            "title": "Timelineconsumers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "projectVersion",
+          "eventCursor",
+          "rootSpecIds",
+          "items",
+          "dependencies",
+          "timelineConsumers"
+        ],
+        "title": "GenerationImpactReport",
         "type": "object"
       },
       "GenerationSpecBase": {
@@ -6972,6 +7246,166 @@
           }
         },
         "title": "ImageParameters",
+        "type": "object"
+      },
+      "ImpactDependency": {
+        "additionalProperties": false,
+        "properties": {
+          "sourceSpecId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Generation source followed by this binding, if any; retained subject assets and overrides do not follow a spec.",
+            "title": "Sourcespecid"
+          },
+          "sourceItemId": {
+            "description": "Logical source canvas identity, including hidden sources.",
+            "format": "uuid",
+            "title": "Sourceitemid",
+            "type": "string"
+          },
+          "targetSpecId": {
+            "description": "Consumer generation configuration identity.",
+            "format": "uuid",
+            "title": "Targetspecid",
+            "type": "string"
+          },
+          "referenceId": {
+            "description": "Current follow_current reference identity; historical and pinned usages are excluded.",
+            "format": "uuid",
+            "title": "Referenceid",
+            "type": "string"
+          },
+          "role": {
+            "description": "Resolved reference purpose.",
+            "enum": [
+              "reference",
+              "first_frame",
+              "last_frame",
+              "continuation"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "assetId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Actual resolved input asset, absent when unresolved.",
+            "title": "Assetid"
+          },
+          "documentId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Retained subject document supplying this asset.",
+            "title": "Documentid"
+          },
+          "inputConfirmed": {
+            "description": "Whether the current resolver confirmed this transmitted input. False is uncertainty, not an empty dependency.",
+            "title": "Inputconfirmed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sourceItemId",
+          "targetSpecId",
+          "referenceId",
+          "role",
+          "inputConfirmed"
+        ],
+        "title": "ImpactDependency",
+        "type": "object"
+      },
+      "ImpactReason": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "Stable explanation code, localized only by the display layer.",
+            "enum": [
+              "inputs_changed",
+              "upstream_pending",
+              "output_unavailable",
+              "baseline_missing",
+              "input_unresolved",
+              "model_unresolved",
+              "dependency_unresolved",
+              "execution_basis_incomplete",
+              "dependency_cycle"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "objectId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Related business object identity, when known.",
+            "title": "Objectid"
+          },
+          "referenceId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Related current reference identity, when known.",
+            "title": "Referenceid"
+          },
+          "fieldPaths": {
+            "default": [],
+            "description": "Allowlisted changed input sections; no user content or connection details.",
+            "items": {
+              "enum": [
+                "spec.prompt",
+                "spec.promptContent",
+                "spec.parameters",
+                "model",
+                "references"
+              ],
+              "type": "string"
+            },
+            "title": "Fieldpaths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "ImpactReason",
         "type": "object"
       },
       "InputRules": {
@@ -13311,6 +13745,80 @@
         "title": "TimelineFontResource",
         "type": "object"
       },
+      "TimelineImpactConsumer": {
+        "additionalProperties": false,
+        "properties": {
+          "editorDocumentId": {
+            "description": "Current timeline document identity.",
+            "format": "uuid",
+            "title": "Editordocumentid",
+            "type": "string"
+          },
+          "revision": {
+            "description": "Timeline document revision read by this report.",
+            "minimum": 1,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "clipId": {
+            "description": "Retained timeline clip identity.",
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Clipid",
+            "type": "string"
+          },
+          "assetId": {
+            "description": "Asset currently retained in this clip; the query never replaces it.",
+            "format": "uuid",
+            "title": "Assetid",
+            "type": "string"
+          },
+          "specIds": {
+            "description": "Related generation specs from exact result or source identities.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Specids",
+            "type": "array"
+          },
+          "association": {
+            "description": "Exact retained result asset, explicit input connection, or both; none implies automatic replacement.",
+            "enum": [
+              "asset",
+              "source",
+              "asset_and_source"
+            ],
+            "title": "Association",
+            "type": "string"
+          },
+          "sourceItemId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Source item from the document input connection, when relevant.",
+            "title": "Sourceitemid"
+          }
+        },
+        "required": [
+          "editorDocumentId",
+          "revision",
+          "clipId",
+          "assetId",
+          "specIds",
+          "association"
+        ],
+        "title": "TimelineImpactConsumer",
+        "type": "object"
+      },
       "TimelinePackageExportFile": {
         "additionalProperties": false,
         "properties": {
@@ -15821,6 +16329,7 @@
             "asset.usage": "#/$defs/AssetUsageQuery",
             "canvas.status": "#/$defs/CanvasStatusQuery",
             "canvas.versions": "#/$defs/VersionsQuery",
+            "generation.impact": "#/$defs/GenerationImpactQuery",
             "generationSpec.versions": "#/$defs/VersionsQuery",
             "job.get": "#/$defs/ObjectQuery",
             "object.get": "#/$defs/ObjectQuery",
@@ -15849,9 +16358,16 @@
           },
           {
             "$ref": "#/$defs/AssetPreviewQuery"
+          },
+          {
+            "$ref": "#/$defs/GenerationImpactQuery"
           }
         ],
         "title": "Query"
+      },
+      "generationImpact": {
+        "$ref": "#/$defs/GenerationImpactReport",
+        "description": "Read-only generation dependency and result reuse report."
       },
       "event": {
         "$ref": "#/$defs/ProjectEvent",
@@ -15957,6 +16473,7 @@
       "command",
       "receipt",
       "query",
+      "generationImpact",
       "event",
       "job",
       "result",
@@ -19881,6 +20398,7 @@
               "missing_object",
               "reference_invalid",
               "image_quality_unsupported",
+              "impact_scope_exceeded",
               "bigmodel_video_model",
               "bigmodel_video_output",
               "bigmodel_video_image",
@@ -20327,6 +20845,7 @@
                 "asset.usage": "#/$defs/AssetUsageQuery",
                 "canvas.status": "#/$defs/CanvasStatusQuery",
                 "canvas.versions": "#/$defs/VersionsQuery",
+                "generation.impact": "#/$defs/GenerationImpactQuery",
                 "generationSpec.versions": "#/$defs/VersionsQuery",
                 "job.get": "#/$defs/ObjectQuery",
                 "object.get": "#/$defs/ObjectQuery",
@@ -20355,9 +20874,16 @@
               },
               {
                 "$ref": "#/$defs/AssetPreviewQuery"
+              },
+              {
+                "$ref": "#/$defs/GenerationImpactQuery"
               }
             ],
             "title": "Query"
+          },
+          "generationImpact": {
+            "$ref": "#/$defs/GenerationImpactReport",
+            "description": "Read-only generation dependency and result reuse report."
           },
           "event": {
             "$ref": "#/$defs/ProjectEvent",
@@ -20463,6 +20989,7 @@
           "command",
           "receipt",
           "query",
+          "generationImpact",
           "event",
           "job",
           "result",
@@ -21776,6 +22303,279 @@
           "suggestion"
         ],
         "title": "GenerationFailure",
+        "type": "object"
+      },
+      "GenerationImpactItem": {
+        "additionalProperties": false,
+        "properties": {
+          "specId": {
+            "description": "Generation configuration identity.",
+            "format": "uuid",
+            "title": "Specid",
+            "type": "string"
+          },
+          "specRevision": {
+            "description": "Configuration revision read by this report.",
+            "minimum": 1,
+            "title": "Specrevision",
+            "type": "integer"
+          },
+          "currentResultId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Currently adopted result, never an unadopted candidate.",
+            "title": "Currentresultid"
+          },
+          "baselineJobId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Successful job owning the adopted result.",
+            "title": "Baselinejobid"
+          },
+          "baselineInputFingerprint": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Verified adopted job input fingerprint.",
+            "title": "Baselineinputfingerprint"
+          },
+          "currentInputFingerprint": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reconstructed current input fingerprint using the acceptance rules.",
+            "title": "Currentinputfingerprint"
+          },
+          "inputState": {
+            "description": "Current effective inputs compared with the adopted job.",
+            "enum": [
+              "equal",
+              "changed",
+              "unresolved",
+              "no_baseline"
+            ],
+            "title": "Inputstate",
+            "type": "string"
+          },
+          "reuseState": {
+            "description": "Result reuse evidence, independent of creative approval and remote cache availability.",
+            "enum": [
+              "reusable",
+              "stale",
+              "pending_upstream",
+              "unavailable",
+              "unknown",
+              "no_result"
+            ],
+            "title": "Reusestate",
+            "type": "string"
+          },
+          "relation": {
+            "description": "Relationship to requested roots, not an invalidation decision.",
+            "enum": [
+              "root",
+              "downstream",
+              "independent"
+            ],
+            "title": "Relation",
+            "type": "string"
+          },
+          "upstreamSpecIds": {
+            "default": [],
+            "description": "Direct current generation dependencies only; no enumeration of all paths.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Upstreamspecids",
+            "type": "array"
+          },
+          "activeJobIds": {
+            "default": [],
+            "description": "Active or unresolved job identities; inspect the original jobs before deciding any action.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Activejobids",
+            "type": "array"
+          },
+          "reasons": {
+            "default": [],
+            "description": "Bounded direct evidence for this decision.",
+            "items": {
+              "$ref": "#/$defs/ImpactReason"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "specId",
+          "specRevision",
+          "currentResultId",
+          "baselineJobId",
+          "baselineInputFingerprint",
+          "currentInputFingerprint",
+          "inputState",
+          "reuseState",
+          "relation",
+          "upstreamSpecIds",
+          "activeJobIds",
+          "reasons"
+        ],
+        "title": "GenerationImpactItem",
+        "type": "object"
+      },
+      "GenerationImpactQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "queryId": {
+            "description": "Caller-supplied query ID.",
+            "format": "uuid",
+            "title": "Queryid",
+            "type": "string"
+          },
+          "projectId": {
+            "description": "Owning project ID.",
+            "format": "uuid",
+            "title": "Projectid",
+            "type": "string"
+          },
+          "type": {
+            "const": "generation.impact",
+            "description": "Read adopted-result reuse and dependency impact; never submits, adopts or edits. Limited to 20000 reference edges.",
+            "title": "Type",
+            "type": "string"
+          },
+          "rootSpecIds": {
+            "description": "Unique generation configuration roots belonging to this project.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Rootspecids",
+            "type": "array"
+          },
+          "maxNodes": {
+            "default": 2000,
+            "description": "Maximum project generation configurations to analyze; overflow fails without a partial report.",
+            "maximum": 10000,
+            "minimum": 1,
+            "title": "Maxnodes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "queryId",
+          "projectId",
+          "type",
+          "rootSpecIds",
+          "maxNodes"
+        ],
+        "title": "GenerationImpactQuery",
+        "type": "object"
+      },
+      "GenerationImpactReport": {
+        "additionalProperties": false,
+        "properties": {
+          "analysisVersion": {
+            "const": 1,
+            "default": 1,
+            "description": "Impact interpretation version.",
+            "title": "Analysisversion",
+            "type": "integer"
+          },
+          "projectVersion": {
+            "$ref": "#/$defs/ObjectVersion",
+            "description": "Single authoritative project snapshot version used for this read, not authorization for later writes."
+          },
+          "eventCursor": {
+            "description": "Event cursor from the same project snapshot.",
+            "minimum": 0,
+            "title": "Eventcursor",
+            "type": "integer"
+          },
+          "rootSpecIds": {
+            "description": "Unique requested roots in this project.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Rootspecids",
+            "type": "array"
+          },
+          "items": {
+            "description": "All project generation configurations, including independent branches.",
+            "items": {
+              "$ref": "#/$defs/GenerationImpactItem"
+            },
+            "maxItems": 10000,
+            "title": "Items",
+            "type": "array"
+          },
+          "dependencies": {
+            "description": "Current effective follow bindings; scope overflow fails instead of truncating.",
+            "items": {
+              "$ref": "#/$defs/ImpactDependency"
+            },
+            "maxItems": 20000,
+            "title": "Dependencies",
+            "type": "array"
+          },
+          "timelineConsumers": {
+            "description": "Current timeline usages requiring review, never automatic replacement instructions.",
+            "items": {
+              "$ref": "#/$defs/TimelineImpactConsumer"
+            },
+            "title": "Timelineconsumers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "analysisVersion",
+          "projectVersion",
+          "eventCursor",
+          "rootSpecIds",
+          "items",
+          "dependencies",
+          "timelineConsumers"
+        ],
+        "title": "GenerationImpactReport",
         "type": "object"
       },
       "GenerationSpecBase": {
@@ -23205,6 +24005,172 @@
           "outputFormat"
         ],
         "title": "ImageParameters",
+        "type": "object"
+      },
+      "ImpactDependency": {
+        "additionalProperties": false,
+        "properties": {
+          "sourceSpecId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Generation source followed by this binding, if any; retained subject assets and overrides do not follow a spec.",
+            "title": "Sourcespecid"
+          },
+          "sourceItemId": {
+            "description": "Logical source canvas identity, including hidden sources.",
+            "format": "uuid",
+            "title": "Sourceitemid",
+            "type": "string"
+          },
+          "targetSpecId": {
+            "description": "Consumer generation configuration identity.",
+            "format": "uuid",
+            "title": "Targetspecid",
+            "type": "string"
+          },
+          "referenceId": {
+            "description": "Current follow_current reference identity; historical and pinned usages are excluded.",
+            "format": "uuid",
+            "title": "Referenceid",
+            "type": "string"
+          },
+          "role": {
+            "description": "Resolved reference purpose.",
+            "enum": [
+              "reference",
+              "first_frame",
+              "last_frame",
+              "continuation"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "assetId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Actual resolved input asset, absent when unresolved.",
+            "title": "Assetid"
+          },
+          "documentId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Retained subject document supplying this asset.",
+            "title": "Documentid"
+          },
+          "inputConfirmed": {
+            "description": "Whether the current resolver confirmed this transmitted input. False is uncertainty, not an empty dependency.",
+            "title": "Inputconfirmed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sourceSpecId",
+          "sourceItemId",
+          "targetSpecId",
+          "referenceId",
+          "role",
+          "assetId",
+          "documentId",
+          "inputConfirmed"
+        ],
+        "title": "ImpactDependency",
+        "type": "object"
+      },
+      "ImpactReason": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "Stable explanation code, localized only by the display layer.",
+            "enum": [
+              "inputs_changed",
+              "upstream_pending",
+              "output_unavailable",
+              "baseline_missing",
+              "input_unresolved",
+              "model_unresolved",
+              "dependency_unresolved",
+              "execution_basis_incomplete",
+              "dependency_cycle"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "objectId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Related business object identity, when known.",
+            "title": "Objectid"
+          },
+          "referenceId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Related current reference identity, when known.",
+            "title": "Referenceid"
+          },
+          "fieldPaths": {
+            "default": [],
+            "description": "Allowlisted changed input sections; no user content or connection details.",
+            "items": {
+              "enum": [
+                "spec.prompt",
+                "spec.promptContent",
+                "spec.parameters",
+                "model",
+                "references"
+              ],
+              "type": "string"
+            },
+            "title": "Fieldpaths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "objectId",
+          "referenceId",
+          "fieldPaths"
+        ],
+        "title": "ImpactReason",
         "type": "object"
       },
       "InputRules": {
@@ -29768,6 +30734,81 @@
         "title": "TimelineFontResource",
         "type": "object"
       },
+      "TimelineImpactConsumer": {
+        "additionalProperties": false,
+        "properties": {
+          "editorDocumentId": {
+            "description": "Current timeline document identity.",
+            "format": "uuid",
+            "title": "Editordocumentid",
+            "type": "string"
+          },
+          "revision": {
+            "description": "Timeline document revision read by this report.",
+            "minimum": 1,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "clipId": {
+            "description": "Retained timeline clip identity.",
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Clipid",
+            "type": "string"
+          },
+          "assetId": {
+            "description": "Asset currently retained in this clip; the query never replaces it.",
+            "format": "uuid",
+            "title": "Assetid",
+            "type": "string"
+          },
+          "specIds": {
+            "description": "Related generation specs from exact result or source identities.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Specids",
+            "type": "array"
+          },
+          "association": {
+            "description": "Exact retained result asset, explicit input connection, or both; none implies automatic replacement.",
+            "enum": [
+              "asset",
+              "source",
+              "asset_and_source"
+            ],
+            "title": "Association",
+            "type": "string"
+          },
+          "sourceItemId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Source item from the document input connection, when relevant.",
+            "title": "Sourceitemid"
+          }
+        },
+        "required": [
+          "editorDocumentId",
+          "revision",
+          "clipId",
+          "assetId",
+          "specIds",
+          "association",
+          "sourceItemId"
+        ],
+        "title": "TimelineImpactConsumer",
+        "type": "object"
+      },
       "TimelinePackageExportFile": {
         "additionalProperties": false,
         "properties": {
@@ -32373,6 +33414,7 @@
             "asset.usage": "#/$defs/AssetUsageQuery",
             "canvas.status": "#/$defs/CanvasStatusQuery",
             "canvas.versions": "#/$defs/VersionsQuery",
+            "generation.impact": "#/$defs/GenerationImpactQuery",
             "generationSpec.versions": "#/$defs/VersionsQuery",
             "job.get": "#/$defs/ObjectQuery",
             "object.get": "#/$defs/ObjectQuery",
@@ -32401,9 +33443,16 @@
           },
           {
             "$ref": "#/$defs/AssetPreviewQuery"
+          },
+          {
+            "$ref": "#/$defs/GenerationImpactQuery"
           }
         ],
         "title": "Query"
+      },
+      "generationImpact": {
+        "$ref": "#/$defs/GenerationImpactReport",
+        "description": "Read-only generation dependency and result reuse report."
       },
       "event": {
         "$ref": "#/$defs/ProjectEvent",
@@ -32509,6 +33558,7 @@
       "command",
       "receipt",
       "query",
+      "generationImpact",
       "event",
       "job",
       "result",
