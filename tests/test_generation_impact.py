@@ -305,20 +305,31 @@ def test_active_and_unknown_jobs_do_not_create_retry_actions():
     assert not {'action', 'submit', 'resume', 'retry'} & set(item.model_dump())
 
 
-def test_timeline_consumers_are_reported_without_mutation():
+@pytest.mark.parametrize('source_role', ['generation', 'material'])
+def test_timeline_consumers_are_reported_without_mutation(source_role):
     state = graph()
     resources = [dict(asset=asset_ref(state.assets[i]), title=f'Clip {i}') for i in (1, 2, 3)]
     data = state.model_dump()
+    source_id = uid(201)
+    if source_role == 'material':
+        source_id = uid(810)
+        data['canvasItems'] = [*state.canvasItems, entity(810, kind='image',
+            binding=dict(role='material', objectRef=asset_ref(state.assets[1])))]
     data['editorDocuments'] = [entity(800, kind='timeline', revision=3,
-        inputConnections=[dict(id=uid(801), sourceId=uid(201), slotId='b', asset=asset_ref(state.assets[1]))],
+        inputConnections=[dict(id=uid(801), sourceId=source_id, slotId='b', asset=asset_ref(state.assets[1]))],
         data=dict(fps=24, width=128, height=128, tracks=[dict(id='v', kind='visual', title='Shots', clips=[
             dict(id=key, resource=res, inPoint=0, outPoint=1) for key, res in zip(('b', 'c', 'd'), resources)])]))]
     state = new_result(ProjectSnapshot.model_validate(data), 1)  # timeline retains B1
     before = state.model_dump_json()
-    consumers = report(state).timelineConsumers
-    assert [(c.clipId, c.association, c.assetId, c.specIds, c.revision) for c in consumers] == [
-        ('b', 'asset_and_source', uid(301), (uid(101),), 3),
-        ('c', 'asset', uid(302), (uid(102),), 3)]
+    value = report(state)
+    association = 'asset_and_source' if source_role == 'generation' else 'asset'
+    assert [(c.clipId, c.association, c.assetId, c.specIds, c.revision, c.sourceItemId)
+            for c in value.timelineConsumers] == [
+        ('b', association, uid(301), (uid(101),), 3, source_id),
+        ('c', 'asset', uid(302), (uid(102),), 3, None)]
+    # Retained material provenance does not introduce another generation edge.
+    assert [(e.sourceSpecId, e.targetSpecId) for e in value.dependencies] == [
+        (uid(100), uid(101)), (uid(101), uid(102))]
     assert state.model_dump_json() == before
 
 

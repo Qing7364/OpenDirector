@@ -277,7 +277,7 @@ def _timeline_consumers(index, related):
                 append(TimelineClipImpactConsumer(editorDocumentId=document.id, revision=document.revision,
                     clipId=clip.id, assetId=clip.resource.asset.assetId, specIds=tuple(sorted(asset_specs | source_specs)),
                     association='asset_and_source' if asset_specs and source_specs else 'asset' if asset_specs else 'source',
-                    sourceItemId=source.id if source_specs else None))
+                    sourceItemId=source.id if source is not None else None))
         for overlay in document.data.overlays:
             if overlay.sourceAsset is None:
                 continue

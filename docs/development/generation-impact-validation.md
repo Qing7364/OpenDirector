@@ -48,7 +48,7 @@ HTTP and Agent queries read the generation service's existing capability observa
 
 Direct application callers should pass their owning generation service's `availability` and shared `assets` when constructing `CreationCanvas`. Without an injected capability service, the standalone reader has only local configuration rules, not another process's transient observations.
 
-One display detail remains deferred: if a clip is explicitly connected through an ordinary material node containing a related result, the report includes its exact asset usage but omits that material node's `sourceItemId`. This does not remove the consumer or imply a live generation dependency.
+If a clip is explicitly connected through an ordinary material node containing a related result, the report retains that node's `sourceItemId` alongside its exact asset usage. Its `association` remains `asset`: the source identity records the document connection without creating a live generation dependency. Clips without a source connection retain a null `sourceItemId`.
 
 ## Reproducible validation
 
@@ -93,4 +93,10 @@ OPENDIRECTOR_REAL_CLI=1 PYTHONPATH=packages/core/src:apps/api/src:tests .venv/bi
 npm test
 ```
 
-One independent review identified seven important gaps: shared capability observations, text overlay consumers, recoverable Job identities, the browser node budget, structured Agent errors, a retained-evidence budget, and safe verification-cache reuse. Each was covered by a failing regression before its correction; the final suite above includes the corrected cases. Review and the first full test run ran concurrently; the complete suite was rerun after fixes. No second review was used as a substitute for regression tests. The material-node source display detail described above remains deferred.
+One independent review identified seven important gaps: shared capability observations, text overlay consumers, recoverable Job identities, the browser node budget, structured Agent errors, a retained-evidence budget, and safe verification-cache reuse. Each was covered by a failing regression before its correction; the final suite above includes the corrected cases. Review and the first full test run ran concurrently; the complete suite was rerun after fixes. No second review was used as a substitute for regression tests.
+
+### Material source identity follow-up, 2026-11-23
+
+The material-node regression initially failed because `sourceItemId` was null; the generation-node case passed. The correction retains the existing connected source identity independently of whether that source follows a generation spec. The regression verifies the retained B1 asset after B2 adoption, both source roles, a clip without a connection, the unchanged A → B → C dependency graph and an unchanged project snapshot.
+
+After this correction, `tests/test_generation_impact.py`, `tests/test_generation_impact_queries.py` and `tests/test_creation_contracts.py` passed together: 141 cases, with the same dependency deprecation warning. The frontend impact/client tests passed 34 cases; generated contracts and all four import boundaries passed. These focused checks cover the follow-up; the complete CPU/frontend counts above belong to the earlier recorded revision.
