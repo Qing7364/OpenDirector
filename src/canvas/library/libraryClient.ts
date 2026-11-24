@@ -15,6 +15,7 @@ import type {
   MessageParams,
 } from "../../i18n/types";
 import type { CanvasResource } from "../model";
+import { fetchMediaSource } from "../../backend/creationClient.ts";
 
 export type LibraryKind = "asset" | "subject";
 export type LibraryState = "active" | "trashed";
@@ -309,7 +310,7 @@ export async function addInlineFromCanvas(
   options: { projectId?: string; assetId?: string; mimeType?: string } = {},
   t: Translate = nowTranslate,
 ): Promise<LibraryItem> {
-  const response = await fetch(src);
+  const response = await fetchMediaSource(src);
   if (!response.ok) throw new Error(t("library.media.inlineReadFailed"));
   const blob = await response.blob();
   const mime =

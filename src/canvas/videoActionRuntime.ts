@@ -8,6 +8,7 @@ import {
 import { withMediaDuration } from "./editorMedia.ts";
 import { tNow } from "../i18n/messages.ts";
 import type { VideoCrop } from "./videoCrop.ts";
+import { fetchMediaSource } from "../backend/creationClient.ts";
 
 export interface VideoTimeRange {
   start: number;
@@ -163,7 +164,7 @@ export async function captureVideoEndpoint(
   const { Input, BlobSource, ALL_FORMATS, EncodedPacketSink, CanvasSink } =
     await import("mediabunny");
   signal.throwIfAborted();
-  const response = await fetch(src, { signal });
+  const response = await fetchMediaSource(src, { signal });
   if (!response.ok) throw new Error(tNow("errors.videoAction.videoRead"));
   const blob = await response.blob();
   signal.throwIfAborted();
@@ -233,7 +234,7 @@ export async function extractVideoAudio(
   signal: AbortSignal,
 ): Promise<LinkedMediaResult> {
   signal.throwIfAborted();
-  const response = await fetch(src, { signal });
+  const response = await fetchMediaSource(src, { signal });
   if (!response.ok) throw new Error(tNow("errors.videoAction.audioRead"));
   const source = await response.arrayBuffer();
   signal.throwIfAborted();

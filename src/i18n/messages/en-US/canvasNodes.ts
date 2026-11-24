@@ -21,6 +21,9 @@ export const canvasNodes = {
   "canvasNodes.file.local": "Local file",
   "canvasNodes.file.open": "Open preview",
   "canvasNodes.upload.missing": "Media not found. Choose it again.",
+  "canvasNodes.media.loading": "Loading media",
+  "canvasNodes.media.failed": "Could not load media",
+  "canvasNodes.media.retry": "Retry",
   "canvasNodes.upload.aria": "Upload {kind}",
   "canvasNodes.upload.local": "Upload from computer",
 

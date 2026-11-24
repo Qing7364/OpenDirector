@@ -38,6 +38,7 @@ import {
   type VideoTimeRange,
 } from "./videoActionRuntime";
 import "./video-action-editor.css";
+import { AssetMedia } from "./useAssetMedia.tsx";
 
 export interface VideoActionEditorProps {
   node: CanvasNode;
@@ -790,7 +791,8 @@ function VideoActionSession({
               }
             : null;
   const playback = (
-    <video
+    <AssetMedia
+      as="video"
       ref={bindVideo}
       src={node.data.src}
       crossOrigin="anonymous"

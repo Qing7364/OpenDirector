@@ -42,6 +42,7 @@ import { resolveGenerationModel } from "./modelResolution.ts";
 import { GenerationComposerShell } from "./GenerationComposerShell";
 import { useI18n } from "../i18n/I18nProvider";
 import { getNodeGenerationSettings } from "./generationSettings.ts";
+import { AssetMedia } from "./useAssetMedia.tsx";
 export { getNodeGenerationSettings };
 import {
   GenerationReferenceEditor,
@@ -325,7 +326,8 @@ export function NodeComposer({
                 >
                   <span className="cw-frame-thumbnail">
                     {node?.data.src && node.data.assetState !== "missing" ? (
-                      <img
+                      <AssetMedia
+                        as="img"
                         src={node.data.src}
                         alt={`${label}：${node.data.title}`}
                         draggable={false}

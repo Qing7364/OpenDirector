@@ -38,6 +38,8 @@ export const canvasShell = {
   "canvas.project.editNameHint": "Click to edit the project name",
   "canvas.project.switch": "Switch project",
   "canvas.project.actions": "Project actions",
+  "canvas.project.openInNewTab": "Open in new tab",
+  "canvas.project.openInNewTabFor": "Open {name} in new tab",
   "canvas.project.actionsFor": "Project actions: {name}",
   "canvas.project.cleanup": "Remove unreadable projects ({count})",
   "canvas.project.create": "New canvas project",

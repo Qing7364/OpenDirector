@@ -6,6 +6,7 @@ This records the dependency/reuse foundation for [#355](https://github.com/Think
 
 - The isolated implementation starts at upstream `main` `52102ed03d74d08f52face27113fc9d44e283216`. No commits from the local issue-87 branch were carried in.
 - Before updating [PR #480](https://github.com/ThinkFlowLab/OpenDirector/pull/480), the branch integrates upstream `main` `8258d4b016496d81a7c824e4cdfa42f3c840d5eb`. This includes [#479](https://github.com/ThinkFlowLab/OpenDirector/pull/479)'s published node workflow and `control` references; the impact contract now accepts that role. Those node operations do not supply the separate #212 workbench service/schema described below.
+- The final synchronization also integrates `main` `63279266d7587761399647c61c53f104c76f66f5`, which advanced during validation. The query union retains both upstream `job.status` and this PR's `generation.impact`; both documentation index entries and both error-code sets are retained.
 - [#342](https://github.com/ThinkFlowLab/OpenDirector/pull/342) was open at `f9993a1fb9db103ab028103859d26bdf93f4935d`. Its public patch provides H3 compilation, storyboard audit/QC and shot revision, not an adopted-input impact/reuse query. This change reuses existing execution snapshots, input resolution, asset verification and query dispatch.
 - [#212's progress report](https://github.com/ThinkFlowLab/OpenDirector/issues/212#issuecomment-6821432061) describes a separate workbench service and editor document. The public branch/PR searches and the [interface request](https://github.com/ThinkFlowLab/OpenDirector/issues/355#issuecomment-7116407885) did not provide a runnable workbench branch or schema. No reply was present on recheck. Overlap with that unpublished implementation remains unconfirmed.
 - Client and bilingual display strings are ready; visible workbench integration and a browser language-switch acceptance remain pending #212. No second workbench or speculative workbench document adapter was added.
@@ -132,3 +133,16 @@ The complete checks below ran against the merged implementation before its merge
 The first complete run of this merged tree had one setup error: the worker for `test_real_opencode_native_visual_input[image-model]` received HTTP 503 before its model-input assertions, leaving 2,969 passed and 111 skipped. Its isolated repeat passed in 15.83 seconds, and the final complete run above passed. The available failure output does not establish the cause of the 503. Runtime code, timeout limits and assertions were not changed to hide it. The 111 skips cover unavailable/opt-in native Harness executions and Windows-specific behavior on macOS; no live GPU/provider or new browser workbench acceptance is claimed.
 
 The final CPU execution profile is `test-results/impact-review-python-final.json`; audit it with `scripts/ci/check_test_layers.py --profile test-results/impact-review-python-final.json --require-executed`. Logs and profiles are local ignored artifacts, not prerequisites for using the shared query.
+
+### Final upstream conflict resolution, 2026-11-24
+
+After publishing `35e2fd9c`, the remote check found that `main` had advanced to `63279266`. Integrating it required combining the documentation index and query/error-code unions, then regenerating the shared contracts. One hundred other staged paths exactly matched upstream blobs. The affected query wiring retains shared capability and asset services through HTTP, Agent and the frontend client.
+
+The merged tree passed 351 Python regressions across impact queries, contracts, localization, Agent gateway/metadata, CLI, HTTP creation, canvas/assets/history services and rule facts (39.09 seconds, one dependency deprecation warning). The complete frontend suite passed 981 cases (13.65 seconds). Contract generation, all four import boundaries, i18n (3,377 keys, zero problems), type checking and the production build passed; the existing chunk-size advisory remains.
+
+These focused Python checks validate the final conflict resolution. The 2,970-pass complete CPU run above belongs to `35e2fd9c` before this last upstream integration; it is not a full-suite result for the final merge. No additional workbench browser acceptance is claimed.
+
+```bash
+PYTHONPATH=packages/core/src:apps/api/src:tests .venv/bin/python -m pytest tests/test_generation_impact.py tests/test_generation_impact_queries.py tests/test_creation_contracts.py tests/test_localization.py tests/test_agent_gateway.py tests/test_cli.py tests/test_creation_api.py tests/test_creation_canvas_service.py tests/test_creation_assets.py tests/test_creation_history_service.py tests/test_agent_metadata.py tests/test_rule_facts.py -q
+npm test
+```

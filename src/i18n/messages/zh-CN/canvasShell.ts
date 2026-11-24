@@ -39,6 +39,8 @@ export const canvasShell = {
   "canvas.project.editNameHint": "单击编辑项目名称",
   "canvas.project.switch": "切换项目",
   "canvas.project.actions": "项目操作",
+  "canvas.project.openInNewTab": "在新标签页打开",
+  "canvas.project.openInNewTabFor": "在新标签页打开 {name}",
   "canvas.project.actionsFor": "项目操作：{name}",
   "canvas.project.cleanup": "清除不可读项目（{count}）",
   "canvas.project.create": "新建画布项目",
