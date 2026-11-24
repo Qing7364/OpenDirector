@@ -73,6 +73,26 @@ def test_dependency_edges_use_active_business_bindings():
     assert len(build_generation_dependencies(inactive, resolved(inactive))) == 1
 
 
+def test_structure_control_reference_is_reported_as_an_effective_input():
+    from test_fasth3_inputs import control_model
+    public = control_model()
+    current_model = ModelSnapshot(modelConfigId=public.id, inputRules=public.inputRules,
+        **{key: getattr(public, key) for key in
+           ('kind', 'modelId', 'url', 'protocol', 'connectionType', 'proxyMode', 'videoAdapter')})
+    source = asset(300, 'video')
+    state = ProjectSnapshot(project=dict(id=PROJECT, name='Control'), assets=[source],
+        generationSpecs=[entity(100, kind='video', purpose='generation', modelConfigId=public.id,
+            parameters=dict(videoMode='control'))],
+        canvasItems=[entity(200, kind='video', binding=dict(role='material', objectRef=asset_ref(source)))],
+        references=[entity(600, binding='follow_current', targetSpecId=uid(100),
+            source=dict(id=uid(200)), role='control')])
+    value = report(state, roots=(uid(100),), models={public.id: current_model})
+    edge, = value.dependencies
+    assert (edge.role, edge.sourceItemId, edge.assetId, edge.inputConfirmed) == ('control', uid(200), source.id, True)
+    assert edge.sourceSpecId is None
+    assert value.items[0].reuseState == 'no_result'
+
+
 def test_pinned_hidden_override_and_subject_bindings():
     state = graph()
     hidden = replace(state, 'canvasItems', 1, visible=False)

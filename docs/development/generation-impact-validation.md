@@ -5,6 +5,7 @@ This records the dependency/reuse foundation for [#355](https://github.com/Think
 ## Upstream boundary, checked 2026-11-23
 
 - The isolated implementation starts at upstream `main` `52102ed03d74d08f52face27113fc9d44e283216`. No commits from the local issue-87 branch were carried in.
+- Before updating [PR #480](https://github.com/ThinkFlowLab/OpenDirector/pull/480), the branch integrates upstream `main` `8258d4b016496d81a7c824e4cdfa42f3c840d5eb`. This includes [#479](https://github.com/ThinkFlowLab/OpenDirector/pull/479)'s published node workflow and `control` references; the impact contract now accepts that role. Those node operations do not supply the separate #212 workbench service/schema described below.
 - [#342](https://github.com/ThinkFlowLab/OpenDirector/pull/342) was open at `f9993a1fb9db103ab028103859d26bdf93f4935d`. Its public patch provides H3 compilation, storyboard audit/QC and shot revision, not an adopted-input impact/reuse query. This change reuses existing execution snapshots, input resolution, asset verification and query dispatch.
 - [#212's progress report](https://github.com/ThinkFlowLab/OpenDirector/issues/212#issuecomment-6821432061) describes a separate workbench service and editor document. The public branch/PR searches and the [interface request](https://github.com/ThinkFlowLab/OpenDirector/issues/355#issuecomment-7116407885) did not provide a runnable workbench branch or schema. No reply was present on recheck. Overlap with that unpublished implementation remains unconfirmed.
 - Client and bilingual display strings are ready; visible workbench integration and a browser language-switch acceptance remain pending #212. No second workbench or speculative workbench document adapter was added.
@@ -112,3 +113,22 @@ After this correction, `tests/test_generation_impact.py`, `tests/test_generation
 The follow-up to `79e25cc4` clarifies independent project/model/capability reads and the inclusion of actual historical/candidate timeline usages in contract descriptions and bilingual CLI guidance. Schema changes are descriptions only. It also moves impact error copy into a catalog while preserving stable codes, generic boundary translations and status handling. Graph validation and the deferred workbench integration are unchanged.
 
 The candidate-usage regression and expanded missing-object language assertions passed before the message extraction. After the changes, the impact, shared-query, creation-contract and localization modules passed together: 150 cases, with the existing dependency deprecation warning. Frontend impact/client tests passed 34 cases. Contract generation, all four import boundaries, i18n (3,352 keys, zero problems), type checking and the production build passed; the existing chunk-size advisory remains. These focused checks cover this follow-up and do not replace the earlier recorded full-suite evidence.
+
+### Upstream integration and complete review validation, 2026-11-24
+
+The tested tree combines review follow-up `65082d7f` with upstream `main` `8258d4b0`. Upstream's published structure-control input adds the `control` reference role. Its impact-query regression first failed with a contract validation error, then passed after the report contract accepted that role and the generated contracts were refreshed. The regression checks an effective material input's source identity and asset identity without inferring a generation source. It does not qualify remote control-result caches or relax conservative handling of unknown adapter fields.
+
+The complete checks below ran against the merged implementation before its merge commit, so the CPU profile records first parent `65082d7f`. Source files stayed unchanged throughout the final full run; only this evidence record was completed afterward. Environment: macOS, Python 3.12.10, pytest 9.2.0 and Node 24.22.1.
+
+| Check | Observed result |
+| --- | --- |
+| Complete CPU suite with `OPENDIRECTOR_REAL_CLI=1` | 2,970 passed, 111 skipped, 1 dependency deprecation warning; 555.76 seconds |
+| Complete layer inventory audit with execution required | 3,081 collected, 152/152 required representatives passed, 18 capabilities |
+| Complete frontend suite | 973 passed; 18.49 seconds |
+| Locale check | 3,367 keys, 0 problems |
+| Type checking and production build | Passed; existing large-chunk advisory remains |
+| Contract generation and import boundaries | Passed; 4 import contracts kept |
+
+The first complete run of this merged tree had one setup error: the worker for `test_real_opencode_native_visual_input[image-model]` received HTTP 503 before its model-input assertions, leaving 2,969 passed and 111 skipped. Its isolated repeat passed in 15.83 seconds, and the final complete run above passed. The available failure output does not establish the cause of the 503. Runtime code, timeout limits and assertions were not changed to hide it. The 111 skips cover unavailable/opt-in native Harness executions and Windows-specific behavior on macOS; no live GPU/provider or new browser workbench acceptance is claimed.
+
+The final CPU execution profile is `test-results/impact-review-python-final.json`; audit it with `scripts/ci/check_test_layers.py --profile test-results/impact-review-python-final.json --require-executed`. Logs and profiles are local ignored artifacts, not prerequisites for using the shared query.

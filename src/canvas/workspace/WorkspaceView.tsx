@@ -1725,6 +1725,7 @@ export function WorkspaceView({ rt }: { rt: WorkspaceRuntime }) {
                 key={activeAction.token}
                 node={actionNode}
                 tool={activeAction.tool}
+                nodes={doc.nodes}
                 draft={actionNode.data.taskDraft}
                 mediaContainer={actionMedia}
                 onDraftChange={(task) => saveActionDraft(activeAction, task)}

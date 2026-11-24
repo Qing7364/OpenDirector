@@ -24,7 +24,7 @@ class ImpactDependency(Contract):
     sourceItemId: UUID = Field(description='Logical source canvas identity, including hidden sources.')
     targetSpecId: UUID = Field(description='Consumer generation configuration identity.')
     referenceId: UUID = Field(description='Current follow_current reference identity; historical and pinned usages are excluded.')
-    role: Literal['reference', 'first_frame', 'last_frame', 'continuation'] = Field(description='Resolved reference purpose.')
+    role: Literal['reference', 'first_frame', 'last_frame', 'continuation', 'control'] = Field(description='Resolved reference purpose.')
     assetId: UUID | None = Field(default=None, description='Actual resolved input asset, absent when unresolved.')
     documentId: UUID | None = Field(default=None, description='Retained subject document supplying this asset.')
     inputConfirmed: bool = Field(description='Whether the current resolver confirmed this transmitted input. False is uncertainty, not an empty dependency.')

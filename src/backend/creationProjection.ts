@@ -919,6 +919,23 @@ export class CreationProjection {
           target: item.id,
           intent: "post_edit_result",
         });
+      const editor = asset?.provenance.editorDocumentId &&
+        snapshot.editorDocuments.find((doc) => doc.id === asset.provenance.editorDocumentId);
+      if (
+        asset && editor && editor.kind === "media_edit" &&
+        editor.data.tool === "video-mask-composite" &&
+        editor.revision === asset.provenance.editorRevision
+      ) {
+        const maskId = editor.data.sourceItems[1];
+        if (maskId && maskId !== sourceId && maskId !== item.id &&
+            snapshot.canvasItems.some((source) => source.id === maskId))
+          document.edges.push({
+            id: `publication:${item.id}:${asset.id}:${maskId}`,
+            source: maskId,
+            target: item.id,
+            intent: "post_edit_result",
+          });
+      }
     }
     document.hiddenNodes = document.nodes.filter(
       (node) => !visible.has(node.id),
