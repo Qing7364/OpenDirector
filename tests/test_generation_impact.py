@@ -22,17 +22,18 @@ def impact_model():
            ('kind', 'modelId', 'url', 'protocol', 'connectionType', 'proxyMode', 'videoAdapter')})
 
 
-def graph():
+def graph(count=4, links=((0, 1), (1, 2))):
     """Four adopted image specs: A -> B -> C, with independent D."""
     data = dict(project=dict(id=PROJECT, name='Impact'), generationSpecs=[
         entity(100+i, kind='image', purpose='generation', modelConfigId=uid(20), prompt=f'Shot {i}')
-        for i in range(4)], canvasItems=[
+        for i in range(count)], canvasItems=[
         entity(200+i, kind='image', binding=dict(role='generation', objectRef=dict(id=uid(100+i))))
-        for i in range(4)], assets=[], jobs=[], results=[], references=[])
-    for i in range(4):
-        if i in (1, 2):
+        for i in range(count)], assets=[], jobs=[], results=[], references=[])
+    for i in range(count):
+        source = next((source for source, target in links if target == i), None)
+        if source is not None:
             data['references'].append(entity(600+i, binding='follow_current',
-                targetSpecId=uid(100+i), source=dict(id=uid(199+i))))
+                targetSpecId=uid(100+i), source=dict(id=uid(200+source))))
         state = ProjectSnapshot.model_validate(data)
         spec, refs = current_generation_inputs(state, state.generationSpecs[i], impact_model().inputRules)
         frozen = InputSnapshot(spec=spec, model=impact_model(), references=refs)
@@ -152,3 +153,223 @@ def test_impact_query_rejects_unbounded_or_ambiguous_inputs(updates):
     data = dict(type='generation.impact', queryId=uid(900), projectId=PROJECT, rootSpecIds=[uid(101)])
     with pytest.raises(ValidationError):
         TypeAdapter(Query).validate_python(data | updates)
+
+
+def report(state=None, *, models=None, missing=(), available=None, roots=(uid(101),), max_nodes=2000):
+    from opendirector.application.creation_impact import analyze_generation_impact
+    return analyze_generation_impact(state or graph(), root_spec_ids=roots,
+        models={uid(20): impact_model()} if models is None else models,
+        asset_available=available or (lambda key: key not in missing), max_nodes=max_nodes)
+
+
+def by_spec(value):
+    return {item.specId: item for item in value.items}
+
+
+def new_result(state, index, *, adopt=True, number=1000):
+    """Build an accepted result from real inputs, independently of the analyzer."""
+    from opendirector.domain.creation.generation import execution_spec
+    spec, refs = current_generation_inputs(state, state.generationSpecs[index], impact_model().inputRules)
+    frozen = InputSnapshot(spec=execution_spec(spec, refs, impact_model().inputRules).model_copy(
+        update={'currentResultId': None}), model=impact_model(), references=refs)
+    output = asset(number, 'image')
+    job = Job(**entity(number+1, inputSnapshot=frozen, inputFingerprint=frozen.fingerprint(),
+        execution=dict(kind='image', size='2K'), status='succeeded', recovery='done', phase='complete',
+        asset=asset_ref(output)))
+    result = ResultVersion(**entity(number+2, specId=spec.id, jobId=job.id,
+        asset=job.asset, inputFingerprint=job.inputFingerprint))
+    data = state.model_dump()
+    data.update(assets=[*state.assets, output], jobs=[*state.jobs, job], results=[*state.results, result])
+    if adopt:
+        data['generationSpecs'][index]['currentResultId'] = result.id
+    return ProjectSnapshot.model_validate(data)
+
+
+def test_unchanged_adopted_results_are_reusable():
+    calls = []
+    value = report(available=lambda key: calls.append(key) or True)
+    assert [item.reuseState for item in value.items] == ['reusable'] * 4
+    assert [item.relation for item in value.items] == ['independent', 'root', 'downstream', 'independent']
+    assert all(item.inputState == 'equal' and item.baselineInputFingerprint == item.currentInputFingerprint for item in value.items)
+    assert [item.baselineJobId for item in value.items] == [uid(400+i) for i in range(4)]
+    assert sorted(calls) == [uid(300+i) for i in range(4)]  # shared inputs checked once
+
+
+def test_pending_upstream_is_not_current_input_mismatch():
+    state = replace(graph(), 'generationSpecs', 1, prompt='Changed B', revision=2)
+    items = report(state).items
+    assert [(i.inputState, i.reuseState) for i in items] == [
+        ('equal', 'reusable'), ('changed', 'stale'), ('equal', 'pending_upstream'), ('equal', 'reusable')]
+    assert items[1].reasons[0].fieldPaths == ('spec.prompt',)
+    assert any(r.code == 'upstream_pending' and r.objectId == uid(101) and r.referenceId == uid(602) for r in items[2].reasons)
+
+
+def test_adoption_changes_direct_consumer_inputs():
+    state = graph(5, ((0, 1), (1, 2), (2, 4)))
+    state = new_result(replace(state, 'generationSpecs', 1, prompt='B2', revision=2), 1)
+    items = report(state).items
+    assert [(i.inputState, i.reuseState) for i in items] == [
+        ('equal', 'reusable'), ('equal', 'reusable'), ('changed', 'stale'),
+        ('equal', 'reusable'), ('equal', 'pending_upstream')]
+
+
+def test_candidate_and_pinned_reference_do_not_invalidate():
+    state = graph()
+    candidate = new_result(state, 1, adopt=False)
+    assert all(i.reuseState == 'reusable' for i in report(candidate).items)
+    pinned = replace(state, 'references', 1, binding='pinned', source=asset_ref(state.assets[1]).model_dump(),
+        sourceVersion=dict(objectType='canvas_item', id=uid(201), revision=1))
+    pinned = new_result(pinned, 2)  # Adopt C generated from a fixed reference.
+    adopted = new_result(pinned, 1, number=1100)
+    item = report(adopted).items[2]
+    assert (item.inputState, item.reuseState, item.relation) == ('equal', 'reusable', 'independent')
+
+
+def test_display_changes_do_not_change_effective_inputs():
+    state = replace(graph(), 'canvasItems', 1, position=dict(x=99, y=20), visible=False, revision=2)
+    state = replace(state, 'assets', 1, name='A renamed file', revision=2)
+    assert all(i.inputState == 'equal' and i.reuseState == 'reusable' for i in report(state).items)
+
+
+@pytest.mark.parametrize('change,path', [
+    ('model', 'model'), ('rules', 'model'), ('connection', 'model'), ('parameters', 'spec.parameters'),
+    ('identity', 'references'), ('source_identity', 'references'), ('order', 'references'), ('role', 'references'),
+])
+def test_model_parameters_order_and_identity_changes_are_detected(change, path):
+    state = graph()
+    models = {uid(20): impact_model()}
+    if change == 'model':
+        models[uid(20)] = models[uid(20)].model_copy(update={'modelId': 'another-model'})
+    elif change == 'rules':
+        models[uid(20)] = models[uid(20)].model_copy(update={'inputRules': models[uid(20)].inputRules.model_copy(update={'maxImages': 1})})
+    elif change == 'connection':
+        models[uid(20)] = models[uid(20)].model_copy(update={'url': 'https://other.example/v1'})
+    elif change == 'parameters':
+        state = replace(state, 'generationSpecs', 1, parameters=dict(size='1024x1024'))
+    elif change == 'identity':
+        data = state.model_dump()
+        twin = state.assets[0].model_copy(update={'id': uid(999), 'path': f'assets/{uid(999)}'})
+        data['assets'] = [*state.assets, twin]
+        data['canvasItems'][0]['binding'] = dict(role='material', objectRef=asset_ref(twin))
+        state = ProjectSnapshot.model_validate(data)
+    elif change == 'source_identity':
+        data = state.model_dump()
+        data['canvasItems'] = [*state.canvasItems, entity(999, kind='image', binding=dict(role='material', objectRef=asset_ref(state.assets[0])))]
+        data['references'][0]['source']['id'] = uid(999)
+        state = ProjectSnapshot.model_validate(data)
+    elif change == 'role':
+        state = replace(state, 'references', 0, role='first_frame')
+    else:
+        data = state.model_dump()
+        data['references'] = [*state.references, entity(699, binding='follow_current', targetSpecId=uid(101), source=dict(id=uid(203)), order=1)]
+        state = new_result(ProjectSnapshot.model_validate(data), 1)
+        data = state.model_dump()
+        data['references'][0]['order'], data['references'][2]['order'] = 1, 0
+        state = ProjectSnapshot.model_validate(data)
+    item = report(state, models=models).items[1]
+    assert item.inputState == 'changed' and item.reuseState == 'stale'
+    assert path in next(r.fieldPaths for r in item.reasons if r.code == 'inputs_changed')
+
+
+def test_missing_output_and_unrecorded_inputs_are_not_reusable():
+    state = graph()
+    missing = report(state, missing=(uid(303),)).items[3]
+    assert missing.reuseState == 'unavailable' and missing.reasons[0].code == 'output_unavailable'
+    unresolved = report(state, models={}).items[1]
+    assert (unresolved.inputState, unresolved.reuseState) == ('unresolved', 'unknown')
+    assert unresolved.reasons[0].code == 'model_unresolved'
+    incomplete = replace(state, 'jobs', 1, adapterParameters={'guide_frames': [0, 8], 'adapter': 'external'})
+    assert report(incomplete).items[1].reuseState == 'unknown'
+    assert 'execution_basis_incomplete' in [r.code for r in report(incomplete).items[1].reasons]
+    # Defensive analyzer checks also reject inconsistent in-memory adopted links.
+    broken = state.model_copy(update={'results': tuple(r for r in state.results if r.id != uid(501))})
+    assert report(broken).items[1].reuseState == 'unknown'
+    missing_input = report(state, missing=(uid(300),)).items[1]
+    assert missing_input.reuseState == 'unknown' and missing_input.inputState == 'unresolved'
+    assert 'input_unresolved' in [r.code for r in missing_input.reasons]
+    empty = replace(state, 'generationSpecs', 1, currentResultId=None)
+    assert report(empty).items[1].reuseState == 'no_result'
+
+
+def test_active_and_unknown_jobs_do_not_create_retry_actions():
+    state = graph()
+    active = state.jobs[1].model_copy(update={'id': uid(901), 'status': 'running', 'phase': 'poll',
+        'recovery': 'remote', 'externalTaskId': 'original-task', 'asset': None, 'resumeAllowed': True})
+    unknown = active.model_copy(update={'id': uid(902), 'status': 'interrupted', 'recovery': 'review',
+        'resumeAllowed': False, 'externalTaskId': None})
+    state = state.model_copy(update={'jobs': (*state.jobs, active, unknown)})
+    before = state.model_dump_json()
+    item = report(state).items[1]
+    assert item.reuseState == 'reusable' and item.activeJobIds == (uid(901), uid(902))
+    assert state.model_dump_json() == before
+    assert not {'action', 'submit', 'resume', 'retry'} & set(item.model_dump())
+
+
+def test_timeline_consumers_are_reported_without_mutation():
+    state = graph()
+    resources = [dict(asset=asset_ref(state.assets[i]), title=f'Clip {i}') for i in (1, 2, 3)]
+    data = state.model_dump()
+    data['editorDocuments'] = [entity(800, kind='timeline', revision=3,
+        inputConnections=[dict(id=uid(801), sourceId=uid(201), slotId='b', asset=asset_ref(state.assets[1]))],
+        data=dict(fps=24, width=128, height=128, tracks=[dict(id='v', kind='visual', title='Shots', clips=[
+            dict(id=key, resource=res, inPoint=0, outPoint=1) for key, res in zip(('b', 'c', 'd'), resources)])]))]
+    state = new_result(ProjectSnapshot.model_validate(data), 1)  # timeline retains B1
+    before = state.model_dump_json()
+    consumers = report(state).timelineConsumers
+    assert [(c.clipId, c.association, c.assetId, c.specIds, c.revision) for c in consumers] == [
+        ('b', 'asset_and_source', uid(301), (uid(101),), 3),
+        ('c', 'asset', uid(302), (uid(102),), 3)]
+    assert state.model_dump_json() == before
+
+
+def test_snapshot_normalization_matches_generation_acceptance(tmp_path):
+    from generation_helpers import new_project, command
+    from test_creation_generation_service import Provider
+    from opendirector.application.creation_generation import CreationGeneration
+    from opendirector.domain.creation.generation import freeze_input_snapshot
+    from opendirector.infrastructure.model_configs import ModelConfigs
+    project = new_project(tmp_path)
+    configs = ModelConfigs(tmp_path)
+    config = configs.save('video', 'http://127.0.0.1:12345/v1', 'standard-video-fixture', '',
+        connection_type='self_hosted', protocol='vllm_omni', auth_mode='none', video_adapter='standard',
+        video_capabilities={'outputs': [{'resolution': '480P', 'width': 832, 'height': 480, 'durations': [5]}],
+            'defaultResolution': '480P', 'defaultDuration': 5, 'dimensionStep': 2})
+    runner = CreationGeneration(project[0], configs, Provider())
+    request = command(project, config, parameters={'videoMode': 'reference', 'resolution': '480P'})
+    receipt = runner.prepare(request, session=project[2])
+    assert receipt.status == 'accepted'
+    state = project[0].snapshot(project[1])
+    spec, job = state.generationSpecs[-1], state.jobs[-1]
+    current, refs = current_generation_inputs(state, spec, job.inputSnapshot.model.inputRules)
+    frozen = freeze_input_snapshot(current, job.inputSnapshot.model, refs)
+    assert frozen == job.inputSnapshot and frozen.fingerprint() == job.inputFingerprint
+    assert spec.parameters.videoMode == 'reference' and frozen.spec.parameters.videoMode == 'first_frame'
+
+
+def test_inputs_over_acceptance_limit_are_unresolved_before_fingerprinting():
+    state = graph()
+    data = state.model_dump()
+    data['references'] = [entity(10000+i, binding='follow_current', targetSpecId=uid(101),
+        source=dict(id=uid(200)), order=i) for i in range(65)]
+    item = report(ProjectSnapshot.model_validate(data)).items[1]
+    assert (item.inputState, item.reuseState) == ('unresolved', 'unknown')
+
+
+@pytest.mark.parametrize('parameters', [
+    {'seconds': '5', 'duration': 5, 'num_frames': 124, 'fps': 24, 'seed': 123},
+    {'duration': 5, 'generate_audio': True, 'audio': 'native', 'operation': 'text', 'route': '/text2video/fixture'},
+])
+def test_ordinary_adapter_settings_do_not_invent_missing_guide_requirements(parameters):
+    from opendirector.domain.creation.generation import VideoGenerationSpec
+    public = model('video')
+    frozen_model = ModelSnapshot(modelConfigId=public.id, inputRules=public.inputRules,
+        **{key: getattr(public, key) for key in ('kind', 'modelId', 'url', 'protocol', 'connectionType', 'videoAdapter')})
+    frozen = InputSnapshot(spec=VideoGenerationSpec(**entity(100, kind='video', purpose='generation', modelConfigId=public.id)), model=frozen_model)
+    output = asset(300, 'video')
+    job = Job(**entity(400, inputSnapshot=frozen, inputFingerprint=frozen.fingerprint(),
+        execution=dict(kind='video'), asset=asset_ref(output), status='succeeded', recovery='done',
+        adapterParameters=parameters))
+    result = ResultVersion(**entity(500, specId=uid(100), jobId=job.id, asset=job.asset, inputFingerprint=job.inputFingerprint))
+    state = ProjectSnapshot(project=dict(id=PROJECT, name='Video'), assets=[output], jobs=[job], results=[result],
+        generationSpecs=[frozen.spec.model_copy(update={'currentResultId': result.id})])
+    assert report(state, models={public.id: frozen_model}, roots=(uid(100),)).items[0].reuseState == 'reusable'
