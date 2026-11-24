@@ -7,7 +7,7 @@ from .canvas import CanvasItem, CanvasItemBase, MediaRole, NodeCapabilities, Rol
 from .commands import Command, CommandReceipt, ProjectEvent, Query
 from .editors import EditorDocument
 from .generation import ExecutionParameters, GenerationSpec, InputSnapshot, Job, PromptPart, Reference, ResultVersion
-from .impact import GenerationImpactReport
+from .impact import GenerationImpactReport, TimelineImpactConsumer
 from .models import ModelConfigPublic, ModelConfigWrite, ModelKind, VideoMode
 from .project import ProjectSnapshot, ViewState
 from .timeline_packages import TimelinePackageManifest, TimelinePackageImportRequest, TimelinePackageImportReceipt
@@ -44,4 +44,5 @@ ALIASES = {
     'EditorDocument': EditorDocument, 'Command': Command, 'ExecutionParameters': ExecutionParameters,
     'PromptPart': PromptPart, 'MediaRole': MediaRole, 'RoleAction': RoleAction,
     'ModelKind': ModelKind, 'VideoMode': VideoMode,
+    'TimelineImpactConsumer': TimelineImpactConsumer,
 }

@@ -1,8 +1,10 @@
 """Reconstructible, read-only dependency and adopted-result reuse evidence."""
-from typing import Literal
+from typing import Annotated, Literal, Union
 from uuid import UUID
 
 from pydantic import Field, model_validator
+
+from opendirector.domain.rule_facts import GENERATION_IMPACT_EVIDENCE_LIMIT
 
 from .base import Contract, Digest, Identifier, ObjectVersion, Revision, unique
 
@@ -28,14 +30,28 @@ class ImpactDependency(Contract):
     inputConfirmed: bool = Field(description='Whether the current resolver confirmed this transmitted input. False is uncertainty, not an empty dependency.')
 
 
-class TimelineImpactConsumer(Contract):
+class TimelineImpactConsumerBase(Contract):
     editorDocumentId: UUID = Field(description='Current timeline document identity.')
     revision: Revision = Field(description='Timeline document revision read by this report.')
-    clipId: Identifier = Field(description='Retained timeline clip identity.')
-    assetId: UUID = Field(description='Asset currently retained in this clip; the query never replaces it.')
+    assetId: UUID = Field(description='Asset currently retained in this timeline usage; the query never replaces it.')
     specIds: tuple[UUID, ...] = Field(description='Related generation specs from exact result or source identities.')
     association: Literal['asset', 'source', 'asset_and_source'] = Field(description='Exact retained result asset, explicit input connection, or both; none implies automatic replacement.')
     sourceItemId: UUID | None = Field(default=None, description='Source item from the document input connection, when relevant.')
+
+
+class TimelineClipImpactConsumer(TimelineImpactConsumerBase):
+    kind: Literal['clip'] = Field(default='clip', description='Retained media clip usage.')
+    clipId: Identifier = Field(description='Retained timeline clip identity.')
+
+
+class TimelineTextImpactConsumer(TimelineImpactConsumerBase):
+    kind: Literal['text_overlay'] = Field(default='text_overlay', description='Retained text overlay source usage.')
+    overlayId: Identifier = Field(description='Retained timeline text overlay identity.')
+    association: Literal['asset'] = Field(description='Exact frozen source text asset; subsequent source edits do not replace overlay text.')
+    sourceItemId: None = Field(default=None, description='Text overlays retain source assets without a live source connection.')
+
+
+TimelineImpactConsumer = Annotated[Union[TimelineClipImpactConsumer, TimelineTextImpactConsumer], Field(discriminator='kind')]
 
 
 class GenerationImpactItem(Contract):
@@ -49,7 +65,8 @@ class GenerationImpactItem(Contract):
     reuseState: Literal['reusable', 'stale', 'pending_upstream', 'unavailable', 'unknown', 'no_result'] = Field(description='Result reuse evidence, independent of creative approval and remote cache availability.')
     relation: Literal['root', 'downstream', 'independent'] = Field(description='Relationship to requested roots, not an invalidation decision.')
     upstreamSpecIds: tuple[UUID, ...] = Field(default=(), description='Direct current generation dependencies only; no enumeration of all paths.')
-    activeJobIds: tuple[UUID, ...] = Field(default=(), description='Active or unresolved job identities; inspect the original jobs before deciding any action.')
+    activeJobIds: tuple[UUID, ...] = Field(default=(), max_length=GENERATION_IMPACT_EVIDENCE_LIMIT,
+        description='Active, recoverable or unresolved job identities; inspect the original jobs before deciding any action.')
     reasons: tuple[ImpactReason, ...] = Field(default=(), description='Bounded direct evidence for this decision.')
 
 
@@ -60,7 +77,8 @@ class GenerationImpactReport(Contract):
     rootSpecIds: tuple[UUID, ...] = Field(min_length=1, max_length=100, description='Unique requested roots in this project.')
     items: tuple[GenerationImpactItem, ...] = Field(max_length=10000, description='All project generation configurations, including independent branches.')
     dependencies: tuple[ImpactDependency, ...] = Field(max_length=20000, description='Current effective follow bindings; scope overflow fails instead of truncating.')
-    timelineConsumers: tuple[TimelineImpactConsumer, ...] = Field(description='Current timeline usages requiring review, never automatic replacement instructions.')
+    timelineConsumers: tuple[TimelineImpactConsumer, ...] = Field(max_length=GENERATION_IMPACT_EVIDENCE_LIMIT,
+        description='Current clip and text overlay usages requiring review; combined with all activeJobIds, limited to 20000 entries. Never automatic replacement instructions.')
 
     @model_validator(mode='after')
     def identities(self):
@@ -70,4 +88,6 @@ class GenerationImpactReport(Contract):
             raise ValueError('Impact roots must belong to the reported specs')
         if self.projectVersion.objectType != 'project':
             raise ValueError('Impact report requires a project version')
+        if len(self.timelineConsumers) + sum(len(item.activeJobIds) for item in self.items) > GENERATION_IMPACT_EVIDENCE_LIMIT:
+            raise ValueError('Impact report exceeds the retained evidence budget')
         return self

@@ -5755,11 +5755,12 @@
           },
           "activeJobIds": {
             "default": [],
-            "description": "Active or unresolved job identities; inspect the original jobs before deciding any action.",
+            "description": "Active, recoverable or unresolved job identities; inspect the original jobs before deciding any action.",
             "items": {
               "format": "uuid",
               "type": "string"
             },
+            "maxItems": 20000,
             "title": "Activejobids",
             "type": "array"
           },
@@ -5883,10 +5884,25 @@
             "type": "array"
           },
           "timelineConsumers": {
-            "description": "Current timeline usages requiring review, never automatic replacement instructions.",
+            "description": "Current clip and text overlay usages requiring review; combined with all activeJobIds, limited to 20000 entries. Never automatic replacement instructions.",
             "items": {
-              "$ref": "#/$defs/TimelineImpactConsumer"
+              "discriminator": {
+                "mapping": {
+                  "clip": "#/$defs/TimelineClipImpactConsumer",
+                  "text_overlay": "#/$defs/TimelineTextImpactConsumer"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/TimelineClipImpactConsumer"
+                },
+                {
+                  "$ref": "#/$defs/TimelineTextImpactConsumer"
+                }
+              ]
             },
+            "maxItems": 20000,
             "title": "Timelineconsumers",
             "type": "array"
           }
@@ -13588,6 +13604,87 @@
         "title": "TimelineClip",
         "type": "object"
       },
+      "TimelineClipImpactConsumer": {
+        "additionalProperties": false,
+        "properties": {
+          "editorDocumentId": {
+            "description": "Current timeline document identity.",
+            "format": "uuid",
+            "title": "Editordocumentid",
+            "type": "string"
+          },
+          "revision": {
+            "description": "Timeline document revision read by this report.",
+            "minimum": 1,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "assetId": {
+            "description": "Asset currently retained in this timeline usage; the query never replaces it.",
+            "format": "uuid",
+            "title": "Assetid",
+            "type": "string"
+          },
+          "specIds": {
+            "description": "Related generation specs from exact result or source identities.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Specids",
+            "type": "array"
+          },
+          "association": {
+            "description": "Exact retained result asset, explicit input connection, or both; none implies automatic replacement.",
+            "enum": [
+              "asset",
+              "source",
+              "asset_and_source"
+            ],
+            "title": "Association",
+            "type": "string"
+          },
+          "sourceItemId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Source item from the document input connection, when relevant.",
+            "title": "Sourceitemid"
+          },
+          "kind": {
+            "const": "clip",
+            "default": "clip",
+            "description": "Retained media clip usage.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "clipId": {
+            "description": "Retained timeline clip identity.",
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Clipid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "editorDocumentId",
+          "revision",
+          "assetId",
+          "specIds",
+          "association",
+          "clipId"
+        ],
+        "title": "TimelineClipImpactConsumer",
+        "type": "object"
+      },
       "TimelineData": {
         "additionalProperties": false,
         "properties": {
@@ -13745,7 +13842,7 @@
         "title": "TimelineFontResource",
         "type": "object"
       },
-      "TimelineImpactConsumer": {
+      "TimelineImpactConsumerBase": {
         "additionalProperties": false,
         "properties": {
           "editorDocumentId": {
@@ -13760,16 +13857,8 @@
             "title": "Revision",
             "type": "integer"
           },
-          "clipId": {
-            "description": "Retained timeline clip identity.",
-            "maxLength": 100,
-            "minLength": 1,
-            "pattern": "\\S",
-            "title": "Clipid",
-            "type": "string"
-          },
           "assetId": {
-            "description": "Asset currently retained in this clip; the query never replaces it.",
+            "description": "Asset currently retained in this timeline usage; the query never replaces it.",
             "format": "uuid",
             "title": "Assetid",
             "type": "string"
@@ -13811,12 +13900,11 @@
         "required": [
           "editorDocumentId",
           "revision",
-          "clipId",
           "assetId",
           "specIds",
           "association"
         ],
-        "title": "TimelineImpactConsumer",
+        "title": "TimelineImpactConsumerBase",
         "type": "object"
       },
       "TimelinePackageExportFile": {
@@ -14329,6 +14417,75 @@
           "padding"
         ],
         "title": "TimelineTextBackground",
+        "type": "object"
+      },
+      "TimelineTextImpactConsumer": {
+        "additionalProperties": false,
+        "properties": {
+          "editorDocumentId": {
+            "description": "Current timeline document identity.",
+            "format": "uuid",
+            "title": "Editordocumentid",
+            "type": "string"
+          },
+          "revision": {
+            "description": "Timeline document revision read by this report.",
+            "minimum": 1,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "assetId": {
+            "description": "Asset currently retained in this timeline usage; the query never replaces it.",
+            "format": "uuid",
+            "title": "Assetid",
+            "type": "string"
+          },
+          "specIds": {
+            "description": "Related generation specs from exact result or source identities.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Specids",
+            "type": "array"
+          },
+          "association": {
+            "const": "asset",
+            "description": "Exact frozen source text asset; subsequent source edits do not replace overlay text.",
+            "title": "Association",
+            "type": "string"
+          },
+          "sourceItemId": {
+            "default": null,
+            "description": "Text overlays retain source assets without a live source connection.",
+            "title": "Sourceitemid",
+            "type": "null"
+          },
+          "kind": {
+            "const": "text_overlay",
+            "default": "text_overlay",
+            "description": "Retained text overlay source usage.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "overlayId": {
+            "description": "Retained timeline text overlay identity.",
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Overlayid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "editorDocumentId",
+          "revision",
+          "assetId",
+          "specIds",
+          "association",
+          "overlayId"
+        ],
+        "title": "TimelineTextImpactConsumer",
         "type": "object"
       },
       "TimelineTextOverlay": {
@@ -22422,11 +22579,12 @@
           },
           "activeJobIds": {
             "default": [],
-            "description": "Active or unresolved job identities; inspect the original jobs before deciding any action.",
+            "description": "Active, recoverable or unresolved job identities; inspect the original jobs before deciding any action.",
             "items": {
               "format": "uuid",
               "type": "string"
             },
+            "maxItems": 20000,
             "title": "Activejobids",
             "type": "array"
           },
@@ -22558,10 +22716,25 @@
             "type": "array"
           },
           "timelineConsumers": {
-            "description": "Current timeline usages requiring review, never automatic replacement instructions.",
+            "description": "Current clip and text overlay usages requiring review; combined with all activeJobIds, limited to 20000 entries. Never automatic replacement instructions.",
             "items": {
-              "$ref": "#/$defs/TimelineImpactConsumer"
+              "discriminator": {
+                "mapping": {
+                  "clip": "#/$defs/TimelineClipImpactConsumer",
+                  "text_overlay": "#/$defs/TimelineTextImpactConsumer"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/TimelineClipImpactConsumer"
+                },
+                {
+                  "$ref": "#/$defs/TimelineTextImpactConsumer"
+                }
+              ]
             },
+            "maxItems": 20000,
             "title": "Timelineconsumers",
             "type": "array"
           }
@@ -30573,6 +30746,89 @@
         "title": "TimelineClip",
         "type": "object"
       },
+      "TimelineClipImpactConsumer": {
+        "additionalProperties": false,
+        "properties": {
+          "editorDocumentId": {
+            "description": "Current timeline document identity.",
+            "format": "uuid",
+            "title": "Editordocumentid",
+            "type": "string"
+          },
+          "revision": {
+            "description": "Timeline document revision read by this report.",
+            "minimum": 1,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "assetId": {
+            "description": "Asset currently retained in this timeline usage; the query never replaces it.",
+            "format": "uuid",
+            "title": "Assetid",
+            "type": "string"
+          },
+          "specIds": {
+            "description": "Related generation specs from exact result or source identities.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Specids",
+            "type": "array"
+          },
+          "association": {
+            "description": "Exact retained result asset, explicit input connection, or both; none implies automatic replacement.",
+            "enum": [
+              "asset",
+              "source",
+              "asset_and_source"
+            ],
+            "title": "Association",
+            "type": "string"
+          },
+          "sourceItemId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Source item from the document input connection, when relevant.",
+            "title": "Sourceitemid"
+          },
+          "kind": {
+            "const": "clip",
+            "default": "clip",
+            "description": "Retained media clip usage.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "clipId": {
+            "description": "Retained timeline clip identity.",
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Clipid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "editorDocumentId",
+          "revision",
+          "assetId",
+          "specIds",
+          "association",
+          "sourceItemId",
+          "kind",
+          "clipId"
+        ],
+        "title": "TimelineClipImpactConsumer",
+        "type": "object"
+      },
       "TimelineData": {
         "additionalProperties": false,
         "properties": {
@@ -30734,7 +30990,7 @@
         "title": "TimelineFontResource",
         "type": "object"
       },
-      "TimelineImpactConsumer": {
+      "TimelineImpactConsumerBase": {
         "additionalProperties": false,
         "properties": {
           "editorDocumentId": {
@@ -30749,16 +31005,8 @@
             "title": "Revision",
             "type": "integer"
           },
-          "clipId": {
-            "description": "Retained timeline clip identity.",
-            "maxLength": 100,
-            "minLength": 1,
-            "pattern": "\\S",
-            "title": "Clipid",
-            "type": "string"
-          },
           "assetId": {
-            "description": "Asset currently retained in this clip; the query never replaces it.",
+            "description": "Asset currently retained in this timeline usage; the query never replaces it.",
             "format": "uuid",
             "title": "Assetid",
             "type": "string"
@@ -30800,13 +31048,12 @@
         "required": [
           "editorDocumentId",
           "revision",
-          "clipId",
           "assetId",
           "specIds",
           "association",
           "sourceItemId"
         ],
-        "title": "TimelineImpactConsumer",
+        "title": "TimelineImpactConsumerBase",
         "type": "object"
       },
       "TimelinePackageExportFile": {
@@ -31334,6 +31581,77 @@
           "padding"
         ],
         "title": "TimelineTextBackground",
+        "type": "object"
+      },
+      "TimelineTextImpactConsumer": {
+        "additionalProperties": false,
+        "properties": {
+          "editorDocumentId": {
+            "description": "Current timeline document identity.",
+            "format": "uuid",
+            "title": "Editordocumentid",
+            "type": "string"
+          },
+          "revision": {
+            "description": "Timeline document revision read by this report.",
+            "minimum": 1,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "assetId": {
+            "description": "Asset currently retained in this timeline usage; the query never replaces it.",
+            "format": "uuid",
+            "title": "Assetid",
+            "type": "string"
+          },
+          "specIds": {
+            "description": "Related generation specs from exact result or source identities.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Specids",
+            "type": "array"
+          },
+          "association": {
+            "const": "asset",
+            "description": "Exact frozen source text asset; subsequent source edits do not replace overlay text.",
+            "title": "Association",
+            "type": "string"
+          },
+          "sourceItemId": {
+            "default": null,
+            "description": "Text overlays retain source assets without a live source connection.",
+            "title": "Sourceitemid",
+            "type": "null"
+          },
+          "kind": {
+            "const": "text_overlay",
+            "default": "text_overlay",
+            "description": "Retained text overlay source usage.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "overlayId": {
+            "description": "Retained timeline text overlay identity.",
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Overlayid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "editorDocumentId",
+          "revision",
+          "assetId",
+          "specIds",
+          "association",
+          "sourceItemId",
+          "kind",
+          "overlayId"
+        ],
+        "title": "TimelineTextImpactConsumer",
         "type": "object"
       },
       "TimelineTextOverlay": {

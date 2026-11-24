@@ -219,13 +219,14 @@ export class CreationClient {
   }
   generationImpact(
     rootSpecIds: readonly string[],
-    options: ReadOptions = {},
+    options: ReadOptions & { maxNodes?: number } = {},
   ): Promise<GenerationImpactReport> {
     const query: GenerationImpactQueryInput = {
       type: "generation.impact",
       queryId: crypto.randomUUID(),
       projectId: this.id,
       rootSpecIds: [...rootSpecIds],
+      ...(options.maxNodes !== undefined ? { maxNodes: options.maxNodes } : {}),
     };
     return resilientRead(
       (signal) => request<GenerationImpactReport>(`${creationPath(this.id)}/queries`, {

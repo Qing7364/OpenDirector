@@ -16,10 +16,10 @@ This records the dependency/reuse foundation for [#355](https://github.com/Think
 Use `generation.impact` through `POST /api/creation/projects/{projectId}/queries`, the existing Agent query tool, or `opendirector --project PROJECT_UUID query generation.impact --file impact-query.json`. The HTTP request uses the existing local-API request-header protection. No editing session is required.
 
 - Query and report definitions: [commands.py](../../packages/core/src/opendirector/domain/creation/commands.py), [impact.py](../../packages/core/src/opendirector/domain/creation/impact.py), [generated TypeScript](../../src/contracts/generated.ts).
-- Frontend: `CreationClient.generationImpact(rootSpecIds, { signal })` in [creationClient.ts](../../src/backend/creationClient.ts). It performs a read without installing the response as a project snapshot or entering the mutation queue.
+- Frontend: `CreationClient.generationImpact(rootSpecIds, { signal, maxNodes })` in [creationClient.ts](../../src/backend/creationClient.ts). The options are optional. It performs a read without installing the response as a project snapshot or entering the mutation queue.
 - Display: pass stable states/reasons to `generationImpactText(code, t)` in [generationImpactText.ts](../../src/backend/generationImpactText.ts). Unknown codes have a translated fallback; no provider payload is rendered.
 - Show both `inputState` and `reuseState`, the reasons and original `baselineJobId`/`activeJobIds`. Retain `projectVersion`, `eventCursor` and object revisions for context; they do not reserve a future edit. Any workbench action continues through existing commands with current versions, locks and authorization.
-- Reports cover all project generation configurations. `relation` is relative to the requested roots; `timelineConsumers` covers only those roots and their downstream configurations. Fixed asset usage and source associations are review evidence, not automatic replacement instructions.
+- Reports cover all project generation configurations. `relation` is relative to the requested roots; `timelineConsumers` covers only those roots and their downstream configurations. Consumers are discriminated as `clip` with `clipId`, or `text_overlay` with `overlayId`. Fixed asset usage and source associations are review evidence, not automatic replacement instructions. Recoverable failures and unresolved cancellations retain their original `activeJobIds`.
 
 ### Recorded request and response
 
@@ -27,10 +27,10 @@ The [request](fixtures/generation-impact-request.json) and [response](fixtures/g
 
 | Test object | Spec ID | Current inputs | Reuse | Relation |
 | --- | --- | --- | --- | --- |
-| A | `d2f677d8-e6cd-43c8-ae54-8df7734c28fa` | equal | reusable | independent |
-| B | `4d5f438a-f86f-4f0f-b9aa-7d6e6cebeeef` | changed | stale | root |
-| C | `dee2d143-046b-47fc-86f3-1c24f113c236` | equal | pending_upstream | downstream |
-| D | `7f268b78-755a-433e-8751-cdf17259877d` | equal | reusable | independent |
+| A | `9264a3d1-0870-4c79-af14-35ce50eaf4e9` | equal | reusable | independent |
+| B | `56d1b593-545a-4cb9-8903-fbf620101873` | changed | stale | root |
+| C | `2997eb24-2271-4595-aebc-f336c55a92fe` | equal | pending_upstream | downstream |
+| D | `39390819-baf0-47cc-bc4e-dceb4fbb51b7` | equal | reusable | independent |
 
 A is an upstream dependency of B, but is not downstream of the requested B root. The timeline contains B/C/D; the response lists B/C consumers with their retained assets and source associations. D remains outside the requested downstream scope. The report contains IDs, fingerprints and controlled field paths, not prompts, provider URLs, credentials, local paths or raw adapter data.
 
@@ -42,7 +42,13 @@ Subject slots retain assets in their editor document. Their `inputConnections` d
 
 The comparison uses the same frozen inputs as generation acceptance. Known adapter output settings and generated random seeds remain execution facts. Unknown adapter extension fields or missing saved model rules prevent a reuse claim. Current storage has no reconstructable guide/window/direction plan for external workflows; a future persisted field needs explicit comparison coverage. `reusable` means the registered existing output can be reused under the compared inputs, not a remote cache hit or deterministic new generation.
 
-Inputs are bounded to 100 distinct roots, at most 10,000 configurations (default budget 2,000), and 20,000 active references/expanded edges. A limit error returns no partial success. Unresolved dependencies and cycles remain explicit uncertainty, including dependent nodes; no execution order or retry command is invented.
+Inputs are bounded to 100 distinct roots, at most 10,000 configurations (default budget 2,000), and 20,000 active references/expanded edges. Timeline consumers and retained Job IDs share a combined evidence limit of 20,000 entries. A limit error returns no partial success, and HTTP and Agent preserve its stable code. Unresolved dependencies and cycles remain explicit uncertainty, including dependent nodes; no execution order or retry command is invented.
+
+HTTP and Agent queries read the generation service's existing capability observations without refreshing them. Repeated queries reuse the safe asset reader's bounded file-signature verification cache; replaced or deleted files are checked again. Project directory resolution remains under the existing storage lock. This does not introduce a new persistent index or claim a measured production throughput improvement.
+
+Direct application callers should pass their owning generation service's `availability` and shared `assets` when constructing `CreationCanvas`. Without an injected capability service, the standalone reader has only local configuration rules, not another process's transient observations.
+
+One display detail remains deferred: if a clip is explicitly connected through an ordinary material node containing a related result, the report includes its exact asset usage but omits that material node's `sourceItemId`. This does not remove the consumer or imply a live generation dependency.
 
 ## Reproducible validation
 

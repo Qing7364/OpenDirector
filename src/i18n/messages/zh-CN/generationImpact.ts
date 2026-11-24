@@ -21,6 +21,8 @@ export const generationImpact = {
   "generationImpact.dependency_unresolved": "当前依赖的依据不完整，请检查原始对象和任务。",
   "generationImpact.execution_basis_incomplete": "已记录额外适配器或引导输入，但无法从当前工程重建这些依据。",
   "generationImpact.dependency_cycle": "该配置处于参考环中或依赖参考环，报告不推断执行顺序。",
-  "generationImpact.impact_scope_exceeded": "依赖分析超出支持的节点或参考数量上限。",
+  "generationImpact.impact_scope_exceeded": "依赖分析超出支持的节点、参考或保留证据数量上限。",
+  "generationImpact.clip": "时间线媒体片段",
+  "generationImpact.text_overlay": "时间线文字叠加层",
   "generationImpact.fallback": "暂时无法解释该影响状态，请刷新报告或检查原任务。",
 };

@@ -54,7 +54,7 @@ Agent 的 Shell 通过 PATH 使用同一个 `opendirector`。宿主提供受令�
 `generation.impact` compares saved current inputs with the successful Job behind each adopted result. Replace the UUID in the parameter file with a real GenerationSpec ID from the selected project, not a canvas item or Job ID. The query does not open an edit session, submit generation, adopt candidates or edit the timeline.
 
 ```json
-{"rootSpecIds":["4d5f438a-f86f-4f0f-b9aa-7d6e6cebeeef"]}
+{"rootSpecIds":["56d1b593-545a-4cb9-8903-fbf620101873"]}
 ```
 
 Save this as `impact-query.json` / 保存为 `impact-query.json`：
@@ -76,13 +76,13 @@ opendirector --project PROJECT_UUID query generation.impact --file impact-query.
 
 For A→B→C and independent D, editing only B's prompt makes B `stale`, C `pending_upstream` and D `reusable`. A B2 candidate does not change C's current inputs until adopted; after adoption, C following B becomes `stale`. C pinned to B1 remains unchanged. `inputState` separately describes current input equality, while `relation` describes reachability from the requested roots. Independent nodes still have their own inputs and files checked.
 
-报告含 `projectVersion`、`eventCursor`、各配置版本、`baselineJobId`、`activeJobIds`、稳定原因码及受控字段路径。时间线使用点仅列出请求根和下游配置的相关片段，区分固定素材与来源关联，不代表允许自动替换。查询后工程可能继续变化；修改前须重读相关对象、校验当前版本和锁定。活动或未知提交先查询原 Job，不能因为本报告另建任务重发。
+报告含 `projectVersion`、`eventCursor`、各配置版本、`baselineJobId`、`activeJobIds`、稳定原因码及受控字段路径。`activeJobIds` 包括可恢复失败和远端取消未决的原任务。时间线使用点仅列出请求根和下游配置相关的媒体片段（`kind=clip`、`clipId`）与文字来源（`kind=text_overlay`、`overlayId`），区分固定素材与来源关联，不代表允许自动替换。查询后工程可能继续变化；修改前须重读相关对象、校验当前版本和锁定。活动或未知提交先查询原 Job，不能因为本报告另建任务重发。
 
-The report includes `projectVersion`, `eventCursor`, spec revisions, `baselineJobId`, `activeJobIds`, stable reason codes and controlled field paths. Timeline consumers cover the requested roots and their downstream configurations, distinguishing fixed assets from source associations; they do not authorize replacement. State may change after a query. Re-read affected objects and check current versions and locks before any modification. Inspect the original Job for active or uncertain submissions instead of creating another attempt from this report.
+The report includes `projectVersion`, `eventCursor`, spec revisions, `baselineJobId`, `activeJobIds`, stable reason codes and controlled field paths. `activeJobIds` includes recoverable failures and unresolved remote cancellations. Timeline consumers cover media clips (`kind=clip`, `clipId`) and text sources (`kind=text_overlay`, `overlayId`) for the requested roots and their downstream configurations, distinguishing fixed assets from source associations; they do not authorize replacement. State may change after a query. Re-read affected objects and check current versions and locks before any modification. Inspect the original Job for active or uncertain submissions instead of creating another attempt from this report.
 
-每次最多 100 个不同根；检查工程全部生成配置，`maxNodes` 默认 2,000、最大 10,000，活动参考及展开依赖边最多 20,000。超限返回 `impact_scope_exceeded`，不返回截断后看似完整的报告。缺少可重建的 guide、窗口或扩展 adapter 依据时保持未知。复用只针对已有素材，不保证重新生成确定性、创作质量、服务商健康或远端 latent/cache 命中。外部 ComfyUI 未登记的 graph/history/cache 仍需单独核对。
+每次最多 100 个不同根；检查工程全部生成配置，`maxNodes` 默认 2,000、最大 10,000，活动参考及展开依赖边最多 20,000；时间线使用点与原任务身份合计最多 20,000 条。超限返回 `impact_scope_exceeded`，不返回截断后看似完整的报告。缺少可重建的 guide、窗口或扩展 adapter 依据时保持未知。复用只针对已有素材，不保证重新生成确定性、创作质量、服务商健康或远端 latent/cache 命中。外部 ComfyUI 未登记的 graph/history/cache 仍需单独核对。
 
-Queries accept up to 100 distinct roots and inspect all generation configurations in the project. `maxNodes` defaults to 2,000 with a maximum of 10,000; active references and expanded edges are limited to 20,000. Overflow returns `impact_scope_exceeded`, not a truncated report. Missing reconstructable guide, window or adapter-extension evidence remains unknown. Reuse concerns existing assets, not deterministic regeneration, creative quality, provider health or remote latent/cache hits. Unregistered external ComfyUI graphs, history and caches require separate checks.
+Queries accept up to 100 distinct roots and inspect all generation configurations in the project. `maxNodes` defaults to 2,000 with a maximum of 10,000; active references and expanded edges are limited to 20,000. Timeline consumers and retained Job IDs share a separate combined limit of 20,000 entries. Overflow returns `impact_scope_exceeded`, not a truncated report. Missing reconstructable guide, window or adapter-extension evidence remains unknown. Reuse concerns existing assets, not deterministic regeneration, creative quality, provider health or remote latent/cache hits. Unregistered external ComfyUI graphs, history and caches require separate checks.
 
 ## 更新生成配置
 

@@ -42,7 +42,7 @@ test("impact states, reasons and fallback switch languages without changing busi
   const codes = [...defs.GenerationImpactItem.properties.reuseState.enum,
     ...defs.GenerationImpactItem.properties.inputState.enum,
     ...defs.GenerationImpactItem.properties.relation.enum,
-    ...defs.ImpactReason.properties.code.enum, "impact_scope_exceeded"];
+    ...defs.ImpactReason.properties.code.enum, "impact_scope_exceeded", "clip", "text_overlay"];
   const localized: Record<string, string[]> = {};
   try {
     for (const locale of ["en-US", "zh-CN"] as const) {
@@ -60,4 +60,23 @@ test("impact states, reasons and fallback switch languages without changing busi
     }
     assert.notDeepEqual(localized["en-US"], localized["zh-CN"]);
   } finally { setActiveLocale("zh-CN"); }
+});
+
+test("impact queries can request the supported larger node budget without serializing read controls", async () => {
+  const client = new CreationClient("00000000-0000-0000-0000-000000000001");
+  const original = globalThis.fetch;
+  let body: Record<string, unknown> = {};
+  globalThis.fetch = async (_url, options) => {
+    body = JSON.parse(String(options?.body));
+    assert.ok(options?.signal);
+    return Response.json({});
+  };
+  try {
+    await client.generationImpact(["00000000-0000-0000-0000-000000000100"], {
+      maxNodes: 10000, signal: new AbortController().signal, attempts: 1,
+    });
+    assert.equal(body.maxNodes, 10000);
+    assert.equal(body.signal, undefined);
+    assert.equal(body.attempts, undefined);
+  } finally { globalThis.fetch = original; }
 });

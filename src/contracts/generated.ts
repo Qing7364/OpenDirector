@@ -598,7 +598,7 @@ export interface GenerationImpactReportInput extends ContractInput {
   readonly rootSpecIds: ReadonlyArray<string>;
   readonly items: ReadonlyArray<GenerationImpactItemInput>;
   readonly dependencies: ReadonlyArray<ImpactDependencyInput>;
-  readonly timelineConsumers: ReadonlyArray<TimelineImpactConsumerInput>;
+  readonly timelineConsumers: ReadonlyArray<TimelineClipImpactConsumerInput | TimelineTextImpactConsumerInput>;
 }
 
 export interface GenerationSpecBaseInput extends ProjectEntityInput {
@@ -1400,6 +1400,11 @@ export interface TimelineClipInput extends ContractInput {
   readonly muted?: boolean;
 }
 
+export interface TimelineClipImpactConsumerInput extends TimelineImpactConsumerBaseInput {
+  readonly kind?: "clip";
+  readonly clipId: string;
+}
+
 export interface TimelineDataInput extends ContractInput {
   readonly fps: number;
   readonly width: number;
@@ -1421,10 +1426,9 @@ export interface TimelineFontResourceInput extends ContractInput {
   readonly asset: AssetRefInput;
 }
 
-export interface TimelineImpactConsumerInput extends ContractInput {
+export interface TimelineImpactConsumerBaseInput extends ContractInput {
   readonly editorDocumentId: string;
   readonly revision: number;
-  readonly clipId: string;
   readonly assetId: string;
   readonly specIds: ReadonlyArray<string>;
   readonly association: "asset" | "source" | "asset_and_source";
@@ -1504,6 +1508,13 @@ export interface TimelineTextBackgroundInput extends ContractInput {
   readonly color: string;
   readonly opacity: number;
   readonly padding: number;
+}
+
+export interface TimelineTextImpactConsumerInput extends TimelineImpactConsumerBaseInput {
+  readonly association: "asset";
+  readonly sourceItemId?: null;
+  readonly kind?: "text_overlay";
+  readonly overlayId: string;
 }
 
 export interface TimelineTextOverlayInput extends ContractInput {
@@ -1710,6 +1721,8 @@ export type RoleActionInput = "configure_generation" | "save_manual_text" | "upl
 export type ModelKindInput = "agent" | "image" | "video" | "audio" | "vision";
 
 export type VideoModeInput = "first_frame" | "reference" | "continuation";
+
+export type TimelineImpactConsumerInput = TimelineClipImpactConsumerInput | TimelineTextImpactConsumerInput;
 
 export interface ArtifactPublish extends Contract {
   readonly path: string;
@@ -2307,7 +2320,7 @@ export interface GenerationImpactReport extends Contract {
   readonly rootSpecIds: ReadonlyArray<string>;
   readonly items: ReadonlyArray<GenerationImpactItem>;
   readonly dependencies: ReadonlyArray<ImpactDependency>;
-  readonly timelineConsumers: ReadonlyArray<TimelineImpactConsumer>;
+  readonly timelineConsumers: ReadonlyArray<TimelineClipImpactConsumer | TimelineTextImpactConsumer>;
 }
 
 export interface GenerationSpecBase extends ProjectEntity {
@@ -3108,6 +3121,11 @@ export interface TimelineClip extends Contract {
   readonly muted: boolean;
 }
 
+export interface TimelineClipImpactConsumer extends TimelineImpactConsumerBase {
+  readonly kind: "clip";
+  readonly clipId: string;
+}
+
 export interface TimelineData extends Contract {
   readonly fps: number;
   readonly width: number;
@@ -3129,10 +3147,9 @@ export interface TimelineFontResource extends Contract {
   readonly asset: AssetRef;
 }
 
-export interface TimelineImpactConsumer extends Contract {
+export interface TimelineImpactConsumerBase extends Contract {
   readonly editorDocumentId: string;
   readonly revision: number;
-  readonly clipId: string;
   readonly assetId: string;
   readonly specIds: ReadonlyArray<string>;
   readonly association: "asset" | "source" | "asset_and_source";
@@ -3212,6 +3229,13 @@ export interface TimelineTextBackground extends Contract {
   readonly color: string;
   readonly opacity: number;
   readonly padding: number;
+}
+
+export interface TimelineTextImpactConsumer extends TimelineImpactConsumerBase {
+  readonly association: "asset";
+  readonly sourceItemId: null;
+  readonly kind: "text_overlay";
+  readonly overlayId: string;
 }
 
 export interface TimelineTextOverlay extends Contract {
@@ -3418,3 +3442,5 @@ export type RoleAction = "configure_generation" | "save_manual_text" | "upload_m
 export type ModelKind = "agent" | "image" | "video" | "audio" | "vision";
 
 export type VideoMode = "first_frame" | "reference" | "continuation";
+
+export type TimelineImpactConsumer = TimelineClipImpactConsumer | TimelineTextImpactConsumer;

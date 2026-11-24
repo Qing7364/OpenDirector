@@ -16,7 +16,7 @@ from opendirector.domain.capabilities import Capability
 from opendirector.domain.capability_messages import english_capability_message, missing_tool_model_message
 
 ENGLISH_BY_CODE = {
-    'impact_scope_exceeded': 'Generation impact exceeds the node or reference limit. Reduce the project scope or increase maxNodes within its supported limit.',
+    'impact_scope_exceeded': 'Generation impact exceeds the node, reference or retained-evidence limit. Increase maxNodes only for a node-budget error; other limits require a smaller project scope.',
     "desktop_auth_required": "The desktop connection has expired. Reopen the application.",
     'image_quality_unsupported': 'This model does not support the selected image quality. Choose Auto or select another model.',
     'bigmodel_video_model': 'The BigModel video protocol supports CogVideoX-3 only.',

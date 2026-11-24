@@ -7,12 +7,13 @@ from opendirector.domain.creation.base import ObjectVersion
 from opendirector.domain.creation.commands import GenerationImpactQuery
 from opendirector.domain.creation.generation import ResolvedReference, freeze_input_snapshot
 from opendirector.domain.creation.impact import (
-    GenerationImpactItem, GenerationImpactReport, ImpactDependency, ImpactReason, TimelineImpactConsumer,
+    GenerationImpactItem, GenerationImpactReport, ImpactDependency, ImpactReason,
+    TimelineClipImpactConsumer, TimelineTextImpactConsumer,
 )
 from opendirector.domain.creation.models import ModelSnapshot
 from opendirector.domain.creation.project import ProjectSnapshot
 from opendirector.domain.creation.validation import ContractError
-from opendirector.domain.rule_facts import MAX_REFERENCES
+from opendirector.domain.rule_facts import GENERATION_IMPACT_EVIDENCE_LIMIT, MAX_REFERENCES
 from opendirector.domain.projects import ProjectError
 from opendirector.ports.gateway import gateway
 
@@ -20,15 +21,17 @@ MAX_IMPACT_EDGES = 20000
 
 
 class CreationImpact:
-    def __init__(self, projects):
+    def __init__(self, projects, *, availability=None, assets=None):
+        from opendirector.application.creation_assets import CreationAssets
         self.projects = projects
+        self.availability = availability
+        self.assets = assets if assets is not None else CreationAssets(projects)
 
     def query(self, query: GenerationImpactQuery) -> GenerationImpactReport:
-        from opendirector.application.creation_assets import CreationAssets
         from opendirector.application.model_availability import ModelAvailability
         snapshot = self.projects.snapshot(query.projectId)
         configs = gateway().models(self.projects.local.repository)
-        availability = ModelAvailability(configs)
+        availability = self.availability or ModelAvailability(configs)
         models = {}
         # One locked catalog read. Effective rules use only cached/local facts;
         # never prepare/refresh a capability probe for an impact query.
@@ -44,11 +47,9 @@ class CreationImpact:
                        ('kind', 'modelId', 'url', 'protocol', 'connectionType', 'proxyMode', 'videoAdapter')})
             except ValueError:
                 models[identity] = None
-        assets = CreationAssets(self.projects)
-
         def available(asset_id):
             try:
-                assets.reference_available(query.projectId, asset_id, snapshot=snapshot)
+                self.assets.reference_available(query.projectId, asset_id, snapshot=snapshot)
                 return True
             except (ProjectError, ContractError, OSError, UnicodeError):
                 return False
@@ -106,11 +107,16 @@ class _SnapshotIndex:
         self.documents = {d.id: d for d in snapshot.editorDocuments}
         self.references = {}
         self.active_jobs = {}
+        self.active_job_count = 0
         for ref in snapshot.references:
             if ref.active:
                 self.references.setdefault(ref.targetSpecId, []).append(ref)
         for job in snapshot.jobs:
-            if job.status in {'queued', 'running', 'interrupted'} or job.recovery == 'review':
+            if (job.status in {'queued', 'running', 'interrupted'} or job.recovery == 'review'
+                    or job.resumeAllowed or job.remoteCancellation in {'requested', 'unknown'}):
+                self.active_job_count += 1
+                if self.active_job_count > GENERATION_IMPACT_EVIDENCE_LIMIT:
+                    raise ContractError('impact_scope_exceeded', '依赖分析超出节点、参考或证据数量上限。')
                 self.active_jobs.setdefault(job.inputSnapshot.spec.id, []).append(job.id)
 
     def resolution_view(self, spec):
@@ -249,6 +255,12 @@ def _timeline_consumers(index, related):
         if result.specId in related:
             by_asset.setdefault(result.asset.assetId, set()).add(result.specId)
     consumers = []
+
+    def append(consumer):
+        if len(consumers) + index.active_job_count >= GENERATION_IMPACT_EVIDENCE_LIMIT:
+            raise ContractError('impact_scope_exceeded', '依赖分析超出节点、参考或证据数量上限。')
+        consumers.append(consumer)
+
     for document in index.snapshot.editorDocuments:
         if document.kind != 'timeline':
             continue
@@ -262,10 +274,17 @@ def _timeline_consumers(index, related):
                 source_specs = {source_spec} if source_spec in related else set()
                 if not asset_specs and not source_specs:
                     continue
-                consumers.append(TimelineImpactConsumer(editorDocumentId=document.id, revision=document.revision,
+                append(TimelineClipImpactConsumer(editorDocumentId=document.id, revision=document.revision,
                     clipId=clip.id, assetId=clip.resource.asset.assetId, specIds=tuple(sorted(asset_specs | source_specs)),
                     association='asset_and_source' if asset_specs and source_specs else 'asset' if asset_specs else 'source',
                     sourceItemId=source.id if source_specs else None))
+        for overlay in document.data.overlays:
+            if overlay.sourceAsset is None:
+                continue
+            asset_specs = by_asset.get(overlay.sourceAsset.assetId, set())
+            if asset_specs:
+                append(TimelineTextImpactConsumer(editorDocumentId=document.id, revision=document.revision,
+                    overlayId=overlay.id, assetId=overlay.sourceAsset.assetId, specIds=tuple(sorted(asset_specs)), association='asset'))
     return tuple(consumers)
 
 

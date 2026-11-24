@@ -25,6 +25,8 @@ const messages: Readonly<Record<string, MessageKey>> = {
   execution_basis_incomplete: "generationImpact.execution_basis_incomplete",
   dependency_cycle: "generationImpact.dependency_cycle",
   impact_scope_exceeded: "generationImpact.impact_scope_exceeded",
+  clip: "generationImpact.clip",
+  text_overlay: "generationImpact.text_overlay",
 };
 
 /** Localize stable codes without rendering unknown provider or user content. */

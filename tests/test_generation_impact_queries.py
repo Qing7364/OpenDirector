@@ -308,3 +308,111 @@ def test_foreign_project_root_never_switches_or_opens_a_session(saved, tmp_path)
         CreationCanvas(store).query_snapshot(impact_query(pid, [foreign.id]))
     assert error.value.issue.code == 'missing_object'
     assert store.snapshot(pid) == before
+
+
+def test_cached_capability_rules_are_shared_across_query_entries_without_probing(tmp_path, monkeypatch):
+    from test_request_capability_acceptance import image_runtime, submit
+    from test_tool_tasks import png, upload
+    project = new_project(tmp_path)
+    store, pid, session = project
+    runner, config, probe, queries, posts = image_runtime(project, 2)
+    source = upload(store, str(pid), session, 'source.png', png())
+    request = command(project, config, references=[source])
+    try:
+        assert submit('service', project, runner, probe, request)['status'] == 'accepted'
+        state = store.snapshot(pid)
+        assert state.jobs[0].inputSnapshot.model.inputRules.maxImages == 2
+        spec_id = state.generationSpecs[0].id
+        query = impact_query(pid, [spec_id])
+        api = TestClient(create_app(store.local, generation_provider=runner.provider, capability_probe=probe),
+            headers={'X-OpenDirector-Request': '1'})
+
+        def forbidden(*args, **kwargs):
+            raise AssertionError('Impact queries must only read the existing capability cache')
+
+        monkeypatch.setattr(probe, 'query', forbidden)
+        monkeypatch.setattr(probe, 'query_many', forbidden)
+        http = api.post(f'/api/creation/projects/{pid}/queries', json=query.model_dump(mode='json'))
+        assert http.status_code == 200, http.text
+        agent = asyncio.run(AgentTools(store, runner, runner.configs).execute(pid, uuid4(), session, 'impact-cache',
+            'query', dict(type='generation.impact', rootSpecIds=[str(spec_id)]), [], None))
+        assert http.json() == agent
+        assert CreationCanvas(store, availability=runner.availability).query_snapshot(query).model_dump(mode='json') == agent
+        assert [(i['inputState'], i['reuseState']) for i in agent['items']] == [('equal', 'reusable')]
+        assert len(queries) == len(posts) == 1
+        assert store.snapshot(pid) == state
+    finally:
+        probe.close()
+
+
+@pytest.mark.parametrize('failure', ['limit', 'foreign_root'])
+def test_agent_gateway_preserves_impact_error_codes(saved, tmp_path, failure):
+    from opendirector.agent.context import RunContext
+    from opendirector.agent.gateway import ToolGateway
+    (store, pid, session), configs, runner, _, specs, _ = saved
+    arguments = dict(type='generation.impact', rootSpecIds=[str(specs[0])])
+    if failure == 'limit':
+        arguments['maxNodes'] = 1
+        expected = 'impact_scope_exceeded'
+    else:
+        arguments['rootSpecIds'] = [str(uuid4())]
+        expected = 'missing_object'
+    run = RunContext(runtime='codex', project_id=pid, turn_id=uuid4(), session=session,
+        directory=tmp_path, config=None, messages=[], selected_skills=[])
+
+    async def query():
+        gateway = ToolGateway(AgentTools(store, runner, configs), run)
+        try:
+            result = await gateway.call('impact-rejected', 'query', arguments)
+            assert result.error
+            assert result.value['code'] == expected
+            assert result.event('query')['code'] == expected
+        finally:
+            await gateway.close()
+
+    asyncio.run(query())
+
+
+@pytest.mark.parametrize('entry', ['service', 'http', 'agent'])
+def test_impact_reuses_controlled_file_verification_and_detects_replacements(saved, monkeypatch, entry):
+    from opendirector.application import creation_assets
+    from test_tool_tasks import png
+    (store, pid, session), configs, runner, provider, specs, _ = saved
+    query = impact_query(pid, [specs[1]])
+    canvas = CreationCanvas(store)
+    api = TestClient(create_app(store.local, generation_provider=provider), headers={'X-OpenDirector-Request': '1'})
+    agent = AgentTools(store, runner, configs)
+    calls = []
+    original = creation_assets.stream_identity
+
+    def identity(stream):
+        calls.append(stream)
+        return original(stream)
+
+    monkeypatch.setattr(creation_assets, 'stream_identity', identity)
+
+    def read():
+        if entry == 'service':
+            return canvas.query_snapshot(query).model_dump(mode='json')
+        if entry == 'http':
+            response = api.post(f'/api/creation/projects/{pid}/queries', json=query.model_dump(mode='json'))
+            assert response.status_code == 200, response.text
+            return response.json()
+        return asyncio.run(agent.execute(pid, uuid4(), session, 'impact-files', 'query',
+            dict(type='generation.impact', rootSpecIds=[str(specs[1])]), [], None))
+
+    assert all(item['reuseState'] == 'reusable' for item in read()['items'])
+    assert len(calls) == 4
+    assert all(item['reuseState'] == 'reusable' for item in read()['items'])
+    assert len(calls) == 4  # unchanged file signatures reuse the safe reader's cache
+    state = store.snapshot(pid)
+    adopted = next(r for r in state.results if r.specId == specs[3])
+    with store.local.transaction() as db:
+        directory, _ = store._find(db, pid)
+    output = directory / 'assets' / str(adopted.asset.assetId)
+    output.write_bytes(png(color='black'))
+    assert next(i for i in read()['items'] if i['specId'] == str(specs[3]))['reuseState'] == 'unavailable'
+    assert len(calls) == 5
+    output.unlink()
+    assert next(i for i in read()['items'] if i['specId'] == str(specs[3]))['reuseState'] == 'unavailable'
+    assert store.snapshot(pid) == state

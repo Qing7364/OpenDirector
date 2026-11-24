@@ -426,3 +426,70 @@ def test_unknown_upstream_overrides_pending_independently_of_reference_order(rev
     assert item.inputState == 'equal'
     assert item.reuseState == 'unknown'
     assert any(reason.code == 'dependency_unresolved' and reason.objectId == uid(103) for reason in item.reasons)
+
+
+def test_timeline_text_overlay_retains_generated_source_without_replacing_text():
+    from opendirector.domain.creation.generation import TextGenerationSpec, freeze_input_snapshot
+    from test_creation_timeline_text import data as timeline_data
+    public = model('agent')
+    text_model = ModelSnapshot(modelConfigId=public.id, inputRules=public.inputRules,
+        **{key: getattr(public, key) for key in ('kind', 'modelId', 'url', 'protocol', 'connectionType', 'videoAdapter')})
+    spec = TextGenerationSpec(**entity(100, kind='text', purpose='generation', modelConfigId=public.id))
+    frozen = freeze_input_snapshot(spec, text_model, ())
+    output, font = asset(350, 'text'), asset(351, 'file')
+    job = Job(**entity(450, inputSnapshot=frozen, inputFingerprint=frozen.fingerprint(), execution=dict(kind='text'),
+        status='succeeded', recovery='done', asset=asset_ref(output)))
+    result = ResultVersion(**entity(550, specId=spec.id, jobId=job.id, asset=job.asset, inputFingerprint=job.inputFingerprint))
+    timeline = timeline_data()
+    timeline['fonts'][0]['asset'] = asset_ref(font)
+    timeline['overlays'][0].update(sourceAsset=asset_ref(output), text='Edited retained title')
+    state = ProjectSnapshot(project=dict(id=PROJECT, name='Text impact'), assets=[output, font], jobs=[job], results=[result],
+        generationSpecs=[spec.model_copy(update={'currentResultId': result.id})],
+        editorDocuments=[entity(800, kind='timeline', revision=3, data=timeline)])
+    before = state.model_dump_json()
+    consumers = report(state, roots=(spec.id,), models={public.id: text_model}).timelineConsumers
+    assert len(consumers) == 1
+    consumer = consumers[0]
+    assert (consumer.kind, consumer.overlayId, consumer.assetId, consumer.specIds, consumer.association) == (
+        'text_overlay', 'a', output.id, (spec.id,), 'asset')
+    assert consumer.editorDocumentId == uid(800) and consumer.revision == 3
+    assert state.model_dump_json() == before
+
+
+@pytest.mark.parametrize('status,recovery,cancellation', [
+    ('failed', 'download', 'not_requested'), ('failed', 'local', 'not_requested'),
+    ('cancelled', 'remote', 'unknown'), ('cancelled', 'remote', 'requested'),
+])
+def test_recoverable_jobs_keep_their_original_identity(status, recovery, cancellation):
+    state = graph()
+    original = state.jobs[1].model_copy(update=dict(id=uid(901), status=status, recovery=recovery,
+        asset=None, resumeAllowed=True, cancelRequested=cancellation != 'not_requested',
+        remoteCancellation=cancellation, externalTaskId='accepted-original-job'))
+    terminal = original.model_copy(update=dict(id=uid(902), recovery='retry', resumeAllowed=False,
+        remoteCancellation='confirmed' if cancellation != 'not_requested' else cancellation))
+    state = state.model_copy(update={'jobs': (*state.jobs, original, terminal)})
+    item = report(state).items[1]
+    assert item.activeJobIds == (original.id,)
+    assert item.reuseState == 'reusable'
+
+
+@pytest.mark.parametrize('evidence', ['timeline', 'jobs', 'combined'])
+def test_report_evidence_overflow_is_explicit_including_pending_job_ids(evidence):
+    from opendirector.domain.creation.validation import ContractError
+    state = graph(count=1, links=())
+    data = state.model_dump()
+    if evidence in {'jobs', 'combined'}:
+        count = 10001 if evidence == 'combined' else 20001
+        original = state.jobs[0]
+        data['jobs'] = [original, *(original.model_copy(update=dict(id=UUID(int=10000+i), status='running',
+            recovery='remote', externalTaskId=f'accepted-{i}', asset=None)) for i in range(count))]
+    if evidence in {'timeline', 'combined'}:
+        count = 10000 if evidence == 'combined' else 20001
+        resource = dict(asset=asset_ref(state.assets[0]), title='Retained output')
+        data['editorDocuments'] = [entity(800, kind='timeline', data=dict(fps=24, width=16, height=16,
+            tracks=[dict(id='v', kind='visual', title='Shots', clips=[dict(id=str(i), resource=resource,
+                inPoint=0, outPoint=1) for i in range(count)])]))]
+    state = ProjectSnapshot.model_validate(data)
+    with pytest.raises(ContractError) as error:
+        report(state, roots=(uid(100),), max_nodes=1)
+    assert error.value.issue.code == 'impact_scope_exceeded'

@@ -21,6 +21,8 @@ export const generationImpact = {
   "generationImpact.dependency_unresolved": "A current dependency has incomplete evidence. Inspect its original objects and jobs.",
   "generationImpact.execution_basis_incomplete": "Additional adapter or guide inputs were recorded but cannot be reconstructed from this project.",
   "generationImpact.dependency_cycle": "This configuration is in or depends on a reference cycle; no execution order is inferred.",
-  "generationImpact.impact_scope_exceeded": "Impact analysis exceeds the supported node or reference limit.",
+  "generationImpact.impact_scope_exceeded": "Impact analysis exceeds the supported node, reference or retained-evidence limit.",
+  "generationImpact.clip": "Timeline media clip",
+  "generationImpact.text_overlay": "Timeline text overlay",
   "generationImpact.fallback": "Impact details are unavailable. Refresh the report or inspect the original job.",
 };
