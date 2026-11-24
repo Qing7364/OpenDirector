@@ -262,7 +262,10 @@ def tools() -> list[dict]:
             definition['properties'].pop(field)
             definition['required'].remove(field)
     result.append(tool_schema('query', f'Query objects, jobs, assets or versions. Valid types: {", ".join(QUERY_TYPES)}. '
-                         'canvas.status waits and needs objectId; asset.preview returns media for native viewing.', query_schema))
+                         'canvas.status waits and needs objectId; asset.preview returns media for native viewing. '
+                         'generation.impact takes rootSpecIds and reports adopted-input reuse, potential downstream impact '
+                         'and retained timeline usages without submitting or modifying anything. Inspect original active jobs; '
+                         'the report does not authorize retries or guarantee remote cache availability.', query_schema))
     command_type = {'type': 'string', 'enum': list(COMMANDS)}
     result.append(tool_schema('command_schema', 'Read command help before the first execute_command call of that type in this turn. '
         'Find commands with read_project. For the first lookup, pass only the exact type, e.g. {"type":"canvas.show"}. '

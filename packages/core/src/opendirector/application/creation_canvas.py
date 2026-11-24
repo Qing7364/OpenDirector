@@ -851,6 +851,9 @@ class CreationCanvas:
 
     def query_snapshot(self, query):
         from opendirector.application.creation_history import CreationHistory
+        if query.type == 'generation.impact':
+            from opendirector.application.creation_impact import CreationImpact
+            return CreationImpact(self.projects).query(query)
         snapshot = self.projects.snapshot(query.projectId)
         history = CreationHistory(self.projects)
         if query.type == 'project.get':

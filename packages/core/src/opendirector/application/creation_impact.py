@@ -4,6 +4,7 @@ from collections.abc import Callable, Mapping
 from uuid import UUID
 
 from opendirector.domain.creation.base import ObjectVersion
+from opendirector.domain.creation.commands import GenerationImpactQuery
 from opendirector.domain.creation.generation import ResolvedReference, freeze_input_snapshot
 from opendirector.domain.creation.impact import (
     GenerationImpactItem, GenerationImpactReport, ImpactDependency, ImpactReason, TimelineImpactConsumer,
@@ -12,8 +13,48 @@ from opendirector.domain.creation.models import ModelSnapshot
 from opendirector.domain.creation.project import ProjectSnapshot
 from opendirector.domain.creation.validation import ContractError
 from opendirector.domain.rule_facts import MAX_REFERENCES
+from opendirector.domain.projects import ProjectError
+from opendirector.ports.gateway import gateway
 
 MAX_IMPACT_EDGES = 20000
+
+
+class CreationImpact:
+    def __init__(self, projects):
+        self.projects = projects
+
+    def query(self, query: GenerationImpactQuery) -> GenerationImpactReport:
+        from opendirector.application.creation_assets import CreationAssets
+        from opendirector.application.model_availability import ModelAvailability
+        snapshot = self.projects.snapshot(query.projectId)
+        configs = gateway().models(self.projects.local.repository)
+        availability = ModelAvailability(configs)
+        models = {}
+        # One locked catalog read. Effective rules use only cached/local facts;
+        # never prepare/refresh a capability probe for an impact query.
+        needed = {spec.modelConfigId for spec in snapshot.generationSpecs}
+        for public, private in configs.catalog_snapshot():
+            identity = UUID(public['id'])
+            if identity not in needed:
+                continue
+            try:
+                models[identity] = ModelSnapshot(modelConfigId=identity,
+                    inputRules=availability.effective_input_rules(private),
+                    **{key: public[key] for key in
+                       ('kind', 'modelId', 'url', 'protocol', 'connectionType', 'proxyMode', 'videoAdapter')})
+            except ValueError:
+                models[identity] = None
+        assets = CreationAssets(self.projects)
+
+        def available(asset_id):
+            try:
+                assets.reference_available(query.projectId, asset_id, snapshot=snapshot)
+                return True
+            except (ProjectError, ContractError, OSError, UnicodeError):
+                return False
+
+        return analyze_generation_impact(snapshot, root_spec_ids=query.rootSpecIds, models=models,
+            asset_available=available, max_nodes=query.maxNodes)
 
 
 def build_generation_dependencies(

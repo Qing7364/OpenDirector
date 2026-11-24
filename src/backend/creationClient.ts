@@ -6,6 +6,8 @@ import type {
   CommandInput,
   CommandReceipt,
   GenerationSpec,
+  GenerationImpactReport,
+  GenerationImpactQueryInput,
   Job,
   ObjectVersion,
   ProjectEvent,
@@ -214,6 +216,22 @@ export class CreationClient {
     return () => {
       this.listeners.delete(listener);
     };
+  }
+  generationImpact(
+    rootSpecIds: readonly string[],
+    options: ReadOptions = {},
+  ): Promise<GenerationImpactReport> {
+    const query: GenerationImpactQueryInput = {
+      type: "generation.impact",
+      queryId: crypto.randomUUID(),
+      projectId: this.id,
+      rootSpecIds: [...rootSpecIds],
+    };
+    return resilientRead(
+      (signal) => request<GenerationImpactReport>(`${creationPath(this.id)}/queries`, {
+        ...json("POST", query), signal,
+      }), options,
+    );
   }
   async command<T extends CommandInput["type"]>(
     type: T,
