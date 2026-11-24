@@ -47,6 +47,43 @@ Agent 的 Shell 通过 PATH 使用同一个 `opendirector`。宿主提供受令�
 `job show` / `job wait` 在任务成功后返回 `delivery`：已登记的 AssetRef、当前采用状态及展示该素材的画布项。生成成功不等于质量验收；Agent 应检查现有素材。复制到执行目录做媒体探测、抽帧和审看不需要重新发布，也不应为同一次交付新增画布项。编辑产生的新交付文件才需要登记；独立副本展示应有用户要求。
 
 
+## 生成依赖影响与结果复用 / Generation impact and result reuse
+
+`generation.impact` 从已保存的工程读取当前生成输入，并与当前采用结果对应的成功 Job 比较。以下参数文件中的 UUID 必须替换为当前工程的真实 GenerationSpec ID（不是画布项或 Job ID）。查询不会申请编辑会话、提交生成、采用候选或修改时间线。
+
+`generation.impact` compares saved current inputs with the successful Job behind each adopted result. Replace the UUID in the parameter file with a real GenerationSpec ID from the selected project, not a canvas item or Job ID. The query does not open an edit session, submit generation, adopt candidates or edit the timeline.
+
+```json
+{"rootSpecIds":["4d5f438a-f86f-4f0f-b9aa-7d6e6cebeeef"]}
+```
+
+Save this as `impact-query.json` / 保存为 `impact-query.json`：
+
+```bash
+opendirector --project PROJECT_UUID query generation.impact --file impact-query.json
+```
+
+| `reuseState` | 中文含义 | Meaning |
+| --- | --- | --- |
+| `reusable` | 当前依据一致，已有结果文件可用 | Current evidence matches and the existing result file is available |
+| `stale` | 当前有效输入与采用时不同 | Current effective inputs differ from the adopted execution |
+| `pending_upstream` | 当前输入仍相同，上游后续采用可能影响它 | Inputs still match; a future upstream adoption may affect them |
+| `unavailable` | 已采用结果文件不可用 | The adopted result file is unavailable |
+| `unknown` | 输入、模型或执行依据不足 | Input, model or execution evidence is incomplete |
+| `no_result` | 没有已采用结果 | No result is currently adopted |
+
+例如 A→B→C 与独立 D：只改 B 提示词时，B 为 `stale`，C 为 `pending_upstream`，D 仍为 `reusable`。生成 B2 候选尚未采用不会改变 C 的当前输入；采用 B2 后，跟随 B 的 C 变为 `stale`。C 固定引用 B1 则不跟随 B2。`inputState` 独立说明本次输入是否相同，`relation` 表示相对请求根的关系；独立节点仍会检查自己的输入和文件。
+
+For A→B→C and independent D, editing only B's prompt makes B `stale`, C `pending_upstream` and D `reusable`. A B2 candidate does not change C's current inputs until adopted; after adoption, C following B becomes `stale`. C pinned to B1 remains unchanged. `inputState` separately describes current input equality, while `relation` describes reachability from the requested roots. Independent nodes still have their own inputs and files checked.
+
+报告含 `projectVersion`、`eventCursor`、各配置版本、`baselineJobId`、`activeJobIds`、稳定原因码及受控字段路径。时间线使用点仅列出请求根和下游配置的相关片段，区分固定素材与来源关联，不代表允许自动替换。查询后工程可能继续变化；修改前须重读相关对象、校验当前版本和锁定。活动或未知提交先查询原 Job，不能因为本报告另建任务重发。
+
+The report includes `projectVersion`, `eventCursor`, spec revisions, `baselineJobId`, `activeJobIds`, stable reason codes and controlled field paths. Timeline consumers cover the requested roots and their downstream configurations, distinguishing fixed assets from source associations; they do not authorize replacement. State may change after a query. Re-read affected objects and check current versions and locks before any modification. Inspect the original Job for active or uncertain submissions instead of creating another attempt from this report.
+
+每次最多 100 个不同根；检查工程全部生成配置，`maxNodes` 默认 2,000、最大 10,000，活动参考及展开依赖边最多 20,000。超限返回 `impact_scope_exceeded`，不返回截断后看似完整的报告。缺少可重建的 guide、窗口或扩展 adapter 依据时保持未知。复用只针对已有素材，不保证重新生成确定性、创作质量、服务商健康或远端 latent/cache 命中。外部 ComfyUI 未登记的 graph/history/cache 仍需单独核对。
+
+Queries accept up to 100 distinct roots and inspect all generation configurations in the project. `maxNodes` defaults to 2,000 with a maximum of 10,000; active references and expanded edges are limited to 20,000. Overflow returns `impact_scope_exceeded`, not a truncated report. Missing reconstructable guide, window or adapter-extension evidence remains unknown. Reuse concerns existing assets, not deterministic regeneration, creative quality, provider health or remote latent/cache hits. Unregistered external ComfyUI graphs, history and caches require separate checks.
+
 ## 更新生成配置
 
 `generation-spec update` 替换完整配置，不是局部补丁。先用 `opendirector query object.get --object-id <spec-id>` 读取当前配置，修改需要调整的字段后，将完整对象放入命令文件的 `payload.spec`，并携带当前 `expectedVersions`。

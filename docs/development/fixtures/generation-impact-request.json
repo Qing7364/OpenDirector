@@ -1,0 +1,9 @@
+{
+  "queryId": "3cf1e8e1-89b9-4f5e-8838-54f2b3268fb4",
+  "projectId": "f41fe83e-0ddb-4784-8d91-c1c670065f71",
+  "type": "generation.impact",
+  "rootSpecIds": [
+    "4d5f438a-f86f-4f0f-b9aa-7d6e6cebeeef"
+  ],
+  "maxNodes": 2000
+}

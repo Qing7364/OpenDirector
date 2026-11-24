@@ -1,0 +1,136 @@
+{
+  "analysisVersion": 1,
+  "projectVersion": {
+    "objectType": "project",
+    "id": "f41fe83e-0ddb-4784-8d91-c1c670065f71",
+    "revision": 1
+  },
+  "eventCursor": 33,
+  "rootSpecIds": [
+    "4d5f438a-f86f-4f0f-b9aa-7d6e6cebeeef"
+  ],
+  "items": [
+    {
+      "specId": "d2f677d8-e6cd-43c8-ae54-8df7734c28fa",
+      "specRevision": 4,
+      "currentResultId": "b77c3085-eaec-5a08-8a6c-9fc076328ff0",
+      "baselineJobId": "13677f9c-6502-5697-8a38-283e5e8d32da",
+      "baselineInputFingerprint": "dbd75ac7625191fcfbc582b6ca5c3ed73d3d441caa6e0d1618ae00accf64719f",
+      "currentInputFingerprint": "dbd75ac7625191fcfbc582b6ca5c3ed73d3d441caa6e0d1618ae00accf64719f",
+      "inputState": "equal",
+      "reuseState": "reusable",
+      "relation": "independent",
+      "upstreamSpecIds": [],
+      "activeJobIds": [],
+      "reasons": []
+    },
+    {
+      "specId": "4d5f438a-f86f-4f0f-b9aa-7d6e6cebeeef",
+      "specRevision": 5,
+      "currentResultId": "2b2e7541-87c7-5117-bb94-8ff1c87cf509",
+      "baselineJobId": "ead6bc3b-ec09-5875-96cb-5e0471cd9c1f",
+      "baselineInputFingerprint": "f9880a78e32a8718d511531daa1aa418d591687480de3b66e2d5a3844d10497e",
+      "currentInputFingerprint": "02448c6c6142e6924b90cbeea3825d41c1ac6c436f69dc239f323944cbf3a0a6",
+      "inputState": "changed",
+      "reuseState": "stale",
+      "relation": "root",
+      "upstreamSpecIds": [
+        "d2f677d8-e6cd-43c8-ae54-8df7734c28fa"
+      ],
+      "activeJobIds": [],
+      "reasons": [
+        {
+          "code": "inputs_changed",
+          "objectId": "4d5f438a-f86f-4f0f-b9aa-7d6e6cebeeef",
+          "referenceId": null,
+          "fieldPaths": [
+            "spec.prompt"
+          ]
+        }
+      ]
+    },
+    {
+      "specId": "dee2d143-046b-47fc-86f3-1c24f113c236",
+      "specRevision": 4,
+      "currentResultId": "1d33a0aa-803a-545f-88d7-0ac154e1f720",
+      "baselineJobId": "a038682a-0fe5-53e4-8191-e78a2df1d92e",
+      "baselineInputFingerprint": "b8a061d7123836311407bb42ef23b6e12033f0524c529f1673914c7793f29bf2",
+      "currentInputFingerprint": "b8a061d7123836311407bb42ef23b6e12033f0524c529f1673914c7793f29bf2",
+      "inputState": "equal",
+      "reuseState": "pending_upstream",
+      "relation": "downstream",
+      "upstreamSpecIds": [
+        "4d5f438a-f86f-4f0f-b9aa-7d6e6cebeeef"
+      ],
+      "activeJobIds": [],
+      "reasons": [
+        {
+          "code": "upstream_pending",
+          "objectId": "4d5f438a-f86f-4f0f-b9aa-7d6e6cebeeef",
+          "referenceId": "c936fa2f-fae2-4b38-869d-fb355edfbc2f",
+          "fieldPaths": []
+        }
+      ]
+    },
+    {
+      "specId": "7f268b78-755a-433e-8751-cdf17259877d",
+      "specRevision": 4,
+      "currentResultId": "4c98012b-86e3-5a07-a496-affb1d644b17",
+      "baselineJobId": "6c90d034-a5d1-53c5-94e9-8f46647d6ff5",
+      "baselineInputFingerprint": "3c218cd8c9c95ecd2fa681b236beaa062a6c5bb62d1005bb587cd5367a07bb7e",
+      "currentInputFingerprint": "3c218cd8c9c95ecd2fa681b236beaa062a6c5bb62d1005bb587cd5367a07bb7e",
+      "inputState": "equal",
+      "reuseState": "reusable",
+      "relation": "independent",
+      "upstreamSpecIds": [],
+      "activeJobIds": [],
+      "reasons": []
+    }
+  ],
+  "dependencies": [
+    {
+      "sourceSpecId": "d2f677d8-e6cd-43c8-ae54-8df7734c28fa",
+      "sourceItemId": "f31f1bee-df50-4378-8c1e-40c22050dec6",
+      "targetSpecId": "4d5f438a-f86f-4f0f-b9aa-7d6e6cebeeef",
+      "referenceId": "be3a9284-43d1-4dda-b47e-d12da4585da2",
+      "role": "reference",
+      "assetId": "df7a7beb-bdb3-50f0-882d-644224938ed4",
+      "documentId": null,
+      "inputConfirmed": true
+    },
+    {
+      "sourceSpecId": "4d5f438a-f86f-4f0f-b9aa-7d6e6cebeeef",
+      "sourceItemId": "9c445317-46cb-4ed5-801c-4a357a406dad",
+      "targetSpecId": "dee2d143-046b-47fc-86f3-1c24f113c236",
+      "referenceId": "c936fa2f-fae2-4b38-869d-fb355edfbc2f",
+      "role": "reference",
+      "assetId": "9cb90c95-d158-5c58-9a28-84b4d35aff9b",
+      "documentId": null,
+      "inputConfirmed": true
+    }
+  ],
+  "timelineConsumers": [
+    {
+      "editorDocumentId": "35c2b0d7-a177-4161-aeda-4f77317dc6a3",
+      "revision": 1,
+      "clipId": "B",
+      "assetId": "9cb90c95-d158-5c58-9a28-84b4d35aff9b",
+      "specIds": [
+        "4d5f438a-f86f-4f0f-b9aa-7d6e6cebeeef"
+      ],
+      "association": "asset_and_source",
+      "sourceItemId": "9c445317-46cb-4ed5-801c-4a357a406dad"
+    },
+    {
+      "editorDocumentId": "35c2b0d7-a177-4161-aeda-4f77317dc6a3",
+      "revision": 1,
+      "clipId": "C",
+      "assetId": "6e22e526-0f09-5e94-9d95-e7a21f60d890",
+      "specIds": [
+        "dee2d143-046b-47fc-86f3-1c24f113c236"
+      ],
+      "association": "asset_and_source",
+      "sourceItemId": "2bf7e3c4-b587-4fbb-adad-30c6a1dfbb45"
+    }
+  ]
+}

@@ -198,3 +198,113 @@ def test_long_chain_cycles_and_scope_are_bounded():
     value = report(cyclic)
     assert all(value.items[i].reuseState == 'unknown' for i in (1, 2))
     assert any(r.code == 'dependency_cycle' for r in value.items[1].reasons)
+
+
+def submit_existing(saved, index, *, adopt=False):
+    (store, pid, session), configs, _, provider, specs, items = saved
+
+    async def generate():
+        runner = CreationGeneration(store, configs, provider)
+        state = store.snapshot(pid)
+        spec = next(s for s in state.generationSpecs if s.id == specs[index])
+        item = next(i for i in state.canvasItems if i.id == items[index])
+        request = parse_command(dict(commandId=uuid4(), projectId=pid, type='generation.submit',
+            expectedVersions=[ver('generation_spec', spec), ver('canvas_item', item)], payload=dict(
+                specId=spec.id, expectedSpecRevision=spec.revision, originItemId=item.id,
+                adoptionPolicy='if_current' if adopt else 'candidate_only')))
+        receipt = await runner.execute(request, session=session)
+        assert receipt.status == 'accepted', receipt
+        await settled(runner)
+        await runner.close()
+        state = store.snapshot(pid)
+        job = next(j for j in state.jobs if j.id == receipt.jobIds[0])
+        assert job.status == 'succeeded'
+        return next(r for r in state.results if r.jobId == job.id)
+
+    return asyncio.run(generate())
+
+
+@pytest.mark.parametrize('pinned', [False, True], ids=['following', 'pinned'])
+def test_reopenable_dependency_case_uses_real_commands_and_files(saved, tmp_path, pinned):
+    from opendirector.infrastructure.creation_projects import CreationProjects
+    from opendirector.infrastructure.local_projects import LocalProjects
+    (store, pid, session), _, _, _, specs, items = saved
+    canvas = CreationCanvas(store)
+    query = impact_query(pid, [specs[1]])
+    if pinned:
+        state = store.snapshot(pid)
+        reference = next(r for r in state.references if r.targetSpecId == specs[2])
+        source = next(i for i in state.canvasItems if i.id == items[1])
+        result = next(r for r in state.results if r.specId == specs[1])
+        receipt = send(store, pid, 'reference.update', session=session,
+            versions=[ver('reference', reference), ver('generation_spec', next(s for s in state.generationSpecs if s.id == specs[2]))],
+            reference={**reference.model_dump(exclude={'binding', 'source'}), 'binding': 'pinned',
+                'source': result.asset, 'sourceVersion': ver('canvas_item', source)})
+        assert receipt.status == 'applied', receipt
+        submit_existing(saved, 2, adopt=True)
+    state = store.snapshot(pid)
+    results = {r.id: r for r in state.results}
+    selected = {s.id: results[s.currentResultId] for s in state.generationSpecs}
+    timeline_id = uuid4()
+    clips = [dict(id=key, resource=dict(asset=selected[specs[i]].asset, title=key), inPoint=0, outPoint=1)
+             for key, i in (('B', 1), ('C', 2), ('D', 3))]
+    receipt = send(store, pid, 'editor.create', session=session, document=dict(id=timeline_id, projectId=pid,
+        kind='timeline', inputConnections=[dict(id=uuid4(), sourceId=items[1], slotId='B', asset=selected[specs[1]].asset)],
+        data=dict(fps=24, width=16, height=16, tracks=[dict(id='v', kind='visual', title='Shots', clips=clips)])))
+    assert receipt.status == 'applied', receipt
+    assert all(item.reuseState == 'reusable' for item in canvas.query_snapshot(query).items)
+    before = store.snapshot(pid)
+    b = next(s for s in before.generationSpecs if s.id == specs[1])
+    receipt = send(store, pid, 'generationSpec.update', session=session, versions=[ver('generation_spec', b)],
+        spec=b.model_copy(update={'prompt': 'Change only B'}))
+    assert receipt.status == 'applied', receipt
+    changed = canvas.query_snapshot(query)
+    by_id = {i.specId: i for i in changed.items}
+    assert by_id[specs[1]].reuseState == 'stale'
+    assert (by_id[specs[2]].inputState, by_id[specs[2]].reuseState) == ('equal', 'reusable' if pinned else 'pending_upstream')
+    assert by_id[specs[3]].reuseState == 'reusable'
+    if not pinned:
+        # Keep the actual public request/response as a reproducible handoff artifact.
+        (tmp_path / 'impact-request.json').write_text(query.model_dump_json(indent=2), encoding='utf-8')
+        (tmp_path / 'impact-response.json').write_text(changed.model_dump_json(indent=2), encoding='utf-8')
+    candidate = submit_existing(saved, 1)
+    pending = {i.specId: i for i in canvas.query_snapshot(query).items}
+    assert pending[specs[2]].currentInputFingerprint == by_id[specs[2]].currentInputFingerprint
+    assert pending[specs[2]].inputState == 'equal'
+    state = store.snapshot(pid)
+    b = next(s for s in state.generationSpecs if s.id == specs[1])
+    receipt = send(store, pid, 'result.select', session=session, versions=[ver('generation_spec', b)],
+        specId=b.id, resultId=candidate.id)
+    assert receipt.status == 'applied', receipt
+    after = canvas.query_snapshot(query)
+    by_id = {i.specId: i for i in after.items}
+    assert by_id[specs[2]].reuseState == ('reusable' if pinned else 'stale')
+    assert by_id[specs[3]].reuseState == 'reusable'
+    assert before.jobs == store.snapshot(pid).jobs[:len(before.jobs)]
+    assert before.editorDocuments == store.snapshot(pid).editorDocuments
+    snapshot_bytes = store.snapshot(pid).model_dump_json()
+    files = files_under(store.local.repository)
+    reopened = CreationProjects(LocalProjects(store.local.repository))
+    assert CreationCanvas(reopened).query_snapshot(query) == after
+    assert reopened.snapshot(pid).model_dump_json() == snapshot_bytes
+    assert files_under(store.local.repository) == files
+    # Remove one isolated result's real bytes, retaining all metadata and history.
+    with store.local.transaction() as db:
+        directory, _ = store._find(db, pid)
+    (directory / 'assets' / str(selected[specs[3]].asset.assetId)).unlink()
+    missing = {i.specId: i for i in CreationCanvas(reopened).query_snapshot(query).items}
+    assert missing[specs[3]].reuseState == 'unavailable'
+    assert reopened.snapshot(pid).model_dump_json() == snapshot_bytes
+
+
+def test_foreign_project_root_never_switches_or_opens_a_session(saved, tmp_path):
+    from test_creation_canvas_service import media
+    from opendirector.domain.creation.validation import ContractError
+    (store, pid, _), _, _, _, specs, _ = saved
+    other = new_project(tmp_path, 'Other')
+    _, foreign = media(other)
+    before = store.snapshot(pid)
+    with pytest.raises(ContractError) as error:
+        CreationCanvas(store).query_snapshot(impact_query(pid, [foreign.id]))
+    assert error.value.issue.code == 'missing_object'
+    assert store.snapshot(pid) == before

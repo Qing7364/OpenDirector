@@ -364,7 +364,7 @@ def analyze_generation_impact(snapshot: ProjectSnapshot, *, root_spec_ids: tuple
         for edge in direct:
             if not edge.inputConfirmed or edge.sourceSpecId in uncertain:
                 reasons.append(ImpactReason(code='dependency_unresolved', objectId=edge.sourceSpecId or edge.sourceItemId, referenceId=edge.referenceId))
-                if reuse == 'reusable':
+                if reuse in {'reusable', 'pending_upstream'}:
                     reuse = 'unknown'
             elif edge.sourceSpecId in pending and reuse in {'reusable', 'pending_upstream'}:
                 reuse = 'pending_upstream'

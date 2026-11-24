@@ -373,3 +373,56 @@ def test_ordinary_adapter_settings_do_not_invent_missing_guide_requirements(para
     state = ProjectSnapshot(project=dict(id=PROJECT, name='Video'), assets=[output], jobs=[job], results=[result],
         generationSpecs=[frozen.spec.model_copy(update={'currentResultId': result.id})])
     assert report(state, models={public.id: frozen_model}, roots=(uid(100),)).items[0].reuseState == 'reusable'
+
+
+def test_context_only_is_not_a_propagation_edge_but_retains_shared_fingerprint_semantics():
+    from opendirector.domain.creation.generation import VideoGenerationSpec
+    state = graph()
+    public = model('video')
+    video_model = ModelSnapshot(modelConfigId=uid(21), inputRules=public.inputRules,
+        **{key: getattr(public, key) for key in ('kind', 'modelId', 'url', 'protocol', 'connectionType', 'videoAdapter')})
+    data = state.model_dump()
+    data['generationSpecs'] = list(data['generationSpecs'])
+    data['generationSpecs'][2] = VideoGenerationSpec(**entity(102, kind='video', purpose='generation', modelConfigId=uid(21)))
+    data['canvasItems'][2]['kind'] = 'video'
+    data['jobs'] = [j for j in state.jobs if j.id != uid(402)]
+    data['results'] = [r for r in state.results if r.id != uid(502)]
+    state = ProjectSnapshot.model_validate(data)
+    spec, refs = current_generation_inputs(state, state.generationSpecs[2], video_model.inputRules)
+    assert refs[0].transmission == 'context_only'
+    frozen = InputSnapshot(spec=spec, model=video_model, references=refs)
+    output = asset(350, 'video')
+    job = Job(**entity(450, inputSnapshot=frozen, inputFingerprint=frozen.fingerprint(), execution=dict(kind='video'),
+        status='succeeded', recovery='done', asset=asset_ref(output)))
+    result = ResultVersion(**entity(550, specId=spec.id, jobId=job.id, asset=job.asset, inputFingerprint=job.inputFingerprint))
+    data = state.model_dump()
+    data.update(assets=[*state.assets, output], jobs=[*state.jobs, job], results=[*state.results, result])
+    data['generationSpecs'][2]['currentResultId'] = result.id
+    state = ProjectSnapshot.model_validate(data)
+    models = {uid(20): impact_model(), uid(21): video_model}
+    changed = replace(state, 'generationSpecs', 1, prompt='B changed')
+    value = report(changed, models=models)
+    assert value.items[2].reuseState == 'reusable'
+    assert not any(e.targetSpecId == uid(102) for e in value.dependencies)
+    adopted = new_result(changed, 1)
+    item = report(adopted, models=models).items[2]
+    assert (item.inputState, item.reuseState) == ('changed', 'stale')
+    assert item.reasons[0].fieldPaths == ('references',)
+
+
+@pytest.mark.parametrize('reverse', [False, True])
+def test_unknown_upstream_overrides_pending_independently_of_reference_order(reverse):
+    state = graph()
+    data = state.model_dump()
+    data['references'] = [*state.references, entity(650, binding='follow_current',
+        targetSpecId=uid(102), source=dict(id=uid(203)), order=1)]
+    state = new_result(ProjectSnapshot.model_validate(data), 2)
+    state = replace(state, 'generationSpecs', 1, prompt='B changed')
+    # D's adopted inputs still match, but its execution evidence is incomplete.
+    state = replace(state, 'jobs', 3, adapterParameters={'guide': 'unregistered'})
+    if reverse:
+        state = state.model_copy(update={'references': tuple(reversed(state.references))})
+    item = report(state).items[2]
+    assert item.inputState == 'equal'
+    assert item.reuseState == 'unknown'
+    assert any(reason.code == 'dependency_unresolved' and reason.objectId == uid(103) for reason in item.reasons)
